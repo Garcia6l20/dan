@@ -48,14 +48,13 @@ class Target(Logging):
         stack_trace = inspect.stack()
         stack_trace = inspect.stack()
         for frame in stack_trace:
-            if frame.filename.endswith('pymakefile.py') and frame.function == '<module>':
+            if frame.filename.endswith('makefile.py') and frame.function == '<module>':
                 self.source_path = Path(frame.filename).parent
         return self
 
-    def __init__(self, output: str, dependencies: TargetDependencyLike = None, name: str = None):
-        self.__name = name
-        if self.__name:
-            super().__init__(self.__name)
+    async def __initialize__(self, name: str, output: str, dependencies: TargetDependencyLike = None):
+        self.name = name
+        super().__init__(self.name)
         self.output = Path(output)
         self.dependencies: Dependencies[Target] = Dependencies()
         if isinstance(dependencies, list):
@@ -70,7 +69,8 @@ class Target(Logging):
     def load_dependency(self, dependency):
         if isinstance(dependency, Target):
             self.dependencies.append(dependency)
-            return
+        elif isinstance(dependency, FileDependency):
+            self.dependencies.append(dependency)
         elif isinstance(dependency, str):
             self.load_dependency(Path(dependency))
         elif isinstance(dependency, Path):
@@ -81,15 +81,6 @@ class Target(Logging):
         else:
             raise RuntimeError(
                 f'Unhandled dependency {dependency} ({type(dependency)})')
-
-    @property
-    def name(self):
-        return self.__name
-
-    @name.setter
-    def name(self, name):
-        self.__name = name
-        super().__init__(self.__name)
 
     @property
     def modification_time(self):
@@ -126,6 +117,12 @@ class target:
 
     def __call__(self, fn: Callable):
         class TargetImpl(Target):
+            def __init__(self, output, dependencies) -> None:
+                super().__init__()
+                self.output = output
+                self.dependencies = dependencies
+            async def __initialize__(self, name):
+                await super().__initialize__(name, self.output, self.dependencies)
             def __call__(self):
                 arg_spec = inspect.getfullargspec(fn)
                 args = list()

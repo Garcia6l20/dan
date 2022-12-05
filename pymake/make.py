@@ -1,4 +1,5 @@
 
+import asyncio
 import importlib.util
 import logging
 
@@ -15,9 +16,9 @@ class Make(Logging):
         super().__init__('make')
 
         self.source_path = source_path
-        self.module_path = self.source_path / 'pymakefile.py'
+        self.module_path = self.source_path / 'makefile.py'
         spec = importlib.util.spec_from_file_location(
-            'pymakefile', self.module_path)
+            'makefile', self.module_path)
         self.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.module)
 
@@ -26,12 +27,18 @@ class Make(Logging):
         for k, v in self.module.__dict__.items():
             if isinstance(v, Target):
                 self.targets[k] = v  
-                if not v.name:
-                    v.name = make_target_name(k)
 
         self.debug(f'targets: {self.targets}')
+        self.__initialized = False
+        
+    async def initialize(self):
+        if self.__initialized:
+            return
+        await asyncio.gather(*[target.__initialize__(name) for name, target in self.targets.items()])
+        self.__initialized = True
 
     async def build(self):
+        await self.initialize()
         self.info(f'building {self.source_path}')
         for name, target in self.targets.items():
             await target.build()
