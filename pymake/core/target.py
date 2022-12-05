@@ -51,7 +51,6 @@ class Target(Logging):
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls)
         stack_trace = inspect.stack()
-        stack_trace = inspect.stack()
         for frame in stack_trace:
             if frame.filename.endswith('makefile.py') and frame.function == '<module>':
                 self.source_path = Path(frame.filename).parent

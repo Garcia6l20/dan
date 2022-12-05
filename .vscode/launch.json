@@ -8,17 +8,12 @@
             "name": "test: simple",
             "type": "python",
             "request": "launch",
-            "module": "pymake",
+            "program": "${workspaceFolder}/tests/simple/makefile.py",
             "justMyCode": true,
-            "args": [
-                "-d",
-                "${workspaceFolder}/tests/simple"
-            ],
-            "cwd": "${workspaceFolder}/build/tests/simple",
+            "cwd": "${workspaceFolder}/tests/simple",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
-            },
-            "preLaunchTask": "makeTestDirs"
+            }
         },
         {
             "name": "test: cxx/simple",
