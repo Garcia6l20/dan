@@ -1,6 +1,9 @@
 from pathlib import Path
 from typing import Callable, Union, TypeAlias
 import inspect
+import asyncio
+import aiofiles
+import aiofiles.os
 
 from pymake.core.logging import Logging
 
@@ -33,6 +36,7 @@ TargetDependencyLike: TypeAlias = Union[list['Target'], 'Target']
 
 PathImpl = type(Path())
 
+
 class FileDependency(PathImpl):
     def __init__(self, *args, **kwargs):
         super(PathImpl, self).__init__()
@@ -41,6 +45,7 @@ class FileDependency(PathImpl):
     @property
     def modification_time(self):
         return self.stat().st_mtime
+
 
 class Target(Logging):
     def __new__(cls, *args, **kwargs):
@@ -106,6 +111,17 @@ class Target(Logging):
             return await result
         return result
 
+    @property
+    def target_dependencies(self):
+        return [t for t in self.dependencies if isinstance(t, Target)]
+
+    async def clean(self):
+        self.debug('cleaning...')
+        clean_tasks = [t.clean() for t in self.target_dependencies]
+        if self.output.exists():
+            clean_tasks.append(aiofiles.os.remove(self.output))
+        await asyncio.gather(*clean_tasks)
+
     def __call__(self):
         ...
 
@@ -121,8 +137,10 @@ class target:
                 super().__init__()
                 self.output = output
                 self.dependencies = dependencies
+
             async def __initialize__(self, name):
                 await super().__initialize__(name, self.output, self.dependencies)
+
             def __call__(self):
                 arg_spec = inspect.getfullargspec(fn)
                 args = list()
