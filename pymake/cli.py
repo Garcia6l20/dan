@@ -6,8 +6,6 @@ import asyncio
 
 from pymake.make import Make
 
-logging.basicConfig(level=logging.INFO)
-
 pass_make = click.make_pass_decorator(Make)
 
 _active_targets_initialized = False
