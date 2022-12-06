@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Callable, Union, TypeAlias
 import inspect
-import asyncio
+from . import asyncio
 import aiofiles
 import aiofiles.os
 
@@ -58,7 +58,6 @@ class Target(Logging):
 
     async def __initialize__(self, name: str, output: str, dependencies: TargetDependencyLike = None):
         self.name = name
-        self.lock = asyncio.Lock()
         super().__init__(self.name)
         self.output = Path(output)
         self.dependencies: Dependencies[Target] = Dependencies()
@@ -66,6 +65,9 @@ class Target(Logging):
             self.load_dependencies(dependencies)
         elif dependencies is not None:
             self.load_dependency(dependencies)
+
+        self.__cleaned = asyncio.OnceLock()
+        self.__built = asyncio.OnceLock()
 
     def load_dependencies(self, dependencies):
         for dependency in dependencies:
@@ -102,10 +104,14 @@ class Target(Logging):
         return True
 
     async def build(self):
-        async with self.lock:
+        async with self.__built as done:
+            if done:
+                return
+
             if self.up_to_date:
                 self.info('up to date !')
                 return
+
             self.info('building...')
             result = self()
             if inspect.iscoroutine(result):
@@ -117,7 +123,10 @@ class Target(Logging):
         return [t for t in self.dependencies if isinstance(t, Target)]
 
     async def clean(self):
-        async with self.lock:
+        async with self.__cleaned as done:
+            if done:
+                return
+
             self.debug('cleaning...')
             clean_tasks = [t.clean() for t in self.target_dependencies]
             if self.output.exists():
