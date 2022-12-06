@@ -7,7 +7,7 @@ from pymake.core.include import targets, current_makefile
 from pymake.core.logging import Logging
 
 from pymake.core.target import Target
-from pymake.cxx.executable import Executable
+from pymake.cxx.targets import Executable
 
 
 def make_target_name(name: str):
@@ -35,7 +35,7 @@ class Make(Logging):
     async def initialize(self):
         if self.__initialized:
             return
-        await asyncio.gather(*[target.__initialize__(name) for name, target in self.active_targets.items()])
+        await asyncio.gather(*[target.__initialize__(name) for name, target in self.all_targets.items()])
         self.__initialized = True
 
     async def build(self):

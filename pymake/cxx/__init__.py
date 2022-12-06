@@ -1,1 +1,1 @@
-from .executable import Executable
+from .targets import Executable, Library

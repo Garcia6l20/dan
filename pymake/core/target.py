@@ -57,6 +57,7 @@ class Target(Logging):
         self.name = name
         super().__init__(self.name)
         self.output = self.build_path / output
+        self.other_generated_files: list[Path] = list()
         self.dependencies: Dependencies[Target] = Dependencies()
         if isinstance(dependencies, list):
             self.load_dependencies(dependencies)
@@ -129,7 +130,11 @@ class Target(Logging):
             if self.output.exists():
                 self.info('cleaning...')
                 clean_tasks.append(aiofiles.os.remove(self.output))
-            await asyncio.gather(*clean_tasks)
+            clean_tasks.extend([aiofiles.os.remove(f) for f in self.other_generated_files if f.exists()])
+            try:
+                await asyncio.gather(*clean_tasks)
+            except FileNotFoundError as err:
+                self.warn(f'file not found: {err.filename}')
 
     def __call__(self):
         ...
