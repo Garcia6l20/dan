@@ -2,5 +2,9 @@
     "python.envFile": "${workspaceFolder}/.env",
     "terminal.integrated.env.linux": {
         "PYTHONPATH": "${workspaceFolder}"
-    }
+    },
+    "files.associations": {
+        "string_view": "cpp"
+    },
+    "cmake.sourceDirectory": "${workspaceFolder}/tests/cxx/libraries"
 }

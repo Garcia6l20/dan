@@ -16,7 +16,7 @@ class AsyncRunner:
                                                                 stderr=stdout)
         out, err = await proc.communicate()
         if proc.returncode != 0:
-            self.error(f'running command: {command}\n{err.decode() if err else ""}')
+            self.error(f'command returned {proc.returncode}: {command}\n{err.decode() if err else ""}')
             sys.exit(-1)
         return out, err
 
