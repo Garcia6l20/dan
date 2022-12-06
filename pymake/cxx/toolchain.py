@@ -4,26 +4,26 @@ from pymake.core.target import FileDependency
 
 
 class Toolchain:
-    def make_include_options(self, include_paths: list[Path]) -> list[str]:
+    def make_include_options(self, include_paths: set[Path]) -> set[str]:
         ...
 
-    def make_link_options(self, libraries: list[Path]) -> list[str]:
+    def make_link_options(self, libraries: set[Path]) -> set[str]:
         ...
 
-    async def scan_dependencies(self, file: Path, options: list[str]) -> list[FileDependency]:
+    async def scan_dependencies(self, file: Path, options: set[str]) -> set[FileDependency]:
         ...
 
-    def compile_generated_files(self, output: Path) -> list[Path]:
-        return list()
+    def compile_generated_files(self, output: Path) -> set[Path]:
+        return set()
 
-    async def compile(self, sourcefile: Path, output: Path, options: list[str]):
+    async def compile(self, sourcefile: Path, output: Path, options: set[str]):
         ...
 
-    async def link(self, objects: list[Path], output: Path, options: list[str]):
+    async def link(self, objects: set[Path], output: Path, options: set[str]):
         ...
 
-    async def static_lib(self, objects: list[Path], output: Path, options: list[str]):
+    async def static_lib(self, objects: set[Path], output: Path, options: set[str]):
         ...
 
-    async def shared_lib(self, objects: list[Path], output: Path, options: list[str]):
+    async def shared_lib(self, objects: set[Path], output: Path, options: set[str]):
         ...

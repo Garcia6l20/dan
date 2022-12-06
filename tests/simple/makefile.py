@@ -9,7 +9,7 @@ from jinja2 import Environment, FileSystemLoader
 #
 # sync generator definition with source dependency
 #
-@generator('hello.txt', dependencies='source.jinja')
+@generator('hello.txt', dependencies=['source.jinja'])
 def hello(self):
     env = Environment(loader=FileSystemLoader(self.source_path))
     template = env.get_template('source.jinja')
@@ -18,7 +18,7 @@ def hello(self):
 #
 # async generator definition with target dependency
 #
-@generator('hello-cpy.txt', dependencies=hello)
+@generator('hello-cpy.txt', dependencies=[hello])
 async def hello_cpy(self):
     assert hello.up_to_date
     async with aiofiles.open(hello.output, 'r') as input:

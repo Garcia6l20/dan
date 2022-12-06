@@ -5,9 +5,9 @@ from pymake.cxx import Library, Executable
 from copy import deepcopy
 
 static = Library(sources=['static.cpp'], public_includes=['.'])
-statically_linked = Executable(sources=['main.cpp'], dependencies=static)
+statically_linked = Executable(sources=['main.cpp'], dependencies=[static])
 shared = Library(sources=['shared.cpp'], public_includes=['.'], static=False)
-shared_linked = Executable(sources=['main.cpp'], dependencies=shared)
+shared_linked = Executable(sources=['main.cpp'], dependencies=[shared])
 
 if __name__ == '__main__':
     cli()

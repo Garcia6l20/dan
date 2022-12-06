@@ -53,13 +53,16 @@ class Target(Logging):
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
 
-    async def __initialize__(self, name: str, output: str, dependencies: TargetDependencyLike = None):
+    async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
         self.name = name
         super().__init__(self.name)
-        self.output = self.build_path / output
-        self.other_generated_files: list[Path] = list()
+        self.output = self.build_path / output if output else None
+        self.other_generated_files: set[Path] = set()
+        dependencies = set(dependencies)
+        if hasattr(self, 'dependencies'):
+            dependencies.update(self.dependencies)
         self.dependencies: Dependencies[Target] = Dependencies()
-        if isinstance(dependencies, list):
+        if isinstance(dependencies, set):
             self.load_dependencies(dependencies)
         elif dependencies is not None:
             self.load_dependency(dependencies)
@@ -89,11 +92,11 @@ class Target(Logging):
 
     @property
     def modification_time(self):
-        return self.output.stat().st_mtime
+        return self.output.stat().st_mtime if self.output else 0.0
 
     @property
     def up_to_date(self):
-        if not self.output.exists():
+        if self.output and not self.output.exists():
             return False
         if not self.dependencies.up_to_date:
             return False
@@ -127,7 +130,7 @@ class Target(Logging):
                 return
 
             clean_tasks = [t.clean() for t in self.target_dependencies]
-            if self.output.exists():
+            if self.output and self.output.exists():
                 self.info('cleaning...')
                 clean_tasks.append(aiofiles.os.remove(self.output))
             clean_tasks.extend([aiofiles.os.remove(f) for f in self.other_generated_files if f.exists()])

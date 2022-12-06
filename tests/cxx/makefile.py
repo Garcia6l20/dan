@@ -4,7 +4,7 @@ from pymake import cli, include
 
 include('simple')
 include('libraries')
-include('imported')
+include('qt')
 
 if __name__ == '__main__':
     cli()

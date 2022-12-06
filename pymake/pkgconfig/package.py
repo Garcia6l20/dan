@@ -1,15 +1,75 @@
 from pathlib import Path
+import re
 import pkgconfig
+
+from pymake.core.find import find_file, library_paths_lookup
+from pymake.cxx.targets import CXXTarget
+
 
 class MissingPackage(RuntimeError):
     def __init__(self, name) -> None:
         super().__init__(f'package {name} not found')
 
-class Package:
-    def __init__(self, name, minimum_version = None, pc_file : Path = None) -> None:
-        self.name = name
-        # if pc_file:
-        #     pkgconfig.
-        # else:
-        if not pkgconfig.exists(self.name):
-            raise MissingPackage(self.name)
+
+def find_pkg_config(name, paths=list()) -> Path:
+    root, file = find_file(
+        fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+    if root:
+        return root / file
+
+
+class Package(CXXTarget):
+    def __init__(self, name, search_paths: list[str] = list()) -> None:
+        self.config_path = find_pkg_config(name, search_paths)
+        if not self.config_path:
+            raise MissingPackage(name)
+        with open(self.config_path) as f:
+            lines = [l for l in [l.strip().removesuffix('\n')
+                                 for l in f.readlines()] if len(l)]
+            for line in lines:
+                pos = line.find('=')
+                if pos > 0:
+                    name = line[:pos].strip()
+                    value = line[pos+1:].strip()
+                    setattr(self, f'_{name}', value)
+                else:
+                    pos = line.find(':')
+                    if pos > 0:
+                        name = line[:pos].strip().lower()
+                        value = line[pos+1:].strip()
+                        setattr(self, f'_{name}', value)
+        deps = set()
+        if hasattr(self, '_requires'):
+            for req in self._requires.split():
+                deps.add(Package(req, search_paths))
+        super().__init__(public_includes={self._includedir}, dependencies=deps)
+        
+    @property
+    def cxxflags(self):
+        tmp = set(self._cflags.split())
+        for dep in self.cxx_dependencies:
+            tmp.update(dep.cxxflags)
+        return tmp
+    
+    @property
+    def libs(self):
+        tmp = set(self._libs.split())
+        for dep in self.cxx_dependencies:
+            tmp.update(dep.libs)
+        return tmp
+    
+    @property
+    def up_to_date(self):
+        return True
+
+    def __getattribute__(self, name: str):
+        value = super().__getattribute__(name)
+        if type(value) == str:
+            while True:
+                m = re.search(r'\${(\w+)}', value)
+                if m:
+                    var = m.group(1)
+                    value = value.replace(f'${{{var}}}', getattr(self, f'_{var}'))
+                else:
+                    break
+        return value

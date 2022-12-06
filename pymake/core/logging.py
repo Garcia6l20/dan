@@ -1,10 +1,5 @@
 import logging
-
-import colorama
 from termcolor import colored
-
-if hasattr(colorama, 'just_fix_windows_console'):
-    colorama.just_fix_windows_console()
 
 def merge(lhs, rhs):
     if type(lhs) != type(rhs):
