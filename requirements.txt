@@ -2,3 +2,4 @@ click
 jinja2
 gitpython
 aiofiles
+termcolor

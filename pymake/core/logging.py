@@ -1,25 +1,55 @@
 import logging
 
 import colorama
+from termcolor import colored
 
 if hasattr(colorama, 'just_fix_windows_console'):
     colorama.just_fix_windows_console()
 
+def merge(lhs, rhs):
+    if type(lhs) != type(rhs):
+        raise RuntimeError(f'cannot merge {type(lhs)} with {rhs}')
+    if type(lhs) == dict:
+        for k in rhs:
+            if k in lhs:
+                lhs[k] = merge(lhs[k], rhs[k])
+            else:
+                lhs[k] = rhs[k]
+    elif type(lhs) == list:
+        lhs.extend(rhs)
+    return lhs
+
+
+class bind_back:
+    def __init__(self, fn, *args):
+        self.fn = fn
+        self.args = args
+    
+    def __call__(self, *args, **kwds):
+        return self.fn(*args, *self.args, **kwds)
 
 class ColoredFormatter(logging.Formatter):
 
     COLORS = {
-        'WARNING': colorama.Fore.YELLOW,
-        'INFO': colorama.Fore.GREEN,
-        'DEBUG': colorama.Fore.BLUE,
-        'CRITICAL': colorama.Fore.YELLOW,
-        'ERROR': colorama.Fore.RED
+        'WARNING': bind_back(colored, 'yellow'),
+        'INFO': bind_back(colored, 'green'),
+        'DEBUG': bind_back(colored, 'cyan'),
+        'CRITICAL': bind_back(colored, 'yellow'),
+        'ERROR': bind_back(colored, 'red')
+    }
+
+    COLORS_ATTRS = {
+        'WARNING': list(),
+        'INFO': list(),
+        'DEBUG': list(),
+        'CRITICAL': ['blink'],
+        'ERROR': ['blink']
     }
 
     COLOR_FORMAT = \
-        f"[{colorama.Style.DIM}%(asctime)s.%(msecs)03d{colorama.Style.RESET_ALL}]" \
-        f"[%(levelname)s][{colorama.Style.BRIGHT}%(name)s{colorama.Style.RESET_ALL}]: %(message)s "\
-        f"({colorama.Style.DIM}%(filename)s:%(lineno)d{colorama.Style.RESET_ALL})"
+        f"[{colored('%(asctime)s.%(msecs)03d', 'grey')}]" \
+        f"[%(levelname)s][{colored('%(name)s', 'white', attrs=['bold'])}]: %(message)s "\
+        f"({colored('%(filename)s:%(lineno)d', 'grey')})"
     
     FORMAT = \
         "[%(asctime)s.%(msecs)03d]" \
@@ -33,10 +63,8 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record):
         levelname = record.levelname
         if self.use_color and levelname in self.COLORS:
-            record.levelname = colorama.Style.BRIGHT + \
-                self.COLORS[levelname] + levelname + colorama.Style.RESET_ALL
-            record.msg = colorama.Style.NORMAL + \
-                self.COLORS[levelname] + record.msg + colorama.Style.RESET_ALL
+            record.levelname = self.COLORS[levelname](levelname, attrs=['bold', *self.COLORS_ATTRS[levelname]])
+            record.msg = self.COLORS[levelname](record.msg, attrs=[])
         return super().format(record)
 
 
