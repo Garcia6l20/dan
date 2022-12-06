@@ -57,11 +57,15 @@ def build(make: Make, **kwargs):
 
 
 @cli.command()
+@click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @add_options(_common_opts)
 @pass_make
-def list(make: Make, **kwargs):
+def list(make: Make, show_type : bool, **kwargs):
     for name, target in make.active_targets.items():
-        click.echo(f'{name} - {type(target).__name__}')
+        s = name
+        if show_type:
+            s = s + ' - ' + type(target).__name__
+        click.echo(s)
 
 @cli.command()
 @add_options(_common_opts)
