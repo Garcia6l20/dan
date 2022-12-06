@@ -87,7 +87,7 @@ class CXXTarget(Target):
 
     async def execute(self, *args):
         await self.build()
-        out, err = await self.run(f'{self.output} {" ".join(args)}', pipe=False)
+        await self.run(f'{self.output} {" ".join(args)}', pipe=False)
 
 
 class Executable(CXXTarget, AsyncRunner):
@@ -102,6 +102,7 @@ class Executable(CXXTarget, AsyncRunner):
         # link
         self.info(f'linking {self.output}...')
         await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.all_options)
+        self.debug(f'done')
 
 
 class Library(CXXTarget, AsyncRunner):
@@ -130,3 +131,5 @@ class Library(CXXTarget, AsyncRunner):
             await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output)
         else:
             await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, self.all_options)
+
+        self.debug(f'done')
