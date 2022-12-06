@@ -18,7 +18,11 @@ def _set_targets(ctx, param, value):
         _active_targets_initialized = True
         ctx.obj.active_targets = dict()
 
-    found_targets = {name: target for name, target in ctx.obj.all_targets.items() if name.endswith(value)}
+    found_targets = dict()
+    if type(value) != tuple:
+        value = (value)
+    for v in value:
+        found_targets.update({name: target for name, target in ctx.obj.all_targets.items() if name.find(v) >= 0})
 
     if len(found_targets) == 0:
         raise RuntimeError(f"cannot math any target for name '{value}'")
