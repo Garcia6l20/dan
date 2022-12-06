@@ -3,6 +3,17 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
+    "inputs": [
+        {
+            "id": "makefileCommand",
+            "description": "Select a command",
+            "type": "pickString",
+            "options": [
+                {"label": "Build", "value": "build"},
+                {"label": "Clean", "value": "clean"},
+            ]
+        }
+    ],
     "configurations": [
         {
             "name": "test: simple",
@@ -10,6 +21,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/tests/simple/makefile.py",
             "justMyCode": true,
+            "args": ["-d", "${input:makefileCommand}"],
             "cwd": "${workspaceFolder}/tests/simple",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -19,17 +31,13 @@
             "name": "test: cxx/simple",
             "type": "python",
             "request": "launch",
-            "module": "pymake",
+            "program": "${workspaceFolder}/tests/cxx/simple/makefile.py",
             "justMyCode": true,
-            "args": [
-                "-d",
-                "${workspaceFolder}/tests/cxx/simple"
-            ],
-            "cwd": "${workspaceFolder}/build/tests/cxx/simple",
+            "args": ["-d", "${input:makefileCommand}"],
+            "cwd": "${workspaceFolder}/tests/cxx/simple",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
-            },
-            "preLaunchTask": "makeTestDirs"
+            }
         }
     ]
 }

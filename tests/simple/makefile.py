@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from pymake import target
+from pymake import cli, target
 
 import aiofiles
 from jinja2 import Environment, FileSystemLoader
@@ -24,3 +24,6 @@ async def hello_cpy(self):
     async with aiofiles.open(hello.output, 'r') as input:
         async with aiofiles.open(self.output, 'w') as output:
             await output.write(await input.read())
+
+if __name__ == '__main__':
+    cli()

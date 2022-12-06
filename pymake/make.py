@@ -1,10 +1,9 @@
 
 import asyncio
-import importlib.util
-import logging
 import sys
+from types import ModuleType
 
-from click import Path
+from pymake import root_makefile
 from pymake.core.logging import Logging
 
 from pymake.core.target import Target
@@ -15,20 +14,15 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, source_path: Path, active_targets : list[str] = None):
+    def __init__(self, makefile : ModuleType = None, active_targets : list[str] = None):
         super().__init__('make')
 
-        self.source_path = source_path
-        self.module_path = self.source_path / 'makefile.py'
-        spec = importlib.util.spec_from_file_location(
-            'makefile', self.module_path)
-        self.module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.module)
-        self.active_targets: dict[str, Target] = dict()
+        self.makefile = makefile or root_makefile
 
+        self.active_targets: dict[str, Target] = dict()
         self.all_targets: dict[str, Target] = dict()
 
-        for k, v in self.module.__dict__.items():
+        for k, v in self.makefile.__dict__.items():
             if isinstance(v, Target):
                 self.all_targets[k] = v
                 

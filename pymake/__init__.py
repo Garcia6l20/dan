@@ -1,13 +1,11 @@
-from .core.target import target
-
 # patch root makefile
-source_root = None
-root_module = None
-if not root_module:
+root_makefile = None
+if not root_makefile:
     import sys
     import inspect
     from pathlib import Path
-    root_module = sys.modules['__main__']
-    source_root = Path(root_module.__file__).parent
-    from .cli import cli
-    setattr(root_module, '__main__', cli)
+    root_makefile = sys.modules['__main__']
+    setattr(root_makefile, 'source_path', Path(root_makefile.__file__).parent)
+
+from .core.target import target
+from .cli import cli
