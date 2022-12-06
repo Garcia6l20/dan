@@ -13,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader
 def hello(self):
     env = Environment(loader=FileSystemLoader(self.source_path))
     template = env.get_template('source.jinja')
-    print(template.render({'data': 'hello'}), file=open('hello.txt', 'w'))
+    print(template.render({'data': 'hello'}), file=open(self.output, 'w'))
 
 #
 # async target definition with target dependency

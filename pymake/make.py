@@ -3,7 +3,7 @@ import asyncio
 import sys
 from types import ModuleType
 
-from pymake import root_makefile
+from pymake.core.include import targets, current_makefile
 from pymake.core.logging import Logging
 
 from pymake.core.target import Target
@@ -17,14 +17,10 @@ class Make(Logging):
     def __init__(self, makefile : ModuleType = None, active_targets : list[str] = None):
         super().__init__('make')
 
-        self.makefile = makefile or root_makefile
+        self.makefile = makefile or current_makefile
 
         self.active_targets: dict[str, Target] = dict()
-        self.all_targets: dict[str, Target] = dict()
-
-        for k, v in self.makefile.__dict__.items():
-            if isinstance(v, Target):
-                self.all_targets[k] = v
+        self.all_targets = targets()
                 
         for name, target in self.all_targets.items():
             if name not in self.all_targets:

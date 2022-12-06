@@ -50,7 +50,7 @@ class Executable(Target):
 
     async def __initialize__(self, name: str):
         await asyncio.gather(*[obj.__initialize__(name) for obj in self.objs])
-        await super().__initialize__(name, name, self.objs)
+        await super().__initialize__(name, name.split('.')[-1], self.objs)
 
     async def __call__(self):
         # compile objects

@@ -1,10 +1,10 @@
 from pathlib import Path
 from typing import Callable, Union, TypeAlias
 import inspect
-from . import asyncio
 import aiofiles
 import aiofiles.os
 
+from pymake.core import asyncio, utils
 from pymake.core.logging import Logging
 
 
@@ -48,18 +48,15 @@ class FileDependency(PathImpl):
 
 
 class Target(Logging):
-    def __new__(cls, *args, **kwargs):
-        self = super().__new__(cls)
-        stack_trace = inspect.stack()
-        for frame in stack_trace:
-            if frame.filename.endswith('makefile.py') and frame.function == '<module>':
-                self.source_path = Path(frame.filename).parent
-        return self
+    def __init__(self) -> None:
+        from pymake.core.include import current_makefile
+        self.source_path = current_makefile.source_path
+        self.build_path = current_makefile.build_path
 
     async def __initialize__(self, name: str, output: str, dependencies: TargetDependencyLike = None):
         self.name = name
         super().__init__(self.name)
-        self.output = Path(output)
+        self.output = self.build_path / output
         self.dependencies: Dependencies[Target] = Dependencies()
         if isinstance(dependencies, list):
             self.load_dependencies(dependencies)
@@ -111,12 +108,13 @@ class Target(Logging):
             if self.up_to_date:
                 self.info('up to date !')
                 return
-
-            self.info('building...')
-            result = self()
-            if inspect.iscoroutine(result):
-                return await result
-            return result
+            
+            with utils.chdir(self.build_path):
+                self.info('building...')
+                result = self()
+                if inspect.iscoroutine(result):
+                    return await result
+                return result
 
     @property
     def target_dependencies(self):

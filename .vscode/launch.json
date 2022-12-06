@@ -16,13 +16,13 @@
     ],
     "configurations": [
         {
-            "name": "test: simple",
+            "name": "tests",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/tests/simple/makefile.py",
+            "program": "${workspaceFolder}/tests/makefile.py",
             "justMyCode": true,
             "args": ["-d", "${input:makefileCommand}"],
-            "cwd": "${workspaceFolder}/tests/simple",
+            "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
