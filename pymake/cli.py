@@ -32,3 +32,8 @@ def build(make: Make):
 @pass_make
 def clean(make: Make):
     asyncio.run(make.clean())
+
+@cli.command()
+@pass_make
+def run(make: Make):
+    asyncio.run(make.run())

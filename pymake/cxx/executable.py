@@ -1,6 +1,8 @@
 import asyncio
 from pathlib import Path
+import sys
 from pymake.core.target import Target
+from pymake.core.utils import AsyncRunner
 
 from .toolchain import Toolchain
 from .gcc_toolchain import GCCToolchain
@@ -33,7 +35,7 @@ class CXXObject(Target):
         await self.toolchain.compile(self.source, self.output, self.include_opts)
 
 
-class Executable(Target):
+class Executable(Target, AsyncRunner):
     def __init__(self, sources: str, include_paths: list[str]):
         super().__init__()
         self.toolchain = target_toolchain()
@@ -59,3 +61,7 @@ class Executable(Target):
         objs = [str(obj.output) for obj in self.objs]
         self.info(f'linking {self.output}...')
         await self.toolchain.link(objs, self.output, self.include_opts)
+
+    async def execute(self, *args):
+        await self.build()
+        out, err = await self.run(f'{self.output} {" ".join(args)}', pipe=False)

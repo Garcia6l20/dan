@@ -7,6 +7,7 @@ from pymake.core.include import targets, current_makefile
 from pymake.core.logging import Logging
 
 from pymake.core.target import Target
+from pymake.cxx.executable import Executable
 
 
 def make_target_name(name: str):
@@ -40,6 +41,14 @@ class Make(Logging):
     async def build(self):
         await self.initialize()
         await asyncio.gather(*[t.build() for t in self.active_targets.values()])
+    
+    @property
+    def executable_targets(self) -> list[Executable]:
+        return [exe for exe in self.active_targets.values() if isinstance(exe, Executable)]
+
+    async def run(self):
+        await self.initialize()
+        await asyncio.gather(*[t.execute() for t in self.executable_targets])
 
     async def clean(self, target: str = None):
         await self.initialize()

@@ -11,6 +11,7 @@
             "options": [
                 {"label": "Build", "value": "build"},
                 {"label": "Clean", "value": "clean"},
+                {"label": "Run", "value": "run"},
             ]
         }
     ],

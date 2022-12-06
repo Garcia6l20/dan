@@ -125,9 +125,9 @@ class Target(Logging):
             if done:
                 return
 
-            self.debug('cleaning...')
             clean_tasks = [t.clean() for t in self.target_dependencies]
             if self.output.exists():
+                self.info('cleaning...')
                 clean_tasks.append(aiofiles.os.remove(self.output))
             await asyncio.gather(*clean_tasks)
 

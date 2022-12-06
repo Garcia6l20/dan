@@ -1,22 +1,6 @@
 from pymake.core.logging import Logging
-from .toolchain import Toolchain, Path, FileDependency
-
-import asyncio.subprocess
-
-import sys
-
-
-class AsyncRunner:
-    async def run(self, command):
-        self.debug(f'executing: {command}')
-        proc = await asyncio.subprocess.create_subprocess_shell(command,
-                                                                stdout=asyncio.subprocess.PIPE,
-                                                                stderr=asyncio.subprocess.PIPE)
-        out, err = await proc.communicate()
-        if proc.returncode != 0:
-            self.error(f'running command: {command}\n{err.decode()}')
-            sys.exit(-1)
-        return out, err
+from pymake.core.utils import AsyncRunner
+from pymake.cxx.toolchain import Toolchain, Path, FileDependency
 
 
 class GCCToolchain(Toolchain, AsyncRunner, Logging):
