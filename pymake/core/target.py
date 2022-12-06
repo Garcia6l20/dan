@@ -58,6 +58,7 @@ class Target(Logging):
 
     async def __initialize__(self, name: str, output: str, dependencies: TargetDependencyLike = None):
         self.name = name
+        self.lock = asyncio.Lock()
         super().__init__(self.name)
         self.output = Path(output)
         self.dependencies: Dependencies[Target] = Dependencies()
@@ -101,25 +102,27 @@ class Target(Logging):
         return True
 
     async def build(self):
-        if self.up_to_date:
-            self.debug('not building, up to date !')
-            return
-        self.debug('building...')
-        result = self()
-        if inspect.iscoroutine(result):
-            return await result
-        return result
+        async with self.lock:
+            if self.up_to_date:
+                self.info('up to date !')
+                return
+            self.info('building...')
+            result = self()
+            if inspect.iscoroutine(result):
+                return await result
+            return result
 
     @property
     def target_dependencies(self):
         return [t for t in self.dependencies if isinstance(t, Target)]
 
     async def clean(self):
-        self.debug('cleaning...')
-        clean_tasks = [t.clean() for t in self.target_dependencies]
-        if self.output.exists():
-            clean_tasks.append(aiofiles.os.remove(self.output))
-        await asyncio.gather(*clean_tasks)
+        async with self.lock:
+            self.debug('cleaning...')
+            clean_tasks = [t.clean() for t in self.target_dependencies]
+            if self.output.exists():
+                clean_tasks.append(aiofiles.os.remove(self.output))
+            await asyncio.gather(*clean_tasks)
 
     def __call__(self):
         ...
