@@ -1,9 +1,9 @@
 
-import asyncio
 import sys
 from types import ModuleType
 
 from pymake.core.include import targets, current_makefile
+from pymake.core import asyncio
 from pymake.logging import Logging
 
 from pymake.core.target import Target
@@ -28,15 +28,13 @@ class Make(Logging):
                 self.error(f'Unknown target {name}')
                 sys.exit(-1)
             self.active_targets[name] = target
+            target.name = name
 
         self.debug(f'targets: {self.all_targets}')
-        self.__initialized = False
-        
+
+    @asyncio.once_method
     async def initialize(self):
-        if self.__initialized:
-            return
-        await asyncio.gather(*[target.__initialize__(name) for name, target in self.all_targets.items()])
-        self.__initialized = True
+        await asyncio.gather(*[target.initialize() for name, target in self.all_targets.items()])
 
     async def build(self):
         await self.initialize()

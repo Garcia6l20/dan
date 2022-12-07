@@ -1,9 +1,8 @@
-import asyncio
 import os
 from pathlib import Path
-import sys
-from pymake.core.target import Target, TargetDependencyLike
+from pymake.core.target import Dependencies, Target, TargetDependencyLike
 from pymake.core.utils import AsyncRunner
+from pymake.core import asyncio
 
 from . import target_toolchain
 
@@ -13,11 +12,19 @@ class CXXObject(Target):
         self.source = self.source_path / source
         self.cxxflags = cxxflags
         self.toolchain = target_toolchain
+        
+    @Target.name.setter
+    def name(self, value):
+        Target.name.fset(self, f'{value}.{self.source.stem}')
 
-    async def __initialize__(self, name: str):
+    @asyncio.once_method
+    async def initialize(self):
         deps = await self.toolchain.scan_dependencies(self.source, self.cxxflags)
         deps.add(self.source)
-        await super().__initialize__(f'{name}.{self.source.stem}', f'{self.source.name}.o', deps)
+        self.load_dependencies(deps)
+        self.output = Path(f'{self.source.name}.o')
+        await super().initialize(recursive_once=True)
+        # await super().initialize(f'{name}.{self.source.stem}', f'{self.source.name}.o', deps)
 
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
@@ -37,7 +44,7 @@ class CXXTarget(Target):
         super().__init__()
         self.toolchain = target_toolchain
 
-        self.dependencies = set(dependencies)
+        self.dependencies = Dependencies(dependencies)
         self.public_includes: set[Path] = set()
         self.private_includes: set[Path] = set()
         self.public_compile_options = set(public_compile_options)
@@ -96,10 +103,16 @@ class CXXObjectsTarget(CXXTarget):
 
         for source in sources:
             self.objs.add(CXXObject(source, self.cxxflags))
-            
-    async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
-        dependencies.update(self.objs)
-        await asyncio.gather(super().__initialize__(name, output, dependencies), *[obj.__initialize__(name) for obj in self.objs])
+      
+    @asyncio.once_method
+    async def initialize(self):
+        for obj in self.objs:
+            obj.name = self.name
+
+        self.load_dependencies(self.objs)
+        await super().initialize(recursive_once=True)
+        # dependencies.update(self.objs)
+        # await asyncio.gather(super().initialize(name, output, dependencies), *[obj.initialize(name) for obj in self.objs])
 
     async def __call__(self):
         # compile objects
@@ -108,8 +121,11 @@ class CXXObjectsTarget(CXXTarget):
 
 class Executable(CXXObjectsTarget, AsyncRunner):
 
-    async def __initialize__(self, name: str):
-        await super().__initialize__(name, name.split('.')[-1], {*self.dependencies, *self.objs})
+    @asyncio.once_method
+    async def initialize(self):
+        self.output = Path(self.name.split('.')[-1])
+        self.load_dependencies(self.dependencies)
+        await super().initialize(recursive_once=True)
 
     async def __call__(self):
         await super().__call__()
@@ -138,14 +154,21 @@ class Library(CXXObjectsTarget):
         else:
             raise RuntimeError(f'Unknwon os name: {os.name}')
 
-    async def __initialize__(self, name: str):
-        await asyncio.gather(*[obj.__initialize__(name) for obj in self.objs])
-        await super().__initialize__(name, f"lib{name.split('.')[-1]}.{self.ext}", self.objs)
+    @asyncio.once_method
+    async def initialize(self):
+        self.load_dependencies(self.objs)
+        self.output = Path(f"lib{self.name.split('.')[-1]}.{self.ext}")
+        await super().initialize(recursive_once=True)
 
     async def __call__(self):
         await super().__call__()
         self.info(
             f'creating {"static" if self.static else "shared"} library {self.output}...')
+
+        objs = self.objs
+        for dep in self.cxx_dependencies:
+            if isinstance(dep, CXXObjectsTarget):
+                objs.update(dep.objs)
 
         if self.static:
             await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output)

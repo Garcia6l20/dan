@@ -17,3 +17,4 @@ __init_toolchains()
 
 
 from .targets import Executable, Library, Module
+from .targets import CXXObjectsTarget as Objects

@@ -53,19 +53,25 @@ class Target(Logging):
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
         self.other_generated_files: set[Path] = set()
-
-    async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
-        self.name = name
-        super().__init__(self.name)
-        self.output = self.build_path / output if output else None
-        dependencies = set(dependencies)
-        if hasattr(self, 'dependencies'):
-            dependencies.update(self.dependencies)
         self.dependencies: Dependencies[Target] = Dependencies()
-        if isinstance(dependencies, set):
-            self.load_dependencies(dependencies)
-        elif dependencies is not None:
-            self.load_dependency(dependencies)
+        self._name: str = None
+        self.output: Path = None
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        assert not self._name
+        self._name = name
+        super().__init__(self.name)
+
+    @asyncio.once_method
+    async def initialize(self):
+        await asyncio.gather(*[obj.initialize() for obj in self.target_dependencies])
+        if self.output and not self.output.is_absolute():
+            self.output = self.build_path / self.output
 
     def load_dependencies(self, dependencies):
         for dependency in dependencies:
@@ -106,7 +112,7 @@ class Target(Logging):
         if self.up_to_date:
             self.info('up to date !')
             return
-        
+
         with utils.chdir(self.build_path):
             self.info('building...')
             result = self()
@@ -124,7 +130,8 @@ class Target(Logging):
         if self.output and self.output.exists():
             self.info('cleaning...')
             clean_tasks.append(aiofiles.os.remove(self.output))
-        clean_tasks.extend([aiofiles.os.remove(f) for f in self.other_generated_files if f.exists()])
+        clean_tasks.extend([aiofiles.os.remove(f)
+                           for f in self.other_generated_files if f.exists()])
         try:
             await asyncio.gather(*clean_tasks)
         except FileNotFoundError as err:
