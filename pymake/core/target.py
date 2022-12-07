@@ -53,8 +53,6 @@ class Target(Logging):
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
         self.other_generated_files: set[Path] = set()
-        self.__cleaned = asyncio.OnceLock()
-        self.__built = asyncio.OnceLock()
 
     async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
         self.name = name
@@ -103,40 +101,34 @@ class Target(Logging):
             return False
         return True
 
+    @asyncio.once_method
     async def build(self):
-        async with self.__built as done:
-            if done:
-                return
-
-            if self.up_to_date:
-                self.info('up to date !')
-                return
-            
-            with utils.chdir(self.build_path):
-                self.info('building...')
-                result = self()
-                if inspect.iscoroutine(result):
-                    return await result
-                return result
+        if self.up_to_date:
+            self.info('up to date !')
+            return
+        
+        with utils.chdir(self.build_path):
+            self.info('building...')
+            result = self()
+            if inspect.iscoroutine(result):
+                return await result
+            return result
 
     @property
     def target_dependencies(self):
         return [t for t in self.dependencies if isinstance(t, Target)]
 
+    @asyncio.once_method
     async def clean(self):
-        async with self.__cleaned as done:
-            if done:
-                return
-
-            clean_tasks = [t.clean() for t in self.target_dependencies]
-            if self.output and self.output.exists():
-                self.info('cleaning...')
-                clean_tasks.append(aiofiles.os.remove(self.output))
-            clean_tasks.extend([aiofiles.os.remove(f) for f in self.other_generated_files if f.exists()])
-            try:
-                await asyncio.gather(*clean_tasks)
-            except FileNotFoundError as err:
-                self.warn(f'file not found: {err.filename}')
+        clean_tasks = [t.clean() for t in self.target_dependencies]
+        if self.output and self.output.exists():
+            self.info('cleaning...')
+            clean_tasks.append(aiofiles.os.remove(self.output))
+        clean_tasks.extend([aiofiles.os.remove(f) for f in self.other_generated_files if f.exists()])
+        try:
+            await asyncio.gather(*clean_tasks)
+        except FileNotFoundError as err:
+            self.warn(f'file not found: {err.filename}')
 
     def __call__(self):
         ...
