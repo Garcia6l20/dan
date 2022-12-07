@@ -22,9 +22,9 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
         return opts
 
     async def scan_dependencies(self, file: Path, options: set[str]) -> set[FileDependency]:
-        out, _ = await self.run(f'{self.cxx} -M {file} {" ".join(options)}')
+        out, _, _ = await self.run(f'{self.cxx} -M {file} {" ".join(options)}')
         all = ''.join([dep.replace('\\', ' ')
-                      for dep in out.decode().splitlines()]).split()
+                      for dep in out.splitlines()]).split()
         _obj = all.pop(0)
         _src = all.pop(0)
         return {FileDependency(dep) for dep in all}

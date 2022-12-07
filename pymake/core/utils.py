@@ -4,8 +4,15 @@ import os
 import sys
 
 
+class CommandError(RuntimeError):
+    def __init__(self, message, rc, stdout, stderr) -> None:
+        super().__init__(message)
+        self.rc = rc
+        self.stdout = stdout
+        self.stderr = stderr
+
 class AsyncRunner:
-    async def run(self, command, pipe=True):
+    async def run(self, command, pipe=True, no_raise=False):
         self.debug(f'executing: {command}')
         if pipe:
             stdout=asyncio.subprocess.PIPE
@@ -15,10 +22,11 @@ class AsyncRunner:
                                                                 stdout=stdout,
                                                                 stderr=stdout)
         out, err = await proc.communicate()
-        if proc.returncode != 0:
-            self.error(f'command returned {proc.returncode}: {command}\n{err.decode() if err else ""}')
-            sys.exit(-1)
-        return out, err
+        if proc.returncode != 0 and not no_raise:
+            message = f'command returned {proc.returncode}: {command}\n{err.decode() if err else ""}'
+            self.error(message)
+            raise CommandError(message, proc.returncode, out, err)
+        return out.decode(), err.decode(), proc.returncode
 
 
 class chdir:
