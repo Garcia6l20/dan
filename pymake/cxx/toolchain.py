@@ -27,3 +27,7 @@ class Toolchain:
 
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str]):
         ...
+
+    @property
+    def cxxmodules_flags(self) -> set[str]:
+        ...

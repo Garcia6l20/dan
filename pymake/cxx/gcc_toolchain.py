@@ -32,6 +32,10 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
     def compile_generated_files(self, output: Path) -> set[Path]:
         return {output.with_suffix(output.suffix + '.d')}
 
+    @property
+    def cxxmodules_flags(self) -> set[str]:
+        return {'-std=c++20', '-fmodules-ts'}
+
     async def compile(self, sourcefile: Path, output: Path, options: set[str]):
         await self.run(f'{self.cxx} {" ".join(options)} -MD -MT {output} -MF {output}.d -o {output} -c {sourcefile}')
 

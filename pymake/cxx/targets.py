@@ -161,3 +161,14 @@ class Library(CXXObjectsTarget):
             await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.cxxflags, *self.libs})
 
         self.debug(f'done')
+
+class Module(CXXObjectsTarget):
+    def __init__(self, sources: str, *args, **kwargs):
+        super().__init__(sources, *args, **kwargs)
+
+    @property
+    def cxxflags(self):
+        return {*self.toolchain.cxxmodules_flags, *super().cxxflags}
+
+    async def __call__(self):
+        return await super().__call__()

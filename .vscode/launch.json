@@ -13,6 +13,18 @@
                 {"label": "Clean", "value": "clean"},
                 {"label": "Run", "value": "run"},
             ]
+        },
+        {
+            "id": "test",
+            "description": "Select a test",
+            "type": "pickString",
+            "options": [
+                {"label": "Generators", "value": "simple"},
+                {"label": "CXX/simple", "value": "cxx/simple"},
+                {"label": "CXX/library", "value": "cxx/library"},
+                {"label": "CXX/qt", "value": "cxx/qt"},
+                {"label": "CXX/modules", "value": "cxx/modules"},
+            ]
         }
     ],
     "configurations": [
@@ -29,13 +41,25 @@
             }
         },
         {
-            "name": "test: cxx/simple",
+            "name": "single test",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/tests/cxx/simple/makefile.py",
+            "program": "${workspaceFolder}/tests/${input:test}/makefile.py",
             "justMyCode": true,
             "args": ["-d", "${input:makefileCommand}"],
-            "cwd": "${workspaceFolder}/tests/cxx/simple",
+            "cwd": "${workspaceFolder}/tests/${input:test}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "cxx/modules test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/cxx/modules/makefile.py",
+            "justMyCode": true,
+            "args": ["-d", "${input:makefileCommand}"],
+            "cwd": "${workspaceFolder}/tests/cxx/modules",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }

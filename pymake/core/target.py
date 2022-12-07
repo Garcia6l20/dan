@@ -52,12 +52,12 @@ class Target(Logging):
         from pymake.core.include import current_makefile
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
+        self.other_generated_files: set[Path] = set()
 
     async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
         self.name = name
         super().__init__(self.name)
         self.output = self.build_path / output if output else None
-        self.other_generated_files: set[Path] = set()
         dependencies = set(dependencies)
         if hasattr(self, 'dependencies'):
             dependencies.update(self.dependencies)
