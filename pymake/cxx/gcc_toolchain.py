@@ -1,3 +1,4 @@
+import asyncio
 from pymake.core.logging import Logging
 from pymake.core.utils import AsyncRunner
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency
@@ -10,6 +11,10 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
         self.cxx = cxx
         self.ar = f'{cc}-ar'
         self.ranlib = f'{cc}-ranlib'
+    
+    def has_cxx_compile_options(self, *opts) -> bool:
+        _, err, _ = asyncio.run(self.run(f'{self.cxx} {" ".join(opts)}', no_raise=True))
+        return err.splitlines()[0].find('no input files') >= 0
 
     def make_include_options(self, include_paths: set[Path]) -> set[str]:
         return {f'-I{p}' for p in include_paths}
