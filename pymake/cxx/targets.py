@@ -5,25 +5,14 @@ import sys
 from pymake.core.target import Target, TargetDependencyLike
 from pymake.core.utils import AsyncRunner
 
-from .toolchain import Toolchain
-from .gcc_toolchain import GCCToolchain
-
-_target_toolchain: Toolchain = None
-
-
-def target_toolchain() -> Toolchain:
-    global _target_toolchain
-    if _target_toolchain is None:
-        _target_toolchain = GCCToolchain()
-    return _target_toolchain
-
+from . import target_toolchain
 
 class CXXObject(Target):
     def __init__(self, source: str, cxxflags: set[str] = set()) -> None:
         super().__init__()
         self.source = self.source_path / source
         self.cxxflags = cxxflags
-        self.toolchain = target_toolchain()
+        self.toolchain = target_toolchain
 
     async def __initialize__(self, name: str):
         deps = await self.toolchain.scan_dependencies(self.source, self.cxxflags)
@@ -46,7 +35,7 @@ class CXXTarget(Target):
                  private_compile_options: set[str] = set(),
                  dependencies: set[TargetDependencyLike] = set()) -> None:
         super().__init__()
-        self.toolchain = target_toolchain()
+        self.toolchain = target_toolchain
 
         self.dependencies = set(dependencies)
         self.public_includes: set[Path] = set()
