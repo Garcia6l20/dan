@@ -11,13 +11,14 @@ class CommandError(RuntimeError):
         self.stdout = stdout
         self.stderr = stderr
 
+
 class AsyncRunner:
     async def run(self, command, pipe=True, no_raise=False):
         self.debug(f'executing: {command}')
         if pipe:
-            stdout=asyncio.subprocess.PIPE
+            stdout = asyncio.subprocess.PIPE
         else:
-            stdout=None
+            stdout = None
         proc = await asyncio.subprocess.create_subprocess_shell(command,
                                                                 stdout=stdout,
                                                                 stderr=stdout)
@@ -26,7 +27,7 @@ class AsyncRunner:
             message = f'command returned {proc.returncode}: {command}\n{err.decode() if err else ""}'
             self.error(message)
             raise CommandError(message, proc.returncode, out, err)
-        return out.decode(), err.decode(), proc.returncode
+        return out.decode() if out else None, err.decode() if err else None, proc.returncode
 
 
 class chdir:
