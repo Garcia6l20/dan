@@ -5,7 +5,7 @@ import aiofiles
 import aiofiles.os
 
 from pymake.core import asyncio, utils
-from pymake.core.logging import Logging
+from pymake.logging import Logging
 
 
 class Dependencies(set):
@@ -53,6 +53,8 @@ class Target(Logging):
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
         self.other_generated_files: set[Path] = set()
+        self.__cleaned = asyncio.OnceLock()
+        self.__built = asyncio.OnceLock()
 
     async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
         self.name = name
@@ -66,9 +68,6 @@ class Target(Logging):
             self.load_dependencies(dependencies)
         elif dependencies is not None:
             self.load_dependency(dependencies)
-
-        self.__cleaned = asyncio.OnceLock()
-        self.__built = asyncio.OnceLock()
 
     def load_dependencies(self, dependencies):
         for dependency in dependencies:

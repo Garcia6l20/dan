@@ -1,8 +1,6 @@
 import importlib.util
 from pathlib import Path
 
-from pymake.core.logging import setup_logger, logging
-
 # patch root makefile
 root_makefile = None
 current_makefile = None
@@ -22,14 +20,6 @@ def _init_makefile(module, name: str = 'root'):
     setattr(module, 'build_path', build_path)
     setattr(module, 'parent_makefile', current_makefile)
     setattr(module, 'name', name)
-    logger = logging.getLogger(name)
-    setup_logger(logger)
-    setattr(module, '_logger', logger)
-    setattr(module, 'debug', logger.debug)
-    setattr(module, 'info', logger.info)
-    setattr(module, 'warning', logger.warning)
-    setattr(module, 'error', logger.error)
-    setattr(module, 'critical', logger.critical)
     current_makefile = module
 
 

@@ -20,6 +20,7 @@ def find_pkg_config(name, paths=list()) -> Path:
 
 class Package(CXXTarget):
     def __init__(self, name, search_paths: list[str] = list()) -> None:
+        self.output = None
         self.config_path = find_pkg_config(name, search_paths)
         if not self.config_path:
             raise MissingPackage(name)

@@ -1,5 +1,7 @@
+from pymake.core.include import current_makefile as __current_makefile
 import logging
 from termcolor import colored
+
 
 def merge(lhs, rhs):
     if type(lhs) != type(rhs):
@@ -19,9 +21,10 @@ class bind_back:
     def __init__(self, fn, *args):
         self.fn = fn
         self.args = args
-    
+
     def __call__(self, *args, **kwds):
         return self.fn(*args, *self.args, **kwds)
+
 
 class ColoredFormatter(logging.Formatter):
 
@@ -45,7 +48,7 @@ class ColoredFormatter(logging.Formatter):
         f"[{colored('%(asctime)s.%(msecs)03d', 'grey')}]" \
         f"[%(levelname)s][{colored('%(name)s', 'white', attrs=['bold'])}]: %(message)s "\
         f"({colored('%(filename)s:%(lineno)d', 'grey')})"
-    
+
     FORMAT = \
         "[%(asctime)s.%(msecs)03d]" \
         "[%(levelname)s][%(name)s]: %(message)s "\
@@ -58,21 +61,26 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record):
         levelname = record.levelname
         if self.use_color and levelname in self.COLORS:
-            record.levelname = self.COLORS[levelname](levelname, attrs=['bold', *self.COLORS_ATTRS[levelname]])
+            record.levelname = self.COLORS[levelname](
+                levelname, attrs=['bold', *self.COLORS_ATTRS[levelname]])
             record.msg = self.COLORS[levelname](record.msg, attrs=[])
         return super().format(record)
+
 
 _color_formatter = ColoredFormatter()
 _no_color_formatter = ColoredFormatter(use_color=False)
 
-def setup_logger(logger : logging.Logger):
+
+def setup_logger(logger: logging.Logger):
     if not logger.hasHandlers():
         console = logging.StreamHandler()
         console.setFormatter(_color_formatter)
         logger.addHandler(console)
     else:
-        for handler in logger.handlers:            
-            handler.setFormatter(_color_formatter if isinstance(handler, logging.StreamHandler) else _no_color_formatter)
+        for handler in logger.handlers:
+            handler.setFormatter(_color_formatter if isinstance(
+                handler, logging.StreamHandler) else _no_color_formatter)
+
 
 class ColoredLogger(logging.Logger):
 
@@ -80,9 +88,10 @@ class ColoredLogger(logging.Logger):
         super().__init__(name)
         self.propagate = False
         setup_logger(self)
-    
+
 
 logging.setLoggerClass(ColoredLogger)
+
 
 class Logging:
     def __init__(self, name: str = None) -> None:
@@ -94,4 +103,16 @@ class Logging:
         self.warn = self._logger.warn
         self.error = self._logger.error
 
-getLogger = logging.getLogger
+
+if not hasattr(__current_makefile, '_logger'):
+    __makefile_logger = logging.getLogger(__current_makefile.name)
+    setup_logger(__makefile_logger)
+    setattr(__current_makefile, '_logger', __makefile_logger)
+else:
+    __makefile_logger: logging.Logger = getattr(__current_makefile, '_logger')
+
+debug = __makefile_logger.debug
+info = __makefile_logger.info
+warning = __makefile_logger.warning
+error = __makefile_logger.error
+critical = __makefile_logger.critical

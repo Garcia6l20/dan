@@ -1,5 +1,5 @@
 import asyncio
-from pymake.core.logging import Logging
+from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency
 

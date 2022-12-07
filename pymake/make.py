@@ -4,7 +4,7 @@ import sys
 from types import ModuleType
 
 from pymake.core.include import targets, current_makefile
-from pymake.core.logging import Logging
+from pymake.logging import Logging
 
 from pymake.core.target import Target
 from pymake.cxx.targets import Executable
