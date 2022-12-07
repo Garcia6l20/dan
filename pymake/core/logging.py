@@ -67,6 +67,7 @@ class ColoredLogger(logging.Logger):
 
     def __init__(self, name):
         super().__init__(name)
+        self.propagate = False
 
         color_formatter = ColoredFormatter()
         if not self.hasHandlers():
@@ -79,15 +80,13 @@ class ColoredLogger(logging.Logger):
 
 
 logging.setLoggerClass(ColoredLogger)
-# logging.basicConfig(level=logging.INFO)
-
 
 class Logging:
     def __init__(self, name: str = None) -> None:
         if name is None:
             name = self.__class__.__name__
-        self.logger = logging.getLogger(name)
-        self.debug = self.logger.debug
-        self.info = self.logger.info
-        self.warn = self.logger.warn
-        self.error = self.logger.error
+        self._logger = logging.getLogger(name)
+        self.debug = self._logger.debug
+        self.info = self._logger.info
+        self.warn = self._logger.warn
+        self.error = self._logger.error
