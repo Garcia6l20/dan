@@ -45,5 +45,5 @@ def once_method(fn):
             return await inner(self, lock.done, *args, **kwds)
         async with lock as done:
             return await inner(self, done, *args, **kwds)
-            
+
     return wrapper

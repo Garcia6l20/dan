@@ -6,13 +6,14 @@ from pymake.core import asyncio
 
 from . import target_toolchain
 
+
 class CXXObject(Target):
     def __init__(self, source: str, cxxflags: set[str] = set()) -> None:
         super().__init__()
         self.source = self.source_path / source
         self.cxxflags = cxxflags
         self.toolchain = target_toolchain
-        
+
     @Target.name.setter
     def name(self, value):
         Target.name.fset(self, f'{value}.{self.source.stem}')
@@ -76,7 +77,8 @@ class CXXTarget(Target):
 
     @property
     def libs(self) -> set[str]:
-        tmp = self.toolchain.make_link_options([lib.output for lib in self.library_dependencies if lib.output])
+        tmp = self.toolchain.make_link_options(
+            {lib.output for lib in self.library_dependencies if lib.output})
         for dep in self.cxx_dependencies:
             tmp.update(dep.libs)
         return tmp
@@ -97,13 +99,13 @@ class CXXTarget(Target):
 
 class CXXObjectsTarget(CXXTarget):
     def __init__(self,
-                 sources: str, *args, **kwargs):
+                 sources: set[str] = set(), *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.objs: set[CXXObject] = set()
 
         for source in sources:
             self.objs.add(CXXObject(source, self.cxxflags))
-      
+
     @asyncio.once_method
     async def initialize(self):
         for obj in self.objs:
@@ -111,12 +113,12 @@ class CXXObjectsTarget(CXXTarget):
 
         self.load_dependencies(self.objs)
         await super().initialize(recursive_once=True)
-        # dependencies.update(self.objs)
-        # await asyncio.gather(super().initialize(name, output, dependencies), *[obj.initialize(name) for obj in self.objs])
 
     async def __call__(self):
         # compile objects
-        await asyncio.gather(*[dep.build() for dep in self.library_dependencies], *[obj.build() for obj in self.objs])
+        builds = {dep.build() for dep in self.cxx_dependencies}
+        builds.update({dep.build() for dep in self.objs})
+        await asyncio.gather(*builds)
 
 
 class Executable(CXXObjectsTarget, AsyncRunner):
@@ -176,6 +178,7 @@ class Library(CXXObjectsTarget):
             await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.cxxflags, *self.libs})
 
         self.debug(f'done')
+
 
 class Module(CXXObjectsTarget):
     def __init__(self, sources: str, *args, **kwargs):
