@@ -1,10 +1,8 @@
 from pathlib import Path
 from typing import Union, TypeAlias
 import inspect
-import aiofiles
-import aiofiles.os
 
-from pymake.core import asyncio, utils
+from pymake.core import asyncio, aiofiles, utils
 from pymake.logging import Logging
 
 
@@ -48,22 +46,33 @@ class FileDependency(PathImpl):
 
 
 class Target(Logging):
-    def __init__(self) -> None:
+    def __init__(self, name: str = None) -> None:
         from pymake.core.include import current_makefile
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
-        self._name: str = None
+        self._name: str = None        
         self.output: Path = None
+        
+        if name:
+            if current_makefile.parent_makefile:
+                self.name = f'{current_makefile.parent_makefile}.{name}'
+            else:
+                self.name = name
 
     @property
     def name(self) -> str:
         return self._name
 
+    @property
+    def sname(self) -> str:
+        return self._name.split('.')[-1]
+
     @name.setter
     def name(self, name):
-        assert not self._name
+        if self._name:
+            return
         self._name = name
         super().__init__(self.name)
 
@@ -86,8 +95,6 @@ class Target(Logging):
             self.load_dependency(Path(dependency))
         elif isinstance(dependency, Path):
             dependency = FileDependency(self.source_path / dependency)
-            if not dependency.exists():
-                raise FileNotFoundError(dependency)
             self.dependencies.add(dependency)
         else:
             raise RuntimeError(
@@ -109,6 +116,8 @@ class Target(Logging):
 
     @asyncio.once_method
     async def build(self):
+        await self.initialize()
+
         if self.up_to_date:
             self.info('up to date !')
             return
@@ -126,10 +135,15 @@ class Target(Logging):
 
     @asyncio.once_method
     async def clean(self):
+        await self.initialize()
+
         clean_tasks = [t.clean() for t in self.target_dependencies]
         if self.output and self.output.exists():
             self.info('cleaning...')
-            clean_tasks.append(aiofiles.os.remove(self.output))
+            if self.output.is_dir():
+                clean_tasks.append(aiofiles.rmtree(self.output))
+            else:
+                clean_tasks.append(aiofiles.os.remove(self.output))
         clean_tasks.extend([aiofiles.os.remove(f)
                            for f in self.other_generated_files if f.exists()])
         try:

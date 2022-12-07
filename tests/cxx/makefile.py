@@ -6,6 +6,7 @@ include('simple')
 include('libraries')
 include('qt')
 include('modules')
+include('smc')
 
 if __name__ == '__main__':
     cli()

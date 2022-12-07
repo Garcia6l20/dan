@@ -32,12 +32,7 @@ class Make(Logging):
 
         self.debug(f'targets: {self.all_targets}')
 
-    @asyncio.once_method
-    async def initialize(self):
-        await asyncio.gather(*[target.initialize() for name, target in self.all_targets.items()])
-
     async def build(self):
-        await self.initialize()
         await asyncio.gather(*[t.build() for t in self.active_targets.values()])
     
     @property
@@ -45,9 +40,7 @@ class Make(Logging):
         return [exe for exe in self.active_targets.values() if isinstance(exe, Executable)]
 
     async def run(self):
-        await self.initialize()
         await asyncio.gather(*[t.execute() for t in self.executable_targets])
 
     async def clean(self, target: str = None):
-        await self.initialize()
         await asyncio.gather(*[t.clean() for t in self.active_targets.values()])

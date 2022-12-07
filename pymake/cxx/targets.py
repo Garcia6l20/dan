@@ -25,7 +25,6 @@ class CXXObject(Target):
         self.load_dependencies(deps)
         self.output = Path(f'{self.source.name}.o')
         await super().initialize(recursive_once=True)
-        # await super().initialize(f'{name}.{self.source.stem}', f'{self.source.name}.o', deps)
 
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
@@ -125,7 +124,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
 
     @asyncio.once_method
     async def initialize(self):
-        self.output = Path(self.name.split('.')[-1])
+        self.output = Path(self.sname)
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
 
@@ -159,7 +158,7 @@ class Library(CXXObjectsTarget):
     @asyncio.once_method
     async def initialize(self):
         self.load_dependencies(self.objs)
-        self.output = Path(f"lib{self.name.split('.')[-1]}.{self.ext}")
+        self.output = Path(f"lib{self.sname}.{self.ext}")
         await super().initialize(recursive_once=True)
 
     async def __call__(self):
