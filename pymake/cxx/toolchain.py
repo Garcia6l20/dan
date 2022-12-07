@@ -1,12 +1,65 @@
 from pathlib import Path
 
 from pymake.core.target import FileDependency
+from pymake.core.include import root_makefile
+import json
+
+
+class CompileCommands:
+    def __init__(self) -> None:
+        self.cc_path: Path = root_makefile.build_path / 'compile_commands.json'
+        if self.cc_path.exists():
+            self.cc_f = open(self.cc_path, 'r+')
+            try:
+                self.data = json.load(self.cc_f)
+            except json.JSONDecodeError:
+                self.data = list()
+        else:
+            self.data = list()
+            self.cc_f = open(self.cc_path, 'w')
+
+    def clear(self):
+        self.cc_f.seek(0)
+        self.cc_f.truncate()
+        self.cc_f.close()
+
+    def update(self):
+        self.cc_f.seek(0)
+        self.cc_f.truncate()
+        json.dump(self.data, self.cc_f)
+        self.cc_f.close()
+
+    def get(self, file: Path):
+        fname = file.name
+        for entry in self.data:
+            if entry['file'] == fname:
+                return entry
+        return None
+
+    def insert(self, file: Path, build_path: Path, content: list[str] | str):
+        entry = self.get(file)
+        if isinstance(content, str):
+            key = 'command'
+        else:
+            assert isinstance(content, list)
+            key = 'args'
+        if entry:            
+            entry[key] = content
+        else:
+            self.data.append({
+                'file': str(file),
+                'directory': str(build_path),
+                key: content
+            })
 
 
 class Toolchain:
+    def __init__(self) -> None:
+        self.compile_commands = CompileCommands()
+
     def has_cxx_compile_options(*opts) -> bool:
         ...
-    
+
     def make_include_options(self, include_paths: set[Path]) -> set[str]:
         ...
 

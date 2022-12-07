@@ -56,6 +56,8 @@ def cli(ctx: click.Context, debug: bool):
 @pass_make
 def build(make: Make, **kwargs):
     asyncio.run(make.build())
+    from pymake.cxx import target_toolchain
+    target_toolchain.compile_commands.update()
 
 
 @cli.command()
@@ -74,6 +76,8 @@ def list(make: Make, show_type : bool, **kwargs):
 @pass_make
 def clean(make: Make, **kwargs):
     asyncio.run(make.clean())
+    from pymake.cxx import target_toolchain
+    target_toolchain.compile_commands.clear()
 
 @cli.command()
 @add_options(_common_opts)
