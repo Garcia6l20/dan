@@ -8,7 +8,7 @@ from pymake.core import asyncio, utils
 from pymake.core.logging import Logging
 
 
-class Dependencies(list):
+class Dependencies(set):
     def __getattr__(self, attr):
         for item in self:
             if item.name == attr:
@@ -76,16 +76,16 @@ class Target(Logging):
 
     def load_dependency(self, dependency):
         if isinstance(dependency, Target):
-            self.dependencies.append(dependency)
+            self.dependencies.add(dependency)
         elif isinstance(dependency, FileDependency):
-            self.dependencies.append(dependency)
+            self.dependencies.add(dependency)
         elif isinstance(dependency, str):
             self.load_dependency(Path(dependency))
         elif isinstance(dependency, Path):
             dependency = FileDependency(self.source_path / dependency)
             if not dependency.exists():
                 raise FileNotFoundError(dependency)
-            self.dependencies.append(dependency)
+            self.dependencies.add(dependency)
         else:
             raise RuntimeError(
                 f'Unhandled dependency {dependency} ({type(dependency)})')
