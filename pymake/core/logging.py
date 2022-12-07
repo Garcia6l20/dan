@@ -62,22 +62,25 @@ class ColoredFormatter(logging.Formatter):
             record.msg = self.COLORS[levelname](record.msg, attrs=[])
         return super().format(record)
 
+_color_formatter = ColoredFormatter()
+_no_color_formatter = ColoredFormatter(use_color=False)
+
+def setup_logger(logger : logging.Logger):
+    if not logger.hasHandlers():
+        console = logging.StreamHandler()
+        console.setFormatter(_color_formatter)
+        logger.addHandler(console)
+    else:
+        for handler in logger.handlers:            
+            handler.setFormatter(_color_formatter if isinstance(handler, logging.StreamHandler) else _no_color_formatter)
 
 class ColoredLogger(logging.Logger):
 
     def __init__(self, name):
         super().__init__(name)
         self.propagate = False
-
-        color_formatter = ColoredFormatter()
-        if not self.hasHandlers():
-            console = logging.StreamHandler()
-            console.setFormatter(color_formatter)
-            self.addHandler(console)
-        else:
-            for handler in self.handlers:
-                handler.setFormatter(color_formatter)
-
+        setup_logger(self)
+    
 
 logging.setLoggerClass(ColoredLogger)
 
@@ -90,3 +93,5 @@ class Logging:
         self.info = self._logger.info
         self.warn = self._logger.warn
         self.error = self._logger.error
+
+getLogger = logging.getLogger
