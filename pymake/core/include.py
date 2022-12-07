@@ -44,11 +44,15 @@ def targets():
 
 def include(name: str):
     global current_makefile
-    module_path = current_makefile.source_path / name / 'makefile.py'
+    module_path : Path = current_makefile.source_path / name / 'makefile.py'
+    if not module_path.exists():
+        module_path = current_makefile.source_path / f'{name}.py'
     spec = importlib.util.spec_from_file_location(
         f'{current_makefile.name}.{name}', module_path)
     module = importlib.util.module_from_spec(spec)
     _init_makefile(module, name)
     spec.loader.exec_module(module)
     makefiles.append(current_makefile)
+    exports = getattr(module, 'exports') if hasattr(module, 'exports') else None
     current_makefile = current_makefile.parent_makefile
+    return exports
