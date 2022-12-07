@@ -96,6 +96,10 @@ class CXXObjectsTarget(CXXTarget):
 
         for source in sources:
             self.objs.add(CXXObject(source, self.cxxflags))
+            
+    async def __initialize__(self, name: str, output: str = None, dependencies: TargetDependencyLike = set()):
+        dependencies.update(self.objs)
+        await asyncio.gather(super().__initialize__(name, output, dependencies), *[obj.__initialize__(name) for obj in self.objs])
 
     async def __call__(self):
         # compile objects
@@ -105,7 +109,6 @@ class CXXObjectsTarget(CXXTarget):
 class Executable(CXXObjectsTarget, AsyncRunner):
 
     async def __initialize__(self, name: str):
-        await asyncio.gather(*[obj.__initialize__(name) for obj in self.objs])
         await super().__initialize__(name, name.split('.')[-1], {*self.dependencies, *self.objs})
 
     async def __call__(self):

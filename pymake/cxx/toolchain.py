@@ -4,6 +4,9 @@ from pymake.core.target import FileDependency
 
 
 class Toolchain:
+    def has_cxx_compile_options(*opts) -> bool:
+        ...
+    
     def make_include_options(self, include_paths: set[Path]) -> set[str]:
         ...
 
