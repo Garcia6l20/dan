@@ -6,16 +6,12 @@ from .toolchain import Toolchain
 target_toolchain: Toolchain = None
 host_toolchain: Toolchain = None
 
-toolchain_id = None
 auto_fpic = True
 
-def __init_toolchains():
-    global toolchain_id
+def init_toolchains(name):
     from .detect import get_toolchains
     data = get_toolchains()
-    if toolchain_id is None:
-        toolchain_id = data['default']
-    toolchain_data = data['toolchains'][toolchain_id]
+    toolchain_data = data['toolchains'][name]
         
     from .gcc_toolchain import GCCToolchain
     global target_toolchain, host_toolchain
@@ -28,9 +24,21 @@ def __init_toolchains():
     else:
         raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
 
+def __init_toolchains():
+    import os
+    import sys
+    tid = os.getenv('PYMAKE_TOOLCHAIN', None)
+    if not tid:
+        index = sys.argv.index('-t')
+        if index < 0:
+            index = sys.argv.index('--toolchain')
+        if index < 0:
+            tid = 'default'
+        else:
+            tid = sys.argv[index + 1]
+    init_toolchains(tid)
 
 __init_toolchains()
-
 
 from .targets import Executable, Library, Module
 from .targets import CXXObjectsTarget as Objects

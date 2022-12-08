@@ -15,7 +15,7 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, mode: str = 'release', toolchain: str = 'default', makefile: ModuleType = None, active_targets: list[str] = None):
+    def __init__(self, mode: str = 'release', makefile: ModuleType = None, active_targets: list[str] = None):
         super().__init__('make')
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(mode)
@@ -33,6 +33,11 @@ class Make(Logging):
             target.name = name
 
         self.debug(f'targets: {self.all_targets}')
+        
+    @property
+    def toolchains(self):
+        from pymake.cxx.detect import get_toolchains
+        return get_toolchains()
 
     async def build(self):
         await asyncio.gather(*[t.build() for t in self.active_targets.values()])

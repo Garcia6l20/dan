@@ -57,7 +57,7 @@ def add_options(options):
 @click.pass_context
 def cli(ctx: click.Context, verbose: bool, mode: str, toolchain: str):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
-    ctx.obj = Make(mode, toolchain)
+    ctx.obj = Make(mode)
     if ctx.invoked_subcommand is None:
         ctx.invoke(build)
 
@@ -82,6 +82,11 @@ def list(make: Make, show_type: bool, **kwargs):
             s = s + ' - ' + type(target).__name__
         click.echo(s)
 
+@cli.command()
+@pass_make
+def list_toolchains(make: Make, **kwargs):
+    for name, _ in make.toolchains['toolchains'].items():
+        click.echo(name)
 
 @cli.command()
 @add_options(_common_opts)
