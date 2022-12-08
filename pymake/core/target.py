@@ -24,7 +24,7 @@ class Dependencies(set):
         t = 0.0
         for item in self:
             mt = item.modification_time
-            if mt > t:
+            if mt and mt > t:
                 t = mt
         return t
 
@@ -60,7 +60,7 @@ class Target(Logging):
         
         if name:
             if current_makefile.parent_makefile:
-                self.name = f'{current_makefile.parent_makefile}.{name}'
+                self.name = f'{current_makefile.parent_makefile.name}.{name}'
             else:
                 self.name = name
 
@@ -112,7 +112,7 @@ class Target(Logging):
 
     @property
     def modification_time(self):
-        return self.output.stat().st_mtime if self.output else 0.0
+        return self.output.stat().st_mtime if self.output else None
 
     @property
     def up_to_date(self):
@@ -120,7 +120,7 @@ class Target(Logging):
             return False
         if not self.dependencies.up_to_date:
             return False
-        if self.dependencies.modification_time > self.modification_time:
+        if self.modification_time and self.dependencies.modification_time > self.modification_time:
             return False
         return True
 
