@@ -11,6 +11,8 @@ auto_fpic = True
 def init_toolchains(name):
     from .detect import get_toolchains
     data = get_toolchains()
+    if name is None:
+        name = data['default']
     toolchain_data = data['toolchains'][name]
         
     from .gcc_toolchain import GCCToolchain
@@ -24,19 +26,22 @@ def init_toolchains(name):
     else:
         raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
 
-def __init_toolchains():
-    import os
+def __pick_arg(*names, env=None, default=None):
     import sys
-    tid = os.getenv('PYMAKE_TOOLCHAIN', None)
-    if not tid:
-        index = sys.argv.index('-t')
-        if index < 0:
-            index = sys.argv.index('--toolchain')
-        if index < 0:
-            tid = 'default'
-        else:
-            tid = sys.argv[index + 1]
-    init_toolchains(tid)
+    import os
+    if env:
+        value = os.getenv(env, None)
+        if value:
+            return value
+    for name in names:
+        try:
+            return sys.argv[sys.argv.index(name) + 1]
+        except ValueError:
+            continue
+    return default
+
+def __init_toolchains():
+    init_toolchains(__pick_arg('-t', '--toolchain', env='PYMAKE_TOOLCHAIN'))
 
 __init_toolchains()
 
