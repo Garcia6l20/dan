@@ -64,6 +64,9 @@ class Toolchain:
     def has_cxx_compile_options(*opts) -> bool:
         ...
 
+    def make_compile_definitions(self, definitions: set[str]) -> set[str]:
+        ...
+
     def make_include_options(self, include_paths: set[Path]) -> set[str]:
         ...
 

@@ -43,7 +43,7 @@ class Package(CXXTarget):
         if hasattr(self, '_requires'):
             for req in self._requires.split():
                 deps.add(Package(req, search_paths))
-        super().__init__(public_includes={self._includedir}, dependencies=deps)
+        super().__init__(includes={self._includedir}, dependencies=deps)
         
     @property
     def cxx_flags(self):

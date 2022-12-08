@@ -1,13 +1,13 @@
 from pymake import cli, include
 from pymake.cxx import Executable
 
-fmt = include('fmt')
+spdlog, fmt = include('spdlog')
 
-test_fmt = Executable(sources=['main.cpp'],
+test_spdlog = Executable(sources=['main.cpp'],
                       private_includes=['.'],
-                      dependencies=[fmt])
+                      dependencies=[spdlog, fmt])
 
-exports = fmt
+exports = spdlog, fmt
 
 if __name__ == '__main__':
     cli()

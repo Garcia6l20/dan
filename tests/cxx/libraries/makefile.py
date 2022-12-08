@@ -7,8 +7,8 @@ from copy import deepcopy
 compile_options = {'-std=c++17'}
 
 objects = Objects(sources=['static.cpp'],
-                  public_includes=['.'],
-                  public_compile_options=compile_options)
+                  includes=['.'],
+                  compile_options=compile_options)
 
 static = Library(dependencies=[objects])
 

@@ -21,12 +21,20 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
     def make_include_options(self, include_paths: set[Path]) -> set[str]:
         return {f'-I{p}' for p in include_paths}
 
-    def make_link_options(self, libraries: set[Path]) -> set[str]:
+    def make_link_options(self, libraries: set[Path|str]) -> set[str]:
         opts = set()
-        opts.update([f'-L{p.parent}' for p in libraries])
-        opts.update([f'-Wl,-rpath,{p.parent}' for p in libraries])
-        opts.update([f'-l{p.stem.removeprefix("lib")}' for p in libraries])
+        for lib in libraries:
+            if isinstance(lib, Path):
+                opts.add(f'-L{lib.parent}')
+                opts.add(f'-Wl,-rpath,{lib.parent}')
+                opts.add(f'-l{lib.stem.removeprefix("lib")}')
+            else:
+                assert isinstance(lib, str)
+                opts.add(f'-l{lib}')
         return opts
+    
+    def make_compile_definitions(self, definitions: set[str]) -> set[str]:
+        return {f'-D{d}' for d in definitions}
 
     async def scan_dependencies(self, file: Path, options: set[str]) -> set[FileDependency]:
         if not scan:
