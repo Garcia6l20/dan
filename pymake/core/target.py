@@ -81,6 +81,7 @@ class Target(Logging):
 
     @asyncio.once_method
     async def preload(self):
+        await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
         await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
 
     @asyncio.once_method
