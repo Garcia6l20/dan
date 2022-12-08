@@ -2,6 +2,7 @@ import asyncio
 from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
+from pymake.core.errors import InvalidConfiguration
 
 
 class GCCToolchain(Toolchain, AsyncRunner, Logging):
@@ -13,6 +14,19 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
         self.ar = f'{cc}-ar'
         self.ranlib = f'{cc}-ranlib'
 
+    def set_mode(self, mode: str):
+        self.default_flags = set()
+        if mode == 'debug':
+            self.default_flags.update(('-g', ))
+        elif mode == 'release':
+            self.default_flags.update(('-O3', '-DNDEBUG'))
+        elif mode == 'release-min-size':
+            self.default_flags.update(('-Os', '-DNDEBUG'))
+        elif mode == 'release-debug-infos':
+            self.default_flags.update(('-O2', '-g', '-DNDEBUG'))
+        else:
+            raise InvalidConfiguration(f'unknown build mode: {mode}')
+
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = asyncio.run(
             self.run(f'{self.cxx} {" ".join(opts)}', no_raise=True))
@@ -21,7 +35,7 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
     def make_include_options(self, include_paths: set[Path]) -> set[str]:
         return {f'-I{p}' for p in include_paths}
 
-    def make_link_options(self, libraries: set[Path|str]) -> set[str]:
+    def make_link_options(self, libraries: set[Path | str]) -> set[str]:
         opts = set()
         for lib in libraries:
             if isinstance(lib, Path):
@@ -32,7 +46,7 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
                 assert isinstance(lib, str)
                 opts.add(f'-l{lib}')
         return opts
-    
+
     def make_compile_definitions(self, definitions: set[str]) -> set[str]:
         return {f'-D{d}' for d in definitions}
 
@@ -55,7 +69,7 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
         return {'-std=c++20', '-fmodules-ts'}
 
     async def compile(self, sourcefile: Path, output: Path, options: set[str]):
-        args = [*options, '-MD', '-MT',
+        args = [*self.default_flags, *options, '-MD', '-MT',
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         command = f'{self.cxx} {" ".join(args)}'
         self.compile_commands.insert(sourcefile, output.parent, command)

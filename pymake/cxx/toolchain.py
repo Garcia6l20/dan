@@ -61,6 +61,9 @@ class Toolchain:
         self.compile_commands = CompileCommands()
         self.cxx_flags = set()
 
+    def set_mode(self, mode: str):
+        ...
+
     def has_cxx_compile_options(*opts) -> bool:
         ...
 

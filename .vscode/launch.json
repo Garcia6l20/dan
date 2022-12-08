@@ -34,7 +34,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/tests/makefile.py",
             "justMyCode": true,
-            "args": ["-d", "${input:makefileCommand}"],
+            "args": ["-v", "-m", "debug", "${input:makefileCommand}"],
             "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -46,7 +46,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/tests/${input:test}/makefile.py",
             "justMyCode": true,
-            "args": ["-d", "${input:makefileCommand}"],
+            "args": ["-v", "${input:makefileCommand}"],
             "cwd": "${workspaceFolder}/tests/${input:test}",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -58,8 +58,56 @@
             "request": "launch",
             "program": "${workspaceFolder}/tests/cxx/modules/makefile.py",
             "justMyCode": true,
-            "args": ["-d", "${input:makefileCommand}"],
+            "args": ["-v", "${input:makefileCommand}"],
             "cwd": "${workspaceFolder}/tests/cxx/modules",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "cxx test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/cxx/makefile.py",
+            "justMyCode": true,
+            "args": ["-v", "${input:makefileCommand}"],
+            "cwd": "${workspaceFolder}/tests/cxx",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "cxx/simple test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/cxx/simple/makefile.py",
+            "justMyCode": true,
+            "args": ["-v", "${input:makefileCommand}"],
+            "cwd": "${workspaceFolder}/tests/cxx/simple",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "cxx/libraries test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/cxx/libraries/makefile.py",
+            "justMyCode": true,
+            "args": ["-v", "${input:makefileCommand}"],
+            "cwd": "${workspaceFolder}/tests/cxx/libraries",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "cxx/smc test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/cxx/smc/makefile.py",
+            "justMyCode": true,
+            "args": ["-v", "${input:makefileCommand}"],
+            "cwd": "${workspaceFolder}/tests/cxx/smc",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }

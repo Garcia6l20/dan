@@ -47,12 +47,15 @@ def add_options(options):
 
 
 @click.group(invoke_without_command=True)
-@click.option('--debug', '-d', is_flag=True, help='Pring debug informations')
-# @click.option('--target', '-t', help='Target to build', multiple=True)
+@click.option('--verbose', '-v', is_flag=True, help='Pring debug informations')
+@click.option('--mode', '-m',
+              help='Build mode',
+              type=click.Choice(['debug', 'release', 'release-min-size', 'release-debug-infos'],
+                                case_sensitive=False))
 @click.pass_context
-def cli(ctx: click.Context, debug: bool):
-    logging.getLogger().setLevel(logging.DEBUG if debug else logging.INFO)
-    ctx.obj = Make()
+def cli(ctx: click.Context, verbose: bool, mode: str):
+    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+    ctx.obj = Make(mode)
     if ctx.invoked_subcommand is None:
         ctx.invoke(build)
 

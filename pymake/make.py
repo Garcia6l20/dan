@@ -15,8 +15,10 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, makefile : ModuleType = None, active_targets : list[str] = None):
+    def __init__(self, mode='release', makefile : ModuleType = None, active_targets : list[str] = None):
         super().__init__('make')
+        from pymake.cxx import target_toolchain
+        target_toolchain.set_mode(mode)
 
         self.makefile = makefile or current_makefile
 
