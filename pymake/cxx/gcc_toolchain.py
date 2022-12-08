@@ -3,16 +3,17 @@ from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
+from pymake.cxx import auto_fpic
 
 
 class GCCToolchain(Toolchain, AsyncRunner, Logging):
-    def __init__(self, cc: Path = 'gcc', cxx: Path = 'g++'):
+    def __init__(self, data, tools):
         Toolchain.__init__(self)
         Logging.__init__(self, 'gcc-toolchain')
-        self.cc = cc
-        self.cxx = cxx
-        self.ar = f'{cc}-ar'
-        self.ranlib = f'{cc}-ranlib'
+        self.cc = data['cc']
+        self.cxx = data['cxx']
+        self.ar = data['ar'] or tools['ar']
+        self.ranlib = data['ranlib'] or tools['ranlib']
 
     def set_mode(self, mode: str):
         self.default_flags = set()
@@ -71,6 +72,8 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
     async def compile(self, sourcefile: Path, output: Path, options: set[str]):
         args = [*self.default_flags, *options, '-MD', '-MT',
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
+        if auto_fpic:
+            args.insert(0, '-fPIC')
         command = f'{self.cxx} {" ".join(args)}'
         self.compile_commands.insert(sourcefile, output.parent, command)
         await self.run(command)

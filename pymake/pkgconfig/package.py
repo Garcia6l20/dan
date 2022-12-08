@@ -12,10 +12,7 @@ class MissingPackage(RuntimeError):
 
 
 def find_pkg_config(name, paths=list()) -> Path:
-    root, file = find_file(
-        fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
-    if root:
-        return root / file
+    return find_file(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
 
 
 class Package(CXXTarget):

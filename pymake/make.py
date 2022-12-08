@@ -15,7 +15,7 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, mode='release', makefile : ModuleType = None, active_targets : list[str] = None):
+    def __init__(self, mode: str = 'release', toolchain: str = 'default', makefile: ModuleType = None, active_targets: list[str] = None):
         super().__init__('make')
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(mode)
@@ -24,7 +24,7 @@ class Make(Logging):
 
         self.active_targets: dict[str, Target] = dict()
         self.all_targets = targets()
-                
+
         for name, target in self.all_targets.items():
             if name not in self.all_targets:
                 self.error(f'Unknown target {name}')
@@ -36,7 +36,7 @@ class Make(Logging):
 
     async def build(self):
         await asyncio.gather(*[t.build() for t in self.active_targets.values()])
-    
+
     @property
     def executable_targets(self) -> list[Executable]:
         return [exe for exe in self.active_targets.values() if isinstance(exe, Executable)]

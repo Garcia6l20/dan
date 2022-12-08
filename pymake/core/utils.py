@@ -1,6 +1,7 @@
 import asyncio
 from pathlib import Path
 import os
+import subprocess
 import sys
 
 
@@ -23,6 +24,25 @@ class AsyncRunner:
                                                                 stdout=stdout,
                                                                 stderr=stdout)
         out, err = await proc.communicate()
+        if proc.returncode != 0 and not no_raise:
+            message = f'command returned {proc.returncode}: {command}\n{err.decode() if err else ""}'
+            self.error(message)
+            raise CommandError(message, proc.returncode, out, err)
+        return out.decode() if out else None, err.decode() if err else None, proc.returncode
+
+
+class SyncRunner:
+    def run(self, command, pipe=True, no_raise=False, shell=True):
+        # self.debug(f'executing: {command}')
+        if pipe:
+            stdout = asyncio.subprocess.PIPE
+        else:
+            stdout = None
+        proc = subprocess.Popen(command,
+                                stdout=stdout,
+                                stderr=stdout,
+                                shell=shell)
+        out, err = proc.communicate()
         if proc.returncode != 0 and not no_raise:
             message = f'command returned {proc.returncode}: {command}\n{err.decode() if err else ""}'
             self.error(message)

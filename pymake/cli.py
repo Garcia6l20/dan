@@ -51,11 +51,13 @@ def add_options(options):
 @click.option('--mode', '-m',
               help='Build mode',
               type=click.Choice(['debug', 'release', 'release-min-size', 'release-debug-infos'],
-                                case_sensitive=False))
+                                case_sensitive=False),
+              default='release')
+@click.option('--toolchain', '-t', help='Toolchain id to use', default='default')
 @click.pass_context
-def cli(ctx: click.Context, verbose: bool, mode: str):
+def cli(ctx: click.Context, verbose: bool, mode: str, toolchain: str):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
-    ctx.obj = Make(mode)
+    ctx.obj = Make(mode, toolchain)
     if ctx.invoked_subcommand is None:
         ctx.invoke(build)
 
