@@ -46,12 +46,15 @@ class FileDependency(PathImpl):
 
 
 class Target(Logging):
+    clean_request = False
+
     def __init__(self, name: str = None) -> None:
         from pymake.core.include import current_makefile
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
+        self.preload_dependencies: Dependencies[Target] = Dependencies()
         self._name: str = None        
         self.output: Path = None
         
@@ -77,7 +80,13 @@ class Target(Logging):
         super().__init__(self.name)
 
     @asyncio.once_method
+    async def preload(self):
+        await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
+
+    @asyncio.once_method
     async def initialize(self):
+        await self.preload()
+
         await asyncio.gather(*[obj.initialize() for obj in self.target_dependencies])
         if self.output and not self.output.is_absolute():
             self.output = self.build_path / self.output

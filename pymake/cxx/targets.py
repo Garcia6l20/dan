@@ -8,10 +8,10 @@ from . import target_toolchain
 
 
 class CXXObject(Target):
-    def __init__(self, source: str, cxxflags: set[str] = set()) -> None:
+    def __init__(self, source: str, cxx_flags: set[str] = set()) -> None:
         super().__init__()
         self.source = self.source_path / source
-        self.cxxflags = cxxflags
+        self.cxx_flags = cxx_flags
         self.toolchain = target_toolchain
 
     @Target.name.setter
@@ -20,9 +20,12 @@ class CXXObject(Target):
 
     @asyncio.once_method
     async def initialize(self):
-        deps = await self.toolchain.scan_dependencies(self.source, self.cxxflags)
-        deps.add(self.source)
-        self.load_dependencies(deps)
+        await self.preload()
+
+        if not self.clean_request:
+            deps = await self.toolchain.scan_dependencies(self.source, self.cxx_flags)
+            deps.add(self.source)
+            self.load_dependencies(deps)
         self.output = Path(f'{self.source.name}.o')
         await super().initialize(recursive_once=True)
 
@@ -31,7 +34,7 @@ class CXXObject(Target):
 
     async def __call__(self):
         self.info(f'generating {self.output}...')
-        await self.toolchain.compile(self.source, self.output, self.cxxflags)
+        await self.toolchain.compile(self.source, self.output, self.cxx_flags)
 
 
 class CXXTarget(Target):
@@ -40,11 +43,13 @@ class CXXTarget(Target):
                  private_includes: set[str] = set(),
                  public_compile_options: set[str] = set(),
                  private_compile_options: set[str] = set(),
-                 dependencies: set[TargetDependencyLike] = set()) -> None:
+                 dependencies: set[TargetDependencyLike] = set(),
+                 preload_dependencies: set[TargetDependencyLike] = set()) -> None:
         super().__init__()
         self.toolchain = target_toolchain
 
         self.dependencies = Dependencies(dependencies)
+        self.preload_dependencies = Dependencies(preload_dependencies)
         self.public_includes: set[Path] = set()
         self.private_includes: set[Path] = set()
         self.public_compile_options = set(public_compile_options)
@@ -83,12 +88,12 @@ class CXXTarget(Target):
         return tmp
 
     @property
-    def cxxflags(self):
+    def cxx_flags(self):
         flags = self.include_opts
         flags.update(self.public_compile_options)
         flags.update(self.private_compile_options)
         for dep in self.cxx_dependencies:
-            flags.update(dep.cxxflags)
+            flags.update(dep.cxx_flags)
         return flags
 
     async def __call__(self):
@@ -103,10 +108,12 @@ class CXXObjectsTarget(CXXTarget):
         self.objs: set[CXXObject] = set()
 
         for source in sources:
-            self.objs.add(CXXObject(source, self.cxxflags))
+            self.objs.add(CXXObject(source, self.cxx_flags))
 
     @asyncio.once_method
     async def initialize(self):
+        await self.preload()
+
         for obj in self.objs:
             obj.name = self.name
 
@@ -124,6 +131,8 @@ class Executable(CXXObjectsTarget, AsyncRunner):
 
     @asyncio.once_method
     async def initialize(self):
+        await self.preload()
+        
         self.output = Path(self.sname)
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
@@ -157,6 +166,8 @@ class Library(CXXObjectsTarget):
 
     @asyncio.once_method
     async def initialize(self):
+        await self.preload()
+
         self.load_dependencies(self.objs)
         self.output = Path(f"lib{self.sname}.{self.ext}")
         await super().initialize(recursive_once=True)
@@ -174,7 +185,7 @@ class Library(CXXObjectsTarget):
         if self.static:
             await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output)
         else:
-            await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.cxxflags, *self.libs})
+            await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.cxx_flags, *self.libs})
 
         self.debug(f'done')
 
@@ -184,8 +195,8 @@ class Module(CXXObjectsTarget):
         super().__init__(sources, *args, **kwargs)
 
     @property
-    def cxxflags(self):
-        return {*self.toolchain.cxxmodules_flags, *super().cxxflags}
+    def cxx_flags(self):
+        return {*self.toolchain.cxxmodules_flags, *super().cxx_flags}
 
     async def __call__(self):
         return await super().__call__()

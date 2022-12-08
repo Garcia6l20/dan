@@ -1,8 +1,7 @@
 import asyncio
-import json
 from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner
-from pymake.cxx.toolchain import Toolchain, Path, FileDependency
+from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
 
 
 class GCCToolchain(Toolchain, AsyncRunner, Logging):
@@ -30,6 +29,9 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
         return opts
 
     async def scan_dependencies(self, file: Path, options: set[str]) -> set[FileDependency]:
+        if not scan:
+            return set()
+
         out, _, _ = await self.run(f'{self.cxx} -M {file} {" ".join(options)}')
         all = ''.join([dep.replace('\\', ' ')
                       for dep in out.splitlines()]).split()

@@ -46,10 +46,10 @@ class Package(CXXTarget):
         super().__init__(public_includes={self._includedir}, dependencies=deps)
         
     @property
-    def cxxflags(self):
+    def cxx_flags(self):
         tmp = set(self._cflags.split())
         for dep in self.cxx_dependencies:
-            tmp.update(dep.cxxflags)
+            tmp.update(dep.cxx_flags)
         return tmp
     
     @property

@@ -4,6 +4,8 @@ from pymake.core.target import FileDependency
 from pymake.core.include import root_makefile
 import json
 
+scan = True
+
 
 class CompileCommands:
     def __init__(self) -> None:
@@ -16,6 +18,7 @@ class CompileCommands:
                 self.data = list()
         else:
             self.data = list()
+            self.cc_path.parent.mkdir(parents=True, exist_ok=True)
             self.cc_f = open(self.cc_path, 'w')
 
     def clear(self):
@@ -43,7 +46,7 @@ class CompileCommands:
         else:
             assert isinstance(content, list)
             key = 'args'
-        if entry:            
+        if entry:
             entry[key] = content
         else:
             self.data.append({
@@ -56,6 +59,7 @@ class CompileCommands:
 class Toolchain:
     def __init__(self) -> None:
         self.compile_commands = CompileCommands()
+        self.cxx_flags = set()
 
     def has_cxx_compile_options(*opts) -> bool:
         ...

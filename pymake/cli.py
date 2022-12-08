@@ -9,6 +9,8 @@ from pymake.make import Make
 pass_make = click.make_pass_decorator(Make)
 
 _active_targets_initialized = False
+
+
 def _set_targets(ctx, param, value):
     if len(value) == 0:
         return
@@ -22,16 +24,19 @@ def _set_targets(ctx, param, value):
     if type(value) != tuple:
         value = (value)
     for v in value:
-        found_targets.update({name: target for name, target in ctx.obj.all_targets.items() if name.find(v) >= 0})
+        found_targets.update(
+            {name: target for name, target in ctx.obj.all_targets.items() if name.find(v) >= 0})
 
     if len(found_targets) == 0:
         raise RuntimeError(f"cannot math any target for name '{value}'")
 
     ctx.obj.active_targets.update(found_targets)
 
+
 _common_opts = [
     click.argument('TARGETS', nargs=-1, callback=_set_targets)
 ]
+
 
 def add_options(options):
     def _add_options(func):
@@ -39,6 +44,7 @@ def add_options(options):
             func = option(func)
         return func
     return _add_options
+
 
 @click.group(invoke_without_command=True)
 @click.option('--debug', '-d', is_flag=True, help='Pring debug informations')
@@ -64,20 +70,20 @@ def build(make: Make, **kwargs):
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @add_options(_common_opts)
 @pass_make
-def list(make: Make, show_type : bool, **kwargs):
+def list(make: Make, show_type: bool, **kwargs):
     for name, target in make.active_targets.items():
         s = name
         if show_type:
             s = s + ' - ' + type(target).__name__
         click.echo(s)
 
+
 @cli.command()
 @add_options(_common_opts)
 @pass_make
 def clean(make: Make, **kwargs):
     asyncio.run(make.clean())
-    from pymake.cxx import target_toolchain
-    target_toolchain.compile_commands.clear()
+
 
 @cli.command()
 @add_options(_common_opts)
