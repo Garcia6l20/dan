@@ -2,6 +2,7 @@ import click
 
 import logging
 import asyncio
+import sys
 
 
 from pymake.make import Make
@@ -10,6 +11,7 @@ pass_make = click.make_pass_decorator(Make)
 
 _active_targets_initialized = False
 
+_logger = logging.getLogger('cli')
 
 def _set_targets(ctx, param, value):
     if len(value) == 0:
@@ -28,7 +30,11 @@ def _set_targets(ctx, param, value):
             {name: target for name, target in ctx.obj.all_targets.items() if name.find(v) >= 0})
 
     if len(found_targets) == 0:
-        raise RuntimeError(f"cannot math any target for name '{value}'")
+        _logger.error(f"cannot math any target for name(s): {', '.join(value)}")
+        target_names = "\n  - ".join(ctx.obj.all_targets.keys())
+        if len(target_names):
+            _logger.info(f'available targets: \n  - {target_names}')
+        sys.exit(-1)
 
     ctx.obj.active_targets.update(found_targets)
 
@@ -100,3 +106,19 @@ def clean(make: Make, **kwargs):
 @pass_make
 def run(make: Make, **kwargs):
     asyncio.run(make.run())
+
+def main():
+    import sys
+    try:
+        return cli(auto_envvar_prefix='PYMAKE')
+    except Exception as err:
+        _logger.error(str(err))
+        ex_type, ex, tb = sys.exc_info()
+        import traceback
+        _logger.debug(' '.join(traceback.format_tb(tb)))
+        try:
+            # wait asyncio loop to terminate
+            asyncio.get_running_loop().run_until_complete()
+        except Exception:
+            pass
+        return -1
