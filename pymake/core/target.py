@@ -28,7 +28,6 @@ class Dependencies(set):
                 t = mt
         return t
 
-
 TargetDependencyLike: TypeAlias = Union[list['Target'], 'Target']
 
 

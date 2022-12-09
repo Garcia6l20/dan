@@ -35,7 +35,7 @@ class CXXObject(Target):
             deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
             deps.add(self.source)
             self.load_dependencies(deps)
-        ext = o if os.name != 'nt' else 'obj'
+        ext = 'o' if os.name != 'nt' else 'obj'
         self.output = self.build_path / Path(f'{self.parent.sname}.{self.source.name}.{ext}')
         await super().initialize(recursive_once=True)
 

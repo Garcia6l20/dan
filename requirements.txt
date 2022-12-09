@@ -1,6 +1,7 @@
 click
 jinja2
-gitpython
+distro
+pyyaml
 aiofiles
 termcolor
 pkgconfig

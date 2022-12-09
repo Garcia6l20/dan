@@ -11,7 +11,7 @@ try:
                         dependencies=[qt_widgets],
                         private_compile_options=['-fPIC'])
 except MissingPackage:
-    warning('cannot find Qt5Widgets package, sipping !')
+    warning('cannot find Qt5Widgets package, skipping !')
 
 if __name__ == '__main__':
     cli()

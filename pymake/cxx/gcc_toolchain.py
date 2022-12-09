@@ -55,12 +55,17 @@ class GCCToolchain(Toolchain):
         if not scan:
             return set()
 
-        out, _, _ = await self.run(f'{self.cxx} -M {file} {" ".join(options)}', cwd=build_path)
-        all = ''.join([dep.replace('\\', ' ')
-                      for dep in out.splitlines()]).split()
-        _obj = all.pop(0)
-        _src = all.pop(0)
-        return {FileDependency(dep) for dep in all}
+        build_path.mkdir(parents=True, exist_ok=True)
+        output = build_path / file.name
+        out, _, _ = await self.run('scan', output, [self.cxx, '-M', file, *options], cwd=build_path)
+        if out:
+            all = ''.join([dep.replace('\\', ' ')
+                        for dep in out.splitlines()]).split()
+            _obj = all.pop(0)
+            _src = all.pop(0)
+            return {FileDependency(dep) for dep in all}
+        else:
+            return set()
 
     def compile_generated_files(self, output: Path) -> set[Path]:
         return {output.with_suffix(output.suffix + '.d')}
@@ -83,7 +88,7 @@ class GCCToolchain(Toolchain):
         await self.run('link', output, args)
 
     async def static_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
-        await self.run('static_lib', output, [self.ar, 'qc', output, *options, *objects])
+        await self.run('static_lib', output, [self.ar, 'qc', output, *objects])
         await AsyncRunner.run(self, [self.ranlib, output])
 
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
