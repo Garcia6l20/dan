@@ -6,7 +6,7 @@ from pymake.core.errors import InvalidConfiguration
 from pymake.cxx import auto_fpic
 
 
-class GCCToolchain(Toolchain, AsyncRunner, Logging):
+class GCCToolchain(Toolchain):
     def __init__(self, data, tools):
         Toolchain.__init__(self)
         Logging.__init__(self, 'gcc-toolchain')
@@ -16,7 +16,7 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
         self.ranlib = data['ranlib'] or tools['ranlib']
 
     def set_mode(self, mode: str):
-        self.default_flags = set()
+        self.default_flags = {f'-std=c++{self.cpp_std}'}
         if mode == 'debug':
             self.default_flags.update(('-g', ))
         elif mode == 'release':
@@ -51,11 +51,11 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
     def make_compile_definitions(self, definitions: set[str]) -> set[str]:
         return {f'-D{d}' for d in definitions}
 
-    async def scan_dependencies(self, file: Path, options: set[str]) -> set[FileDependency]:
+    async def scan_dependencies(self, file: Path, options: set[str], build_path:Path) -> set[FileDependency]:
         if not scan:
             return set()
 
-        out, _, _ = await self.run(f'{self.cxx} -M {file} {" ".join(options)}')
+        out, _, _ = await self.run(f'{self.cxx} -M {file} {" ".join(options)}', cwd=build_path)
         all = ''.join([dep.replace('\\', ' ')
                       for dep in out.splitlines()]).split()
         _obj = all.pop(0)
@@ -74,16 +74,17 @@ class GCCToolchain(Toolchain, AsyncRunner, Logging):
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         if auto_fpic:
             args.insert(0, '-fPIC')
-        command = f'{self.cxx} {" ".join(args)}'
-        self.compile_commands.insert(sourcefile, output.parent, command)
-        await self.run(command)
+        args.insert(0, self.cxx)
+        self.compile_commands.insert(sourcefile, output.parent, args)
+        await self.run('cc', output, args)
 
     async def link(self, objects: set[Path], output: Path, options: set[str]):
-        await self.run(f'{self.cxx} {" ".join(objects)} -o {output} {" ".join(options)}')
+        args = [self.cxx, *objects, '-o', output, *options]
+        await self.run('link', output, args)
 
     async def static_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
-        await self.run(f'{self.ar} qc {output} {" ".join(options)} {" ".join(objects)}')
-        await self.run(f'{self.ranlib} {output}')
+        await self.run('static_lib', output, [self.ar, 'qc', output, *options, *objects])
+        await AsyncRunner.run(self, [self.ranlib, output])
 
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
-        await self.run(f'{self.cxx} -shared {" ".join(options)} {" ".join(objects)} -o {output}')
+        await self.run('shared_lib', output, [self.cxx, '-shared', *options, *objects, '-o', output])

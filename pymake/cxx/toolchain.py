@@ -1,8 +1,14 @@
+import asyncio
 from pathlib import Path
+
+import aiofiles
 
 from pymake.core.target import FileDependency
 from pymake.core.include import root_makefile
 import json
+
+from pymake.core.utils import AsyncRunner
+from pymake.logging import Logging
 
 scan = True
 
@@ -45,6 +51,7 @@ class CompileCommands:
             key = 'command'
         else:
             assert isinstance(content, list)
+            content = [str(item) for item in content]
             key = 'args'
         if entry:
             entry[key] = content
@@ -56,10 +63,11 @@ class CompileCommands:
             })
 
 
-class Toolchain:
+class Toolchain(AsyncRunner, Logging):
     def __init__(self) -> None:
         self.compile_commands = CompileCommands()
         self.cxx_flags = set()
+        self.cpp_std = 17
 
     def set_mode(self, mode: str):
         ...
@@ -76,7 +84,7 @@ class Toolchain:
     def make_link_options(self, libraries: set[Path]) -> set[str]:
         ...
 
-    async def scan_dependencies(self, file: Path, options: set[str]) -> set[FileDependency]:
+    async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
         ...
 
     def compile_generated_files(self, output: Path) -> set[Path]:
@@ -93,6 +101,15 @@ class Toolchain:
 
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str]):
         ...
+
+    async def run(self, name: str, output: Path, args, **kwargs):
+        args_cache = output.with_suffix(f'.{name}.args')
+        async with aiofiles.open(args_cache, 'w') as cache:
+            result, _ = await asyncio.gather(
+                super().run(args, **kwargs),
+                cache.write(' '.join([str(a) for a in args]))
+            )
+            return result
 
     @property
     def cxxmodules_flags(self) -> set[str]:

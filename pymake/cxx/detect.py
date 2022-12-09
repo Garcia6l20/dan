@@ -1,11 +1,16 @@
+import itertools
 import logging
 import os
+import re
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 
 from pymake.core.osinfo import info as osinfo
 from pymake.core.utils import SyncRunner
 from pymake.core.version import Version
+from pymake.core.win import vswhere
 
 
 class CompilerId:
@@ -164,14 +169,13 @@ def detect_compiler_id(executable):
         # "/B1" C front-end
         # "/c" Compile Without Linking
         # "/TC" Specify Source File Type
-        '/nologo /E /B1 "%s" /c /TC' % cmd,
+        f'/nologo /E /B1 "{cmd}" /c /TC',
         "/QdM /E /TC"  # icc (Intel) on Windows,
         "-Wp,-dM -E -x c"  # QNX QCC
     ]
     try:
         for detector in detectors:
-            command = '%s %s "%s"' % (executable, detector, tmpname)
-            output, _, rc = runner.run(command, no_raise=True)
+            output, _, rc = runner.run(' '.join([f'"{executable}"', *detector.split(' '), tmpname]), no_raise=True)
             if 0 == rc:
                 defines = dict()
                 for line in output.splitlines():
@@ -206,20 +210,22 @@ def detect_compiler_id(executable):
 
 
 class Compiler:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, arch: str = None, env: dict[str, str] = None, tools: dict[str, Path] = dict()) -> None:
         self.path = path
         self.compiler_id = detect_compiler_id(path)
-
-    @property
-    def name(self):
-        return self.compiler_id.name
+        if self.compiler_id is None:
+            raise RuntimeError(f'Cannot detect compiler ID of {self.path}')
+        self.name = self.compiler_id.name
+        self.arch = arch
+        self.env = env
+        self.tools = tools
 
     @property
     def version(self):
         return self.compiler_id.version
 
     def __str__(self) -> str:
-        return f'{self.compiler_id} ({self.path})'
+        return f'{self.compiler_id} {self.arch + " " if self.arch else ""}({self.path})'
 
     def __eq__(self, other: 'Compiler'):
         return self.path == other.path
@@ -227,16 +233,83 @@ class Compiler:
     def __hash__(self):
         return hash(self.path)
 
+def validate_pair(ob):
+    try:
+        if not (len(ob) == 2):
+            print("Unexpected result:", ob, file=sys.stderr)
+            raise ValueError
+    except:
+        return False
+    return True
 
-def get_compilers():
-    from pymake.core.find import find_executables
+
+def get_environment_from_batch_command(env_cmd, initial=None):
+    """
+    Take a command (either a single command or list of arguments)
+    and return the environment created after running that command.
+    Note that if the command must be a batch file or .cmd file, or the
+    changes to the environment will not be captured.
+
+    If initial is supplied, it is used as the initial environment passed
+    to the child process.
+    """
+    def consume(iter):
+        try:
+            while True: next(iter)
+        except StopIteration:
+            pass
+    if not isinstance(env_cmd, (list, tuple)):
+        env_cmd = [env_cmd]
+    # construct the command that will alter the environment
+    env_cmd = subprocess.list2cmdline(env_cmd)
+    # create a tag so we can tell in the output when the proc is done
+    tag = '--- done running command ---'
+    # construct a cmd.exe command to do accomplish this
+    cmd = 'cmd.exe /s /c "{env_cmd} && echo "{tag}" && set"'.format(**vars())
+    # launch the process
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=initial)
+    # parse the output sent to stdout
+    lines = proc.stdout
+    # consume whatever output occurs until the tag is reached
+    consume(itertools.takewhile(lambda l: tag not in l.decode('cp1252'), lines))
+    # define a way to handle each KEY=VALUE line
+    handle_line = lambda l: l.decode('cp1252').rstrip().split('=',1)
+    # parse key/values into pairs
+    pairs = map(handle_line, lines)
+    # make sure the pairs are valid
+    valid_pairs = filter(validate_pair, pairs)
+    # construct a dictionary of the pairs
+    result = dict(valid_pairs)
+    # let the process finish
+    proc.communicate()
+    return result
+
+def get_compilers(logger: logging.Logger):
+    from pymake.core.find import find_executables, find_executable, find_file
     compilers: set[Compiler] = set()
-    for gcc in find_executables(r'gcc(-\d+)?'):
-        gcc = gcc.resolve()
-        compilers.add(Compiler(gcc))
-    for clang in find_executables(r'clang(-\d+)?'):
-        clang = clang.resolve()
-        compilers.add(Compiler(clang))
+    if os.name == 'nt':
+        infos = vswhere()
+        for info in infos:
+            logger.info(f'Loading Visual Studio: {info["displayName"]}')
+            paths = [info['installationPath']]
+            cl = find_executable('cl', paths=paths, default_paths=False)
+            link = find_executable('link', paths=[cl.parent], default_paths=False)
+            lib = find_executable('lib', paths=[cl.parent], default_paths=False)
+            vcvars = find_file(r'vcvarsall.bat', paths=paths)
+            archs = [('x86_64', 'x64'), ('x86', 'x86')]
+            for arch, vc_arch in archs:
+                env = get_environment_from_batch_command([vcvars, vc_arch])
+                if env:
+                    compilers.add(Compiler(cl, arch=arch, env=env, tools={'link': link, 'lib': lib}))
+                else:
+                    logger.warning(f'Cannot load msvc with {arch} architecture')
+    else:
+        for gcc in find_executables(r'gcc(-\d+)?'):
+            gcc = gcc.resolve()
+            compilers.add(Compiler(gcc))
+        for clang in find_executables(r'clang(-\d+)?'):
+            clang = clang.resolve()
+            compilers.add(Compiler(clang))
     return compilers
 
 
@@ -256,6 +329,12 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         suffix = None
     base_path = compiler.path.parent
 
+    if compiler.arch:
+        data['arch'] = compiler.arch
+
+    if compiler.env:
+        data['env'] = compiler.env
+
     def get_compiler_tool(tool, toolname=None):
         if not toolname:
             toolname = f'{base_name}-{tool}'
@@ -271,33 +350,39 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         get_compiler_tool('cxx', 'g++')
     elif compiler.name == 'clang':
         get_compiler_tool('cxx', 'clang++')
-    get_compiler_tool('ar')
-    get_compiler_tool('nm')
-    get_compiler_tool('strip')
-    get_compiler_tool('ranlib')
+    elif compiler.name == 'msvc':
+        data['link'] = str(compiler.tools['link'])
+        data['lib'] = str(compiler.tools['lib'])
+    if os.name != 'nt':
+        get_compiler_tool('ar')
+        get_compiler_tool('nm')
+        get_compiler_tool('strip')
+        get_compiler_tool('ranlib')
     return str(compiler.compiler_id), data
 
 
 def create_toolchains():
     import yaml
-    from .detect import get_compilers
     from pymake.core.find import find_executable
     from pymake.core.include import root_makefile
     toolchains_path = root_makefile.source_path / 'toolchains.yaml'
-    compilers = get_compilers()
     logger = logging.getLogger('toolchain')
+    compilers = get_compilers(logger)
     toolchains = dict()
     tools = dict()
     for cc in compilers:
         k, v = create_toolchain(cc, logger)
         toolchains[k] = v
-    required_tools = [
-        'nm', 'ranlib', 'strip'
-    ]
+    if os.name != 'nt':
+        required_tools = [
+            'nm', 'ranlib', 'strip'
+        ]
+    else:
+        required_tools = list()
     for tool in required_tools:
         tools[tool] = str(find_executable(tool))
     data = {'tools': tools, 'toolchains': toolchains, 'default': list(toolchains.keys())[0]}
-    with open('toolchains.yaml', 'w') as f:
+    with open(toolchains_path, 'w') as f:
         f.write(yaml.dump(data))
     return data
 

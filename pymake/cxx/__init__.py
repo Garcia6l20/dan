@@ -14,17 +14,21 @@ def init_toolchains(name):
     if name is None:
         name = data['default']
     toolchain_data = data['toolchains'][name]
-        
-    from .gcc_toolchain import GCCToolchain
+
     global target_toolchain, host_toolchain
     tc_type = toolchain_data['type']
     if tc_type == 'gcc':
-        if target_toolchain is None: 
-            target_toolchain = GCCToolchain(toolchain_data, data['tools'])
-        if host_toolchain is None:
-            target_toolchain = GCCToolchain(toolchain_data, data['tools'])
+        from .gcc_toolchain import GCCToolchain
+        tc_type = GCCToolchain
+    elif tc_type == 'msvc':
+        from .msvc_toolchain import MSVCToolchain
+        tc_type = MSVCToolchain
     else:
         raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
+    if target_toolchain is None: 
+        target_toolchain = tc_type(toolchain_data, data['tools'])
+    if host_toolchain is None:
+        host_toolchain = target_toolchain
 
 def __pick_arg(*names, env=None, default=None):
     import sys

@@ -48,7 +48,7 @@ class FileDependency(PathImpl):
 class Target(Logging):
     clean_request = False
 
-    def __init__(self, name: str = None) -> None:
+    def __init__(self, name: str = None, parent:'Target' = None) -> None:
         from pymake.core.include import current_makefile
         self.source_path = current_makefile.source_path
         self.build_path = current_makefile.build_path
@@ -57,6 +57,7 @@ class Target(Logging):
         self.preload_dependencies: Dependencies[Target] = Dependencies()
         self._name: str = None        
         self.output: Path = None
+        self.parent = parent
         
         if name:
             if current_makefile.parent_makefile:

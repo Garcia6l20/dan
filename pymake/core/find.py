@@ -54,12 +54,14 @@ def find_library(name, paths=list()) -> Path:
         expr = fr'lib{name}\.(lib|dll)'
     return find_file(expr, [*paths, *library_paths_lookup])
 
-def find_executable(name, paths=list()) -> Path:
+def find_executable(name, paths=list(), default_paths=True) -> Path:
     if os.name == 'posix':
         expr = name + '$'
     elif os.name == 'nt':
         expr = f'{name}.exe$'
-    return find_file(expr, [*paths, *programs_paths_lookup])
+    if default_paths:
+        paths.extend(programs_paths_lookup)
+    return find_file(expr, paths)
 
 def find_executables(name, paths=list()) -> list[Path]:
     if os.name == 'posix':

@@ -1,1 +1,1 @@
-from pymake.pkgconfig.package import Package
+from pymake.pkgconfig.package import Package, MissingPackage

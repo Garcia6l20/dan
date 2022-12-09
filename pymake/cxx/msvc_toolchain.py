@@ -1,0 +1,103 @@
+import asyncio
+import json
+
+import aiofiles
+import yaml
+from pymake.logging import Logging
+from pymake.core.utils import AsyncRunner
+from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
+from pymake.core.errors import InvalidConfiguration
+from pymake.cxx import auto_fpic
+
+
+class MSVCToolchain(Toolchain):
+    def __init__(self, data, tools):
+        Toolchain.__init__(self)
+        Logging.__init__(self, 'msvc-toolchain')
+        self.cc = Path(data['cc'])
+        self.lnk = Path(data['link'])
+        self.lib = Path(data['lib'])
+        self.env = data['env']
+        # self.cxx = data['cxx']
+        # self.ar = data['ar'] or tools['ar']
+        # self.ranlib = data['ranlib'] or tools['ranlib']
+        self.set_mode('release')
+
+    def set_mode(self, mode: str):
+        self.default_flags = {'/nologo', f'/std:c++{self.cpp_std}', '/EHsc', '/GA', '/MT'}
+        if mode == 'debug':
+            pass
+        elif mode == 'release':
+            self.default_flags.update(('/O2', '/DNDEBUG'))
+        elif mode == 'release-min-size':
+            self.default_flags.update(('/Os', '/DNDEBUG'))
+        elif mode == 'release-debug-infos':
+            self.default_flags.update(('/O2', '/DNDEBUG'))
+        else:
+            raise InvalidConfiguration(f'unknown build mode: {mode}')
+
+    def has_cxx_compile_options(self, *opts) -> bool:
+        _, err, _ = asyncio.run(
+            self.run(f'{self.cxx} {" ".join(opts)}', no_raise=True))
+        return err.splitlines()[0].find('no input files') >= 0
+
+    def make_include_options(self, include_paths: set[Path]) -> set[str]:
+        return {f'/I"{p}"' for p in include_paths}
+
+    def make_link_options(self, libraries: set[Path | str]) -> set[str]:
+        opts = set()
+        for lib in libraries:
+            if isinstance(lib, Path):
+                opts.add(f'/LIBPATH:"{lib.parent}"')
+                # opts.add(f'-Wl,-rpath,{lib.parent}')
+                opts.add(f'{lib.stem}.lib')
+            else:
+                assert isinstance(lib, str)
+                opts.add(f'{lib}.lib')
+        return opts
+
+    def make_compile_definitions(self, definitions: set[str]) -> set[str]:
+        return {f'/D{d}' for d in definitions}
+
+    async def scan_dependencies(self, file: Path, options: set[str], build_path:Path) -> set[FileDependency]:
+        if not scan:
+            return set()
+
+        build_path.mkdir(parents=True, exist_ok=True)
+        desc = build_path / file.with_suffix(".json").name
+        args = [f'"{self.cc}"', *self.default_flags, *options, '/scanDependencies', f'"{desc}"', f'"{file}"']
+        await self.run('scan', desc, args,
+                       env=self.env,
+                       cwd=build_path)
+        deps = set()
+        async with aiofiles.open(desc, 'r') as f:
+            data = json.loads(await f.read())
+            for rule in data['rules']:
+                for req in rule['requires']:
+                    if 'source-path' in req:
+                        deps.add(FileDependency(req['source-path']))
+        return deps
+
+    def compile_generated_files(self, output: Path) -> set[Path]:
+        return {output.with_suffix(output.suffix + '.d')}
+
+    @property
+    def cxxmodules_flags(self) -> set[str]:
+        return set() # {'/std=latest'}
+
+    async def compile(self, sourcefile: Path, output: Path, options: set[str]):
+        args = [self.cc, *self.default_flags, *options, 
+                f'/Fo"{str(output)}"', '/c', f'"{str(sourcefile)}"']
+        await self.run('cc', output, args, env=self.env)
+
+    async def link(self, objects: set[Path], output: Path, options: set[str]):
+        args = [self.lnk, '/nologo', *options, *objects, f'/OUT:{str(output)}']
+        await self.run('link', output, args, env=self.env)
+
+    async def static_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
+        args = [self.lib, '/nologo', *objects, f'/OUT:"{output}"']
+        await self.run('static_lib', output, args, env=self.env)
+
+    async def shared_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
+        args = [self.lnk, '/nologo', f'/IMPLIB:"{output.with_suffix(".lib")}"', '/DLL', *options, *objects, f'/OUT:"{output.with_suffix(".dll")}"']
+        await self.run('shared_lib', output, args, env=self.env)

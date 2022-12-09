@@ -9,25 +9,34 @@ from . import target_toolchain
 
 
 class CXXObject(Target):
-    def __init__(self, source: str, cxx_flags: set[str] = set()) -> None:
-        super().__init__()
+    def __init__(self, parent:'CXXTarget', source: str) -> None:
+        super().__init__(parent=parent)
         self.source = self.source_path / source
-        self.cxx_flags = cxx_flags
         self.toolchain = target_toolchain
 
     @Target.name.setter
     def name(self, value):
         Target.name.fset(self, f'{value}.{self.source.stem}')
 
+    @property
+    def cxx_flags(self):
+        return self.parent.cxx_flags
+
+    @property
+    def private_cxx_flags(self):
+        return self.parent.private_cxx_flags
+
     @asyncio.once_method
     async def initialize(self):
+        await self.parent.preload()
         await self.preload()
 
         if not self.clean_request:
-            deps = await self.toolchain.scan_dependencies(self.source, self.cxx_flags)
+            deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
             deps.add(self.source)
             self.load_dependencies(deps)
-        self.output = Path(f'{self.source.name}.o')
+        ext = o if os.name != 'nt' else 'obj'
+        self.output = self.build_path / Path(f'{self.parent.sname}.{self.source.name}.{ext}')
         await super().initialize(recursive_once=True)
 
         self.other_generated_files.update(
@@ -35,7 +44,7 @@ class CXXObject(Target):
 
     async def __call__(self):
         self.info(f'generating {self.output}...')
-        await self.toolchain.compile(self.source, self.output, self.cxx_flags)
+        await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
 
 
 class OptionSet:
@@ -166,7 +175,7 @@ class CXXObjectsTarget(CXXTarget):
         self.objs: set[CXXObject] = set()
 
         for source in sources:
-            self.objs.add(CXXObject(source, self.private_cxx_flags))
+            self.objs.add(CXXObject(self, source))
 
     @asyncio.once_method
     async def initialize(self):
@@ -191,7 +200,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
     async def initialize(self):
         await self.preload()
 
-        self.output = Path(self.sname)
+        self.output = self.build_path / (self.sname if os.name != 'nt' else self.sname + '.exe')
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
 
@@ -225,6 +234,10 @@ class Library(CXXObjectsTarget):
     @asyncio.once_method
     async def initialize(self):
         await self.preload()
+        
+        from .msvc_toolchain import MSVCToolchain
+        if not self.static and isinstance(self.toolchain, MSVCToolchain):
+            self.compile_definitions.add(f'{self.sname.upper()}_EXPORT=1')
 
         self.load_dependencies(self.objs)
         self.output = Path(f"lib{self.sname}.{self.ext}")
@@ -232,18 +245,23 @@ class Library(CXXObjectsTarget):
 
     async def __call__(self):
         await super().__call__()
+
         self.info(
             f'creating {"static" if self.static else "shared"} library {self.output}...')
 
         objs = self.objs
         for dep in self.cxx_dependencies:
-            if isinstance(dep, CXXObjectsTarget):
+            if isinstance(dep, CXXObjectsTarget) and not isinstance(dep, Library):
                 objs.update(dep.objs)
 
         if self.static:
-            await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output)
+            await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output, self.libs)
         else:
             await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
+
+        from .msvc_toolchain import MSVCToolchain
+        if not self.static and isinstance(self.toolchain, MSVCToolchain):
+            self.compile_definitions.add(f'{self.sname.upper()}_IMPORT=1', public=True)
 
         self.debug(f'done')
 
