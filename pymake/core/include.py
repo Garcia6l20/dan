@@ -26,8 +26,11 @@ def _init_makefile(module, name: str = 'root'):
 if not root_makefile:
     import sys
     from pathlib import Path
-    root_makefile = sys.modules['__main__']
+    root_makefile = sys.modules['__main__']    
     _init_makefile(root_makefile)
+    build_root : Path = root_makefile.build_path
+    cache_prefix = build_root / '__pycache__'
+    sys.pycache_prefix = str(cache_prefix)
     current_makefile = root_makefile
     makefiles.append(current_makefile)
 
