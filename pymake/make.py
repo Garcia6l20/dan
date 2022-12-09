@@ -1,4 +1,5 @@
 
+from pathlib import Path
 import sys
 from types import ModuleType
 
@@ -45,6 +46,13 @@ class Make(Logging):
     @property
     def executable_targets(self) -> list[Executable]:
         return [exe for exe in self.active_targets.values() if isinstance(exe, Executable)]
+
+    async def scan_toolchains(self, script:Path = None):
+        from pymake.cxx.detect import create_toolchains, load_env_toolchain
+        if script:
+            load_env_toolchain(script)
+        else:
+            create_toolchains(script)
 
     async def run(self):
         await asyncio.gather(*[t.execute() for t in self.executable_targets])

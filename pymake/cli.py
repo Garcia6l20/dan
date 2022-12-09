@@ -107,6 +107,12 @@ def clean(make: Make, **kwargs):
 def run(make: Make, **kwargs):
     asyncio.run(make.run())
 
+@cli.command()
+@click.option('-s', '--script', help='Use a source script to resolve compilation environment')
+@pass_make
+def scan_toolchains(make: Make, script:str, **kwargs):
+    asyncio.run(make.scan_toolchains(script=script))
+
 def main():
     import sys
     try:

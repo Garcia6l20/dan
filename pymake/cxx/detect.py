@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 
+import yaml
+
 from pymake.core.osinfo import info as osinfo
 from pymake.core.utils import SyncRunner
 from pymake.core.version import Version
@@ -175,7 +177,8 @@ def detect_compiler_id(executable):
     ]
     try:
         for detector in detectors:
-            output, _, rc = runner.run(' '.join([f'"{executable}"', *detector.split(' '), tmpname]), no_raise=True)
+            output, _, rc = runner.run(
+                ' '.join([f'"{executable}"', *detector.split(' '), tmpname]), no_raise=True)
             if 0 == rc:
                 defines = dict()
                 for line in output.splitlines():
@@ -233,6 +236,7 @@ class Compiler:
     def __hash__(self):
         return hash(self.path)
 
+
 def validate_pair(ob):
     try:
         if not (len(ob) == 2):
@@ -255,7 +259,8 @@ def get_environment_from_batch_command(env_cmd, initial=None):
     """
     def consume(iter):
         try:
-            while True: next(iter)
+            while True:
+                next(iter)
         except StopIteration:
             pass
     if not isinstance(env_cmd, (list, tuple)):
@@ -263,26 +268,27 @@ def get_environment_from_batch_command(env_cmd, initial=None):
     # construct the command that will alter the environment
     env_cmd = subprocess.list2cmdline(env_cmd)
     # create a tag so we can tell in the output when the proc is done
-    tag = '--- done running command ---'
-    # construct a cmd.exe command to do accomplish this
-    cmd = 'cmd.exe /s /c "{env_cmd} && echo "{tag}" && set"'.format(**vars())
+    if os.name == 'nt':
+        # construct a cmd.exe command to do accomplish this
+        cmd = f'cmd.exe /s /c "{env_cmd} && set"'
+        enc = 'cp1252'
+        shell = False
+    else:
+        cmd = f'sh -c ". {env_cmd} && env && echo CC=$CC && echo CXX=$CXX"'
+        enc = 'utf-8'
+        shell = True
     # launch the process
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=initial)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, env=initial, shell=shell)
     # parse the output sent to stdout
-    lines = proc.stdout
-    # consume whatever output occurs until the tag is reached
-    consume(itertools.takewhile(lambda l: tag not in l.decode('cp1252'), lines))
-    # define a way to handle each KEY=VALUE line
-    handle_line = lambda l: l.decode('cp1252').rstrip().split('=',1)
-    # parse key/values into pairs
-    pairs = map(handle_line, lines)
-    # make sure the pairs are valid
-    valid_pairs = filter(validate_pair, pairs)
-    # construct a dictionary of the pairs
-    result = dict(valid_pairs)
-    # let the process finish
-    proc.communicate()
+    out, _ = proc.communicate()
+    result = dict()
+    for line in out.decode(enc).splitlines():
+        parts = line.strip().split('=')
+        if len(parts) == 2:
+            if len(parts[1]) and os.getenv(parts[0]) != parts[1]:
+                result[parts[0]] = parts[1]
     return result
+
 
 def get_compilers(logger: logging.Logger):
     from pymake.core.find import find_executables, find_executable, find_file
@@ -293,16 +299,20 @@ def get_compilers(logger: logging.Logger):
             logger.info(f'Loading Visual Studio: {info["displayName"]}')
             paths = [info['installationPath']]
             cl = find_executable('cl', paths=paths, default_paths=False)
-            link = find_executable('link', paths=[cl.parent], default_paths=False)
-            lib = find_executable('lib', paths=[cl.parent], default_paths=False)
+            link = find_executable(
+                'link', paths=[cl.parent], default_paths=False)
+            lib = find_executable(
+                'lib', paths=[cl.parent], default_paths=False)
             vcvars = find_file(r'vcvarsall.bat', paths=paths)
             archs = [('x86_64', 'x64'), ('x86', 'x86')]
             for arch, vc_arch in archs:
                 env = get_environment_from_batch_command([vcvars, vc_arch])
                 if env:
-                    compilers.add(Compiler(cl, arch=arch, env=env, tools={'link': link, 'lib': lib}))
+                    compilers.add(Compiler(cl, arch=arch, env=env,
+                                  tools={'link': link, 'lib': lib}))
                 else:
-                    logger.warning(f'Cannot load msvc with {arch} architecture')
+                    logger.warning(
+                        f'Cannot load msvc with {arch} architecture')
     else:
         for gcc in find_executables(r'gcc(-\d+)?'):
             gcc = gcc.resolve()
@@ -314,16 +324,17 @@ def get_compilers(logger: logging.Logger):
 
 
 def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
-    logger.info(f'creating {compiler.compiler_id} toolchain')
+    logger.info(f'scanning {compiler.compiler_id} toolchain')
     data = {
         'type': compiler.name,
         'version': str(compiler.version),
         'cc': str(compiler.path),
     }
-    pos = compiler.path.stem.rfind('-')
+    pos = compiler.path.stem.rfind(compiler.name)
     if pos > 0:
-        base_name = compiler.path.stem[:pos]
-        suffix = compiler.path.stem[pos + 1:]
+        prefix = compiler.path.stem[:pos]
+        base_name = compiler.name
+        suffix = compiler.path.stem[pos + len(compiler.name) + 1:]
     else:
         base_name = compiler.path.stem
         suffix = None
@@ -338,8 +349,10 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     def get_compiler_tool(tool, toolname=None):
         if not toolname:
             toolname = f'{base_name}-{tool}'
+        if prefix:
+            toolname = f'{prefix}{toolname}'
         if suffix:
-            toolname = f'{toolname}-{suffix}'
+            toolname = f'{toolname}{suffix}'
         tool_path = base_path / toolname
         if tool_path.exists():
             logger.debug(f'found {tool} tool: {tool_path}')
@@ -358,20 +371,80 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         get_compiler_tool('nm')
         get_compiler_tool('strip')
         get_compiler_tool('ranlib')
-    return str(compiler.compiler_id), data
+    name = str(compiler.compiler_id)
+    if prefix:
+        name = f'{prefix}{name}'
+    return name, data
+
+
+def get_pymake_path():
+    path = Path(os.getenv('PYMAKE_DATA', os.getenv('HOME'))) / '.pymake'
+    path.mkdir(exist_ok=True, parents=False)
+    return path
+
+
+def get_toolchain_path():
+    return get_pymake_path() / 'toolchains.yaml'
+
+def load_env_toolchain(script: Path = None, name: str = None):
+    logger = logging.getLogger('toolchain')
+    env = get_environment_from_batch_command(script)
+    arch = env['ARCH'] if 'ARCH' in env else None
+    if 'CC' in env:
+        cc = Compiler(Path(env['CC']), arch=arch, env=env)
+    else:
+        from pymake.core.find import find_executable
+        paths = env['PATH'].split(os.pathsep)
+        cc = find_executable('.+gcc$', paths=paths, default_paths=False)
+        if cc:
+            cc = Compiler(cc, arch=arch, env=env)
+    tname, toolchain = create_toolchain(cc, logger)
+    save_toolchain(name or tname, toolchain)
+    return name or tname, toolchain
+
+def save_toolchain(name, toolchain):
+    toolchains_path = get_toolchain_path()
+    logger = logging.getLogger('toolchain')
+    logger.setLevel(logging.INFO)
+    if toolchains_path.exists():
+        with open(toolchains_path, 'r+') as f:
+            logger.info(f'updating toolchains file {toolchains_path}')
+            data = yaml.load(f.read(), Loader=yaml.FullLoader)
+            toolchains = data['toolchains']
+            toolchains[name] = toolchain
+            f.seek(0)
+            f.truncate()
+            f.write(yaml.dump(data))
 
 
 def create_toolchains():
     import yaml
     from pymake.core.find import find_executable
     from pymake.core.include import root_makefile
-    toolchains_path = root_makefile.source_path / 'toolchains.yaml'
+    toolchains_path = get_toolchain_path()
     logger = logging.getLogger('toolchain')
+    logger.setLevel(logging.INFO)
+    if toolchains_path.exists():
+        with open(toolchains_path, 'r') as f:
+            logger.info(f'updating toolchains file {toolchains_path}')
+            data = yaml.load(f.read(), Loader=yaml.FullLoader)
+            toolchains = data['toolchains']
+            tools = data['tools']
+    else:
+        data = dict()
+        toolchains = dict()
+        tools = dict()
+
     compilers = get_compilers(logger)
-    toolchains = dict()
-    tools = dict()
     for cc in compilers:
         k, v = create_toolchain(cc, logger)
+        if not k in toolchains.keys():
+            logger.info(f'new toolchain \'{k}\' found')
+        elif toolchains[k] != v:
+            logger.info(f'updating toolchain \'{k}\'')
+        else:
+            logger.info(f'toolchain \'{k}\' unchanged')
+            continue
         toolchains[k] = v
     if os.name != 'nt':
         required_tools = [
@@ -381,17 +454,21 @@ def create_toolchains():
         required_tools = list()
     for tool in required_tools:
         tools[tool] = str(find_executable(tool))
-    data = {'tools': tools, 'toolchains': toolchains, 'default': list(toolchains.keys())[0]}
+    data['tools'] = tools
+    data['toolchains'] = toolchains
+    if not 'default' in data:
+        data['default'] = list(toolchains.keys())[0]
     with open(toolchains_path, 'w') as f:
         f.write(yaml.dump(data))
     return data
 
+
 def get_toolchains():
     import yaml
     from pymake.core.include import root_makefile
-    toolchains_path = root_makefile.source_path / 'toolchains.yaml'
+    toolchains_path = get_toolchain_path()
     if not toolchains_path.exists():
         return create_toolchains()
-    
+
     with open(toolchains_path) as f:
         return yaml.load(f, yaml.FullLoader)
