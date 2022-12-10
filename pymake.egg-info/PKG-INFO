@@ -1,0 +1,12 @@
+Metadata-Version: 2.1
+Name: pymake
+Version: 0.1.0
+Summary: Python-based build system.
+Author-email: Garcia Sylvain <garcia.6l20@gmail.com>, garcia.6l20@gmail.com
+Project-URL: homepage, https://github.com/Garcia6L20/pymake
+Project-URL: documentation, https://github.com/Garcia6L20/pymake
+Project-URL: repository, https://github.com/Garcia6L20/pymake
+Keywords: packaging,dependency,build system
+Classifier: Topic :: Software Development
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown

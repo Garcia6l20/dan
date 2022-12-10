@@ -4,7 +4,6 @@ from pathlib import Path
 import aiofiles
 
 from pymake.core.target import FileDependency
-from pymake.core.include import root_makefile
 import json
 
 from pymake.core.utils import AsyncRunner
@@ -15,6 +14,7 @@ scan = True
 
 class CompileCommands:
     def __init__(self) -> None:
+        from pymake.core.include import root_makefile
         self.cc_path: Path = root_makefile.build_path / 'compile_commands.json'
         if self.cc_path.exists():
             self.cc_f = open(self.cc_path, 'r+')
@@ -65,12 +65,18 @@ class CompileCommands:
 
 class Toolchain(AsyncRunner, Logging):
     def __init__(self) -> None:
-        self.compile_commands = CompileCommands()
+        self._compile_commands: CompileCommands = None
         self.cxx_flags = set()
         self.cpp_std = 17
         self.env = None
+    
+    @property
+    def compile_commands(self):
+        if not self._compile_commands:
+            self._compile_commands = CompileCommands()
+        return self._compile_commands
 
-    def set_mode(self, mode: str):
+    def init(self, mode: str):
         ...
 
     def has_cxx_compile_options(*opts) -> bool:

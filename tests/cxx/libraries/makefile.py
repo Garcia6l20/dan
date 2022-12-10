@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-
 import os
-from pymake import cli
 from pymake.cxx import Library, Executable, Objects, target_toolchain
 
 target_toolchain.cpp_std = 17
@@ -26,7 +23,3 @@ else:
 
     shared = Library(sources=['lib.cpp'], includes=['.'], static=False)
     shared_linked = Executable(sources=['main.cpp'], dependencies=[shared])
-
-
-if __name__ == '__main__':
-    cli()

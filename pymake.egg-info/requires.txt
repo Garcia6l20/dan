@@ -1,4 +1,4 @@
-click
+click>=8.0.0
 jinja2
 distro
 pyyaml

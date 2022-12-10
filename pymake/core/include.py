@@ -23,18 +23,6 @@ def _init_makefile(module, name: str = 'root'):
     current_makefile = module
 
 
-if not root_makefile:
-    import sys
-    from pathlib import Path
-    root_makefile = sys.modules['__main__']    
-    _init_makefile(root_makefile)
-    build_root : Path = root_makefile.build_path
-    cache_prefix = build_root / '__pycache__'
-    sys.pycache_prefix = str(cache_prefix)
-    current_makefile = root_makefile
-    makefiles.append(current_makefile)
-
-
 def targets():
     from pymake.core.target import Target
     targets: dict[str, Target] = dict()
@@ -45,17 +33,27 @@ def targets():
     return targets
 
 
-def include(name: str):
-    global current_makefile
-    module_path : Path = current_makefile.source_path / name / 'makefile.py'
-    if not module_path.exists():
-        module_path = current_makefile.source_path / f'{name}.py'
-    spec = importlib.util.spec_from_file_location(
-        f'{current_makefile.name}.{name}', module_path)
+def include(name: str | Path):
+    global current_makefile, root_makefile
+    if not root_makefile:
+        assert type(name) == type(Path())
+        module_path: Path = name / 'makefile.py'
+        spec = importlib.util.spec_from_file_location(
+            'root', module_path)
+    else:
+        module_path: Path = current_makefile.source_path / name / 'makefile.py'
+        if not module_path.exists():
+            module_path = current_makefile.source_path / f'{name}.py'
+        spec = importlib.util.spec_from_file_location(
+            f'{current_makefile.name}.{name}', module_path)
     module = importlib.util.module_from_spec(spec)
+    if not root_makefile:
+        current_makefile = root_makefile = module
     _init_makefile(module, name)
     spec.loader.exec_module(module)
     makefiles.append(current_makefile)
-    exports = getattr(module, 'exports') if hasattr(module, 'exports') else None
-    current_makefile = current_makefile.parent_makefile
+    exports = getattr(module, 'exports') if hasattr(
+        module, 'exports') else None
+    if current_makefile != root_makefile:
+        current_makefile = current_makefile.parent_makefile
     return exports

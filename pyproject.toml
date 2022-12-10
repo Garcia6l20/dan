@@ -1,0 +1,45 @@
+[project]
+name = "pymake"
+version = "0.1.0"
+description = "Python-based build system."
+authors = [
+    {name = "Garcia Sylvain", email="garcia.6l20@gmail.com"},
+    {email = "garcia.6l20@gmail.com"}
+]
+license = {file = "LICENSE.txt"}
+readme = "README.md"
+requires-python = ">=3.10"
+
+keywords = ["packaging", "dependency", "build system"]
+
+classifiers = [
+    "Topic :: Software Development"
+]
+
+dependencies = [
+    "click>=8.0.0",
+    "jinja2",
+    "distro",
+    "pyyaml",
+    "aiofiles",
+    "termcolor",
+]
+
+[project.optional-dependencies]
+#dev = [
+#    "black>=18.3-alpha.0",
+#]
+
+[project.urls]
+homepage = "https://github.com/Garcia6L20/pymake"
+documentation = "https://github.com/Garcia6L20/pymake"
+repository = "https://github.com/Garcia6L20/pymake"
+
+[project.scripts]
+pymake = "pymake.cli:main"
+
+[build-system]
+requires = ["setuptools>=40.8.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+

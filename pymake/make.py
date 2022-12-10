@@ -1,10 +1,10 @@
 
 from pathlib import Path
 import sys
-from types import ModuleType
 
-from pymake.core.include import targets, current_makefile
+from pymake.core.include import targets, include
 from pymake.core import asyncio
+from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 
 from pymake.core.target import Target
@@ -16,12 +16,16 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, mode: str = 'release', makefile: ModuleType = None, active_targets: list[str] = None):
+    def __init__(self, mode: str = 'release', toolchain: str = None, active_targets: list[str] = None):
         super().__init__('make')
+
+        init_toolchains(toolchain)
+
+        include(Path.cwd())
+
+
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(mode)
-
-        self.makefile = makefile or current_makefile
 
         self.active_targets: dict[str, Target] = dict()
         self.all_targets = targets()
@@ -34,7 +38,7 @@ class Make(Logging):
             target.name = name
 
         self.debug(f'targets: {self.all_targets}')
-        
+
     @property
     def toolchains(self):
         from pymake.cxx.detect import get_toolchains
@@ -47,7 +51,7 @@ class Make(Logging):
     def executable_targets(self) -> list[Executable]:
         return [exe for exe in self.active_targets.values() if isinstance(exe, Executable)]
 
-    async def scan_toolchains(self, script:Path = None):
+    async def scan_toolchains(self, script: Path = None):
         from pymake.cxx.detect import create_toolchains, load_env_toolchain
         if script:
             load_env_toolchain(script)

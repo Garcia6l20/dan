@@ -1,4 +1,3 @@
-from pymake.core.include import current_makefile as __current_makefile
 import logging
 from termcolor import colored
 
@@ -104,15 +103,30 @@ class Logging:
         self.error = self._logger.error
 
 
-if not hasattr(__current_makefile, '_logger'):
-    __makefile_logger = logging.getLogger(__current_makefile.name)
-    setup_logger(__makefile_logger)
-    setattr(__current_makefile, '_logger', __makefile_logger)
-else:
-    __makefile_logger: logging.Logger = getattr(__current_makefile, '_logger')
 
-debug = __makefile_logger.debug
-info = __makefile_logger.info
-warning = __makefile_logger.warning
-error = __makefile_logger.error
-critical = __makefile_logger.critical
+def __get_makefile_logger():
+    from pymake.core.include import current_makefile
+    if not hasattr(current_makefile, '_logger'):
+        makefile_logger = logging.getLogger(current_makefile.name)
+        setup_logger(makefile_logger)
+        setattr(current_makefile, '_logger', makefile_logger)
+    else:
+        makefile_logger: logging.Logger = getattr(
+            current_makefile, '_logger')
+    return makefile_logger
+
+
+def debug(*args, **kwds):
+    return __get_makefile_logger().debug(*args, **kwds)
+
+def info(*args, **kwds):
+    return __get_makefile_logger().info(*args, **kwds)
+
+def warning(*args, **kwds):
+    return __get_makefile_logger().warning(*args, **kwds)
+
+def error(*args, **kwds):
+    return __get_makefile_logger().error(*args, **kwds)
+
+def critical(*args, **kwds):
+    return __get_makefile_logger().critical(*args, **kwds)

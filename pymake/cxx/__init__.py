@@ -44,10 +44,10 @@ def __pick_arg(*names, env=None, default=None):
             continue
     return default
 
-def __init_toolchains():
-    init_toolchains(__pick_arg('-t', '--toolchain', env='PYMAKE_TOOLCHAIN'))
+#def __init_toolchains():
+#    init_toolchains(__pick_arg('-t', '--toolchain', env='PYMAKE_TOOLCHAIN'))
 
-__init_toolchains()
+#__init_toolchains()
 
 from .targets import Executable, Library, Module
 from .targets import CXXObjectsTarget as Objects

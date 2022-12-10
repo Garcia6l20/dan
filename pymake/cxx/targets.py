@@ -5,13 +5,12 @@ from pymake.core.target import Dependencies, Target, TargetDependencyLike
 from pymake.core.utils import AsyncRunner
 from pymake.core import asyncio
 
-from . import target_toolchain
-
 
 class CXXObject(Target):
     def __init__(self, parent:'CXXTarget', source: str) -> None:
         super().__init__(parent=parent)
         self.source = self.source_path / source
+        from . import target_toolchain
         self.toolchain = target_toolchain
 
     @Target.name.setter
@@ -101,6 +100,7 @@ class CXXTarget(Target):
                  private_link_libraries: set[str] = set(),
                  preload_dependencies: set[TargetDependencyLike] = set()) -> None:
         super().__init__()
+        from . import target_toolchain
         self.toolchain = target_toolchain
 
         self.dependencies = Dependencies(dependencies)
