@@ -1,8 +1,13 @@
 
+import logging
 from pathlib import Path
 import sys
 
-from pymake.core.include import targets, include
+import yaml
+from pymake.core.errors import InvalidConfiguration
+
+from pymake.core.include import include
+from pymake.core.include import targets as get_targets
 from pymake.core import asyncio
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
@@ -16,19 +21,45 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, mode: str = 'release', toolchain: str = None, active_targets: list[str] = None):
+    def __init__(self, build_path:str, targets: list[str] = None, verbose: bool = False):
+        logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+
         super().__init__('make')
 
+        self.build_path = Path(build_path).absolute()
+        self.cache_path = self.build_path / 'pymake.cache.yaml'
+        self.required_targets = targets
+        self.build_path.mkdir(exist_ok=True, parents=True)
+        self.cache = None
+        if self.cache_path.exists():
+            self.cache = yaml.load(open(self.cache_path, 'r'), Loader=yaml.FullLoader)
+
+    def __del__(self):
+        if self.cache:
+            yaml.dump(self.cache, open(self.cache_path, 'w'))
+
+    def configure(self, toolchain, build_type):
+        if not self.cache:
+            self.cache = dict()
+        self.cache['toolchain'] = toolchain
+        self.cache['build-type'] = build_type
+
+    @asyncio.once_method
+    async def initialize(self):
+        if not self.cache:
+            raise InvalidConfiguration(f'please run configure first')
+
+        toolchain = self.cache['toolchain']
+        build_type = self.cache['build-type']
         init_toolchains(toolchain)
-
-        include(Path.cwd())
-
+        self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
+        include(Path.cwd(), self.build_path)
 
         from pymake.cxx import target_toolchain
-        target_toolchain.set_mode(mode)
+        target_toolchain.set_mode(build_type)
 
         self.active_targets: dict[str, Target] = dict()
-        self.all_targets = targets()
+        self.all_targets = get_targets()
 
         for name, target in self.all_targets.items():
             if name not in self.all_targets:
@@ -37,7 +68,7 @@ class Make(Logging):
             self.active_targets[name] = target
             target.name = name
 
-        self.debug(f'targets: {self.all_targets}')
+        self.debug(f'targets: {[name for name in self.all_targets.keys()]}')
 
     @property
     def toolchains(self):
@@ -45,6 +76,7 @@ class Make(Logging):
         return get_toolchains()
 
     async def build(self):
+        await self.initialize()
         await asyncio.gather(*[t.build() for t in self.active_targets.values()])
 
     @property
@@ -59,9 +91,11 @@ class Make(Logging):
             create_toolchains(script)
 
     async def run(self):
+        await self.initialize()
         await asyncio.gather(*[t.execute() for t in self.executable_targets])
 
     async def clean(self, target: str = None):
+        await self.initialize()
         from pymake.cxx import toolchain
         toolchain.scan = False
         from pymake.core.target import Target

@@ -7,14 +7,15 @@ current_makefile = None
 makefiles = list()
 
 
-def _init_makefile(module, name: str = 'root'):
+def _init_makefile(module, name: str = 'root', build_path: Path = None):
     global current_makefile
     source_path = Path(module.__file__).parent
     if module != root_makefile:
-        build_path = current_makefile.build_path / name
+        build_path = build_path or current_makefile.build_path / name
         name = f'{current_makefile.name}.{name}'
     else:
-        build_path = source_path / 'build'
+        assert build_path
+    build_path.mkdir(parents=True, exist_ok=True)
 
     setattr(module, 'source_path', source_path)
     setattr(module, 'build_path', build_path)
@@ -33,7 +34,7 @@ def targets():
     return targets
 
 
-def include(name: str | Path):
+def include(name: str | Path, build_path: Path = None):
     global current_makefile, root_makefile
     if not root_makefile:
         assert type(name) == type(Path())
@@ -50,7 +51,7 @@ def include(name: str | Path):
     module = importlib.util.module_from_spec(spec)
     if not root_makefile:
         current_makefile = root_makefile = module
-    _init_makefile(module, name)
+    _init_makefile(module, name, build_path)
     spec.loader.exec_module(module)
     makefiles.append(current_makefile)
     exports = getattr(module, 'exports') if hasattr(

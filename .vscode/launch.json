@@ -12,6 +12,7 @@
                 {"label": "Build", "value": "build"},
                 {"label": "Clean", "value": "clean"},
                 {"label": "Run", "value": "run"},
+                {"label": "Configure", "value": "configure"},
             ]
         },
         {
@@ -34,7 +35,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "-m", "debug", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v", "./build2"],
             "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"

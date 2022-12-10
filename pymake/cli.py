@@ -13,6 +13,7 @@ _active_targets_initialized = False
 
 _logger = logging.getLogger('cli')
 
+
 def _set_targets(ctx, param, value):
     if len(value) == 0:
         return
@@ -30,7 +31,8 @@ def _set_targets(ctx, param, value):
             {name: target for name, target in ctx.obj.all_targets.items() if name.find(v) >= 0})
 
     if len(found_targets) == 0:
-        _logger.error(f"cannot math any target for name(s): {', '.join(value)}")
+        _logger.error(
+            f"cannot math any target for name(s): {', '.join(value)}")
         target_names = "\n  - ".join(ctx.obj.all_targets.keys())
         if len(target_names):
             _logger.info(f'available targets: \n  - {target_names}')
@@ -40,7 +42,10 @@ def _set_targets(ctx, param, value):
 
 
 _common_opts = [
-    click.argument('TARGETS', nargs=-1, callback=_set_targets)
+    click.option('--verbose', '-v', is_flag=True,
+                 help='Pring debug informations'),
+    click.argument('BUILD_PATH'),
+    click.argument('TARGETS', nargs=-1),
 ]
 
 
@@ -52,26 +57,48 @@ def add_options(options):
     return _add_options
 
 
-@click.group(invoke_without_command=True)
-@click.option('--verbose', '-v', is_flag=True, help='Pring debug informations')
-@click.option('--mode', '-m',
-              help='Build mode',
-              type=click.Choice(['debug', 'release', 'release-min-size', 'release-debug-infos'],
-                                case_sensitive=False),
-              default='release')
-@click.option('--toolchain', '-t', help='Toolchain id to use', default=None)
-@click.pass_context
-def cli(ctx: click.Context, verbose: bool, mode: str, toolchain: str):
-    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
-    ctx.obj = Make(mode, toolchain)
-    if ctx.invoked_subcommand is None:
-        ctx.invoke(build)
+common_opts = add_options(_common_opts)
+
+
+@click.group()  # invoke_without_command=True)
+# @click.option('--verbose', '-v', is_flag=True, help='Pring debug informations')
+# @click.option('--mode', '-m',
+#               help='Build mode',
+#               type=click.Choice(['debug', 'release', 'release-min-size', 'release-debug-infos'],
+#                                 case_sensitive=False),
+#               default='release')
+# @click.option('--toolchain', '-t', help='Toolchain id to use', default=None)
+# @click.pass_context
+def cli():  # ctx: click.Context, verbose: bool, mode: str, toolchain: str):
+    # logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+    # ctx.obj = Make(mode, toolchain)
+    # if ctx.invoked_subcommand is None:
+    #     ctx.invoke(build)
+    pass
+
+
+def available_toolchains():
+    from pymake.cxx.detect import get_toolchains
+    return [name for name in get_toolchains()['toolchains'].keys()]
 
 
 @cli.command()
-@add_options(_common_opts)
-@pass_make
-def build(make: Make, **kwargs):
+@click.option('--toolchain', '-t', help='The toolchain to use',
+              type=click.Choice(available_toolchains(), case_sensitive=False),
+              prompt=True)
+@click.option('--build-type', '-b', help='Build type to use',
+              type=click.Choice(['debug', 'release', 'release-min-size', 'release-debug-infos'], case_sensitive=False),
+              default='release')
+@common_opts
+def configure(toolchain, build_type, **kwargs):
+    Make(**kwargs).configure(toolchain, build_type)
+
+
+@cli.command()
+@common_opts
+# @pass_make
+def build(**kwargs):
+    make = Make(**kwargs)
     asyncio.run(make.build())
     from pymake.cxx import target_toolchain
     target_toolchain.compile_commands.update()
@@ -88,17 +115,19 @@ def list(make: Make, show_type: bool, **kwargs):
             s = s + ' - ' + type(target).__name__
         click.echo(s)
 
+
 @cli.command()
 @pass_make
 def list_toolchains(make: Make, **kwargs):
     for name, _ in make.toolchains['toolchains'].items():
         click.echo(name)
 
+
 @cli.command()
 @add_options(_common_opts)
-@pass_make
-def clean(make: Make, **kwargs):
-    asyncio.run(make.clean())
+# @pass_make
+def clean(**kwargs):
+    asyncio.run(Make(**kwargs).clean())
 
 
 @cli.command()
@@ -107,11 +136,13 @@ def clean(make: Make, **kwargs):
 def run(make: Make, **kwargs):
     asyncio.run(make.run())
 
+
 @cli.command()
 @click.option('-s', '--script', help='Use a source script to resolve compilation environment')
 @pass_make
-def scan_toolchains(make: Make, script:str, **kwargs):
+def scan_toolchains(make: Make, script: str, **kwargs):
     asyncio.run(make.scan_toolchains(script=script))
+
 
 def main():
     import sys
