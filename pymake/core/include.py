@@ -40,6 +40,7 @@ def include(name: str | Path):
         module_path: Path = name / 'makefile.py'
         spec = importlib.util.spec_from_file_location(
             'root', module_path)
+        name = 'root'
     else:
         module_path: Path = current_makefile.source_path / name / 'makefile.py'
         if not module_path.exists():
