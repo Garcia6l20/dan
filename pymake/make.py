@@ -21,18 +21,33 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, build_path:str, targets: list[str] = None, verbose: bool = False):
+    def __init__(self, path:str, targets: list[str] = None, verbose: bool = False):
         logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
 
         super().__init__('make')
 
-        self.build_path = Path(build_path).absolute()
+        self.cache = None
+        path = Path(path)
+        if not path.exists() or not (path / 'makefile.py').exists():
+            self.source_path = Path.cwd().absolute()
+            self.build_path = path.absolute().resolve()
+        else:
+            self.source_path = path.absolute().resolve()
+            self.build_path = Path.cwd().absolute()
+
         self.cache_path = self.build_path / 'pymake.cache.yaml'
+        if not self.source_path and not self.cache_path.exists():
+            raise InvalidConfiguration(f'configure first')
+            
         self.required_targets = targets
         self.build_path.mkdir(exist_ok=True, parents=True)
-        self.cache = None
         if self.cache_path.exists():
             self.cache = yaml.load(open(self.cache_path, 'r'), Loader=yaml.FullLoader)
+            self.source_path = Path(self.cache['source_path'])
+
+        self.debug(f'source path: {self.source_path}')
+        self.debug(f'build path: {self.build_path}')
+        assert (self.source_path / 'makefile.py').exists()
 
     def __del__(self):
         if self.cache:
@@ -41,6 +56,8 @@ class Make(Logging):
     def configure(self, toolchain, build_type):
         if not self.cache:
             self.cache = dict()
+        self.cache['source_path'] = str(self.source_path)
+        self.cache['build_path'] = str(self.build_path)
         self.cache['toolchain'] = toolchain
         self.cache['build-type'] = build_type
 
@@ -53,7 +70,7 @@ class Make(Logging):
         build_type = self.cache['build-type']
         init_toolchains(toolchain)
         self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
-        include(Path.cwd(), self.build_path)
+        include(self.source_path, self.build_path)
 
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(build_type)

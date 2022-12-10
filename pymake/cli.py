@@ -44,9 +44,13 @@ def _set_targets(ctx, param, value):
 _common_opts = [
     click.option('--verbose', '-v', is_flag=True,
                  help='Pring debug informations'),
-    click.argument('BUILD_PATH'),
+    click.argument('PATH'),
     click.argument('TARGETS', nargs=-1),
 ]
+_base_help_ = '''
+  PATH          Either build or source directory.
+  [TARGETS...]  Targets to process.
+'''
 
 
 def add_options(options):
