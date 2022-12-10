@@ -37,7 +37,7 @@ class AsyncRunner:
 
 
 class SyncRunner:
-    def run(self, command, pipe=True, no_raise=False, shell=True):
+    def run(self, command, pipe=True, no_raise=False, shell=True, env=None):
         # self.debug(f'executing: {command}')
         if pipe:
             stdout = subprocess.PIPE
@@ -47,6 +47,7 @@ class SyncRunner:
                                 stdout=stdout,
                                 stderr=stdout,
                                 shell=shell,
+                                env=env,
                                 universal_newlines=True)
         out, err = proc.communicate()
         if proc.returncode != 0 and not no_raise:
@@ -70,3 +71,11 @@ class chdir:
 
     def __exit__(self, *args):
         os.chdir(self.prev)
+
+def unique(*seqs):
+    seen = set()
+    seen_add = seen.add
+    full = list()
+    for seq in seqs:
+        full.extend(seq)
+    return [x for x in full if not (x in seen or seen_add(x))]

@@ -24,6 +24,6 @@ spdlog = Library(sources=[
     dependencies=[fmt])
 
 if os.name == 'posix':
-    spdlog.link_libraries.add('pthread')
+    spdlog.link_libraries.add('pthread', public=True)
 
 exports = spdlog, fmt

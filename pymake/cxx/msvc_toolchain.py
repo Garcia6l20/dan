@@ -2,12 +2,10 @@ import asyncio
 import json
 
 import aiofiles
-import yaml
+from pymake.core.utils import unique
 from pymake.logging import Logging
-from pymake.core.utils import AsyncRunner
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
-from pymake.cxx import auto_fpic
 
 
 class MSVCToolchain(Toolchain):
@@ -18,21 +16,19 @@ class MSVCToolchain(Toolchain):
         self.lnk = Path(data['link'])
         self.lib = Path(data['lib'])
         self.env = data['env']
-        # self.cxx = data['cxx']
-        # self.ar = data['ar'] or tools['ar']
-        # self.ranlib = data['ranlib'] or tools['ranlib']
+        self.default_cflags = {'/nologo', '/EHsc', '/GA', '/MT'}
+        self.default_cxxflags = {f'/std:c++{self.cpp_std}'}
         self.set_mode('release')
 
     def set_mode(self, mode: str):
-        self.default_flags = {'/nologo', f'/std:c++{self.cpp_std}', '/EHsc', '/GA', '/MT'}
         if mode == 'debug':
             pass
         elif mode == 'release':
-            self.default_flags.update(('/O2', '/DNDEBUG'))
+            self.default_cflags.update(('/O2', '/DNDEBUG'))
         elif mode == 'release-min-size':
-            self.default_flags.update(('/Os', '/DNDEBUG'))
+            self.default_cflags.update(('/Os', '/DNDEBUG'))
         elif mode == 'release-debug-infos':
-            self.default_flags.update(('/O2', '/DNDEBUG'))
+            self.default_cflags.update(('/O2', '/DNDEBUG'))
         else:
             raise InvalidConfiguration(f'unknown build mode: {mode}')
 
@@ -65,7 +61,7 @@ class MSVCToolchain(Toolchain):
 
         build_path.mkdir(parents=True, exist_ok=True)
         desc = build_path / file.with_suffix(".json").name
-        args = [f'"{self.cc}"', *self.default_flags, *options, '/scanDependencies', f'"{desc}"', f'"{file}"']
+        args = [f'"{self.cc}"', *unique(self.default_cflags, self.default_cxxflags, options), '/scanDependencies', f'"{desc}"', f'"{file}"']
         await self.run('scan', desc, args,
                        env=self.env,
                        cwd=build_path)
@@ -86,7 +82,7 @@ class MSVCToolchain(Toolchain):
         return set() # {'/std=latest'}
 
     async def compile(self, sourcefile: Path, output: Path, options: set[str]):
-        args = [self.cc, *self.default_flags, *options, 
+        args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options), 
                 f'/Fo"{str(output)}"', '/c', f'"{str(sourcefile)}"']
         await self.run('cc', output, args, env=self.env)
 

@@ -68,6 +68,7 @@ class Toolchain(AsyncRunner, Logging):
         self.compile_commands = CompileCommands()
         self.cxx_flags = set()
         self.cpp_std = 17
+        self.env = None
 
     def set_mode(self, mode: str):
         ...
@@ -106,7 +107,7 @@ class Toolchain(AsyncRunner, Logging):
         args_cache = output.with_suffix(f'.{name}.args')
         async with aiofiles.open(args_cache, 'w') as cache:
             result, _ = await asyncio.gather(
-                super().run(args, **kwargs),
+                super().run(args, env=self.env, **kwargs),
                 cache.write(' '.join([str(a) for a in args]))
             )
             return result

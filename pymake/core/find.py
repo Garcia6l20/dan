@@ -63,9 +63,11 @@ def find_executable(name, paths=list(), default_paths=True) -> Path:
         paths.extend(programs_paths_lookup)
     return find_file(expr, paths)
 
-def find_executables(name, paths=list()) -> list[Path]:
+def find_executables(name, paths=list(), default_paths=True) -> list[Path]:
     if os.name == 'posix':
         expr = name + '$'
     elif os.name == 'nt':
         expr = f'{name}.exe$'
-    return find_files(expr, [*paths, *programs_paths_lookup])
+    if default_paths:
+        paths.extend(programs_paths_lookup)
+    return find_files(expr, paths)

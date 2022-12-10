@@ -74,11 +74,13 @@ class OptionSet:
             items.update(getattr(dep, self._name).public)
         return items
 
-    def add(self, value, public=False):
+    def add(self, *values, public=False):
         if public:
-            self._public.add(value)
+            for value in values:
+                self._public.add(value)
         else:
-            self._private.add(value)
+            for value in values:
+                self._private.add(value)
 
     def update(self, values: 'OptionSet', private=False):
         self._public = values._public
