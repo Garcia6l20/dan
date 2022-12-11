@@ -30,12 +30,19 @@ class CXXObject(Target):
         await self.parent.preload()
         await self.preload()
 
-        if not self.clean_request:
-            deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
-            deps.add(self.source)
-            self.load_dependencies(deps)
         ext = 'o' if os.name != 'nt' else 'obj'
-        self.output = self.build_path / Path(f'{self.parent.sname}.{self.source.name}.{ext}')
+        self.output : Path = self.build_path / Path(f'{self.parent.sname}.{self.source.name}.{ext}')
+        
+        if not self.clean_request:
+            if not self.output.exists() or self.output.stat().st_mtime < self.source.stat().st_mtime or not hasattr(self.cache, 'deps'):
+                self.info(f'scanning dependencies of {self.source}')
+                deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
+                deps = set(filter(lambda d : str(d).startswith(str(self.source_path)), deps))
+                self.cache.deps = deps
+            else:
+                deps = self.cache.deps
+            self.load_dependencies(deps)
+            self.load_dependency(self.source)
         await super().initialize(recursive_once=True)
 
         self.other_generated_files.update(

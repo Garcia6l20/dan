@@ -1,8 +1,10 @@
+from functools import cached_property
 from pathlib import Path
 from typing import Union, TypeAlias
 import inspect
 
 from pymake.core import asyncio, aiofiles, utils
+from pymake.core.cache import SubCache
 from pymake.logging import Logging
 
 
@@ -68,9 +70,14 @@ class Target(Logging):
     def name(self) -> str:
         return self._name
 
-    @property
+    @cached_property
     def sname(self) -> str:
         return self._name.split('.')[-1]
+
+    @cached_property
+    def cache(self) -> SubCache:
+        from pymake.core.globals import cache
+        return cache.subcache(self._name)
 
     @name.setter
     def name(self, name):

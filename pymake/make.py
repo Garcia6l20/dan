@@ -3,8 +3,7 @@ import logging
 from pathlib import Path
 import sys
 
-import yaml
-from pymake.core.errors import InvalidConfiguration
+from pymake.core.cache import Cache
 
 from pymake.core.include import include
 from pymake.core.include import targets as get_targets
@@ -21,11 +20,15 @@ def make_target_name(name: str):
 
 
 class Make(Logging):
-    def __init__(self, path:str, targets: list[str] = None, verbose: bool = False):
+    _config_name = 'pymake.config.yaml'
+    _cache_name = 'pymake.cache.yaml'
+
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False):
         logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
 
         super().__init__('make')
 
+        self.config = None
         self.cache = None
         path = Path(path)
         if not path.exists() or not (path / 'makefile.py').exists():
@@ -35,39 +38,41 @@ class Make(Logging):
             self.source_path = path.absolute().resolve()
             self.build_path = Path.cwd().absolute()
 
-        self.cache_path = self.build_path / 'pymake.cache.yaml'
-        if not self.source_path and not self.cache_path.exists():
-            raise InvalidConfiguration(f'configure first')
-            
+        self.config_path = self.build_path / self._config_name
+        self.cache_path = self.build_path / self._cache_name
+
         self.required_targets = targets
         self.build_path.mkdir(exist_ok=True, parents=True)
-        if self.cache_path.exists():
-            self.cache = yaml.load(open(self.cache_path, 'r'), Loader=yaml.FullLoader)
-            self.source_path = Path(self.cache['source_path'])
+        sys.pycache_prefix = str(self.build_path)
+        self.config = Cache(self.config_path)
+        self.cache = Cache(self.cache_path)
+
+        import pymake.core.globals
+        pymake.core.globals.cache = self.cache
 
         self.debug(f'source path: {self.source_path}')
         self.debug(f'build path: {self.build_path}')
-        assert (self.source_path / 'makefile.py').exists()
 
-    def __del__(self):
-        if self.cache:
-            yaml.dump(self.cache, open(self.cache_path, 'w'))
+        assert (self.source_path /
+                'makefile.py').exists(), f'no makefile in {self.source_path}'
+        assert (self.source_path !=
+                self.build_path), f'in-source build are not allowed'
+
 
     def configure(self, toolchain, build_type):
-        if not self.cache:
-            self.cache = dict()
-        self.cache['source_path'] = str(self.source_path)
-        self.cache['build_path'] = str(self.build_path)
-        self.cache['toolchain'] = toolchain
-        self.cache['build-type'] = build_type
+        if not self.config:
+            self.config = dict()
+        self.config.source_path = str(self.source_path)
+        self.config.build_path = str(self.build_path)
+        self.config.toolchain = toolchain
+        self.config.build_type = build_type
 
     @asyncio.once_method
     async def initialize(self):
-        if not self.cache:
-            raise InvalidConfiguration(f'please run configure first')
+        assert self.source_path and self.config_path.exists(), 'configure first'
 
-        toolchain = self.cache['toolchain']
-        build_type = self.cache['build-type']
+        toolchain = self.config.toolchain
+        build_type = self.config.build_type
         init_toolchains(toolchain)
         self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
         include(self.source_path, self.build_path)

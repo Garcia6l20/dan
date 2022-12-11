@@ -110,13 +110,7 @@ class Toolchain(AsyncRunner, Logging):
         ...
 
     async def run(self, name: str, output: Path, args, **kwargs):
-        args_cache = output.with_suffix(f'.{name}.args')
-        async with aiofiles.open(args_cache, 'w') as cache:
-            result, _ = await asyncio.gather(
-                super().run(args, env=self.env, **kwargs),
-                cache.write(' '.join([str(a) for a in args]))
-            )
-            return result
+        return await super().run(args, env=self.env, **kwargs)
 
     @property
     def cxxmodules_flags(self) -> set[str]:

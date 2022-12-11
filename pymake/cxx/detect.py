@@ -347,6 +347,7 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         base_name = compiler.name
         suffix = compiler.path.stem[pos + len(compiler.name):]
     else:
+        prefix = None
         base_name = compiler.path.stem
         suffix = None
     base_path = compiler.path.parent
