@@ -1,3 +1,6 @@
+import logging
+import sys
+import tqdm
 import asyncio
 from pathlib import Path
 import os
@@ -13,27 +16,37 @@ class CommandError(RuntimeError):
         self.stderr = stderr
 
 
+_encoding = 'cp1252' if os.name == 'nt' else 'utf-8'
+
+
+async def log_stream(stream):
+    while not stream.at_eof():
+        data = await stream.readline()
+        line = data.decode(_encoding).rstrip()
+        tqdm.tqdm.write(line, end='')
+
+
 class AsyncRunner:
     async def run(self, command, pipe=True, no_raise=False, env=None, cwd=None):
         if not isinstance(command, str):
-            command = ' '.join([f'"{arg}"' if isinstance(arg, Path) else arg for arg in command])
+            command = ' '.join([f'"{arg}"' if isinstance(
+                arg, Path) else arg for arg in command])
         self.debug(f'executing: {command}')
-        if pipe:
-            stdout = asyncio.subprocess.PIPE
-        else:
-            stdout = None
+        stdout = asyncio.subprocess.PIPE
         proc = await asyncio.subprocess.create_subprocess_shell(command,
                                                                 stdout=stdout,
                                                                 stderr=stdout,
                                                                 env=env,
                                                                 cwd=cwd)
-        out, err = await proc.communicate()
-        enc = 'cp1252' if os.name =='nt' else 'utf-8'
-        if proc.returncode != 0 and not no_raise:
-            message = f'command returned {proc.returncode}: {command}\n{out.decode(enc) if out and len(out) else ""}\n{err.decode(enc) if err and len(err) else ""}'
-            self.error(message)
-            raise CommandError(message, proc.returncode, out, err)
-        return out.decode(enc) if out else None, err.decode(enc) if err else None, proc.returncode
+        if not pipe:
+            await asyncio.wait([log_stream(proc.stdout), log_stream(proc.stderr), proc.wait()])
+        else:
+            out, err = await proc.communicate()
+            if proc.returncode != 0 and not no_raise:
+                message = f'command returned {proc.returncode}: {command}\n{out.decode(_encoding) if out and len(out) else ""}\n{err.decode(_encoding) if err and len(err) else ""}'
+                self.error(message)
+                raise CommandError(message, proc.returncode, out, err)
+            return out.decode(_encoding) if out else None, err.decode(_encoding) if err else None, proc.returncode
 
 
 class SyncRunner:
@@ -71,6 +84,7 @@ class chdir:
 
     def __exit__(self, *args):
         os.chdir(self.prev)
+
 
 def unique(*seqs):
     seen = set()

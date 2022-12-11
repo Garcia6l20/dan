@@ -1,3 +1,4 @@
+import tqdm
 import logging
 from termcolor import colored
 
@@ -70,9 +71,14 @@ _color_formatter = ColoredFormatter()
 _no_color_formatter = ColoredFormatter(use_color=False)
 
 
+class TqdmHandler(logging.Handler):
+    def emit(self, record):
+        tqdm.tqdm.write(self.format(record))
+
+
 def setup_logger(logger: logging.Logger):
     if not logger.hasHandlers():
-        console = logging.StreamHandler()
+        console = TqdmHandler()
         console.setFormatter(_color_formatter)
         logger.addHandler(console)
     else:
@@ -103,7 +109,6 @@ class Logging:
         self.error = self._logger.error
 
 
-
 def __get_makefile_logger():
     from pymake.core.include import current_makefile
     if not hasattr(current_makefile, '_logger'):
@@ -119,14 +124,18 @@ def __get_makefile_logger():
 def debug(*args, **kwds):
     return __get_makefile_logger().debug(*args, **kwds)
 
+
 def info(*args, **kwds):
     return __get_makefile_logger().info(*args, **kwds)
+
 
 def warning(*args, **kwds):
     return __get_makefile_logger().warning(*args, **kwds)
 
+
 def error(*args, **kwds):
     return __get_makefile_logger().error(*args, **kwds)
+
 
 def critical(*args, **kwds):
     return __get_makefile_logger().critical(*args, **kwds)

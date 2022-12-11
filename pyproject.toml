@@ -23,6 +23,7 @@ dependencies = [
     "pyyaml",
     "aiofiles",
     "termcolor",
+    "tqdm"
 ]
 
 [project.optional-dependencies]

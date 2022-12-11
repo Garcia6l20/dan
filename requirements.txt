@@ -4,3 +4,4 @@ distro
 pyyaml
 aiofiles
 termcolor
+tqdm

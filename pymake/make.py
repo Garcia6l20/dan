@@ -2,15 +2,14 @@
 import logging
 from pathlib import Path
 import sys
+from tqdm import tqdm
 
 from pymake.core.cache import Cache
-
 from pymake.core.include import include
 from pymake.core.include import targets as get_targets
 from pymake.core import asyncio
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
-
 from pymake.core.target import Target
 from pymake.cxx.targets import Executable
 
@@ -58,7 +57,6 @@ class Make(Logging):
         assert (self.source_path !=
                 self.build_path), f'in-source build are not allowed'
 
-
     def configure(self, toolchain, build_type):
         if not self.config:
             self.config = dict()
@@ -99,7 +97,17 @@ class Make(Logging):
 
     async def build(self):
         await self.initialize()
-        await asyncio.gather(*[t.build() for t in self.active_targets.values()])
+        target_count = len(self.active_targets)
+        pbar = tqdm(total=target_count)
+        tsks = list()
+        def on_done(*args, **kwargs):
+            pbar.update()
+        for t in self.active_targets.values():
+            tsk = asyncio.create_task(t.build())
+            tsk.add_done_callback(on_done)
+            tsks.append(tsk)
+
+        await asyncio.gather(*tsks)
 
     @property
     def executable_targets(self) -> list[Executable]:
