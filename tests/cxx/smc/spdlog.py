@@ -19,7 +19,6 @@ spdlog = Library(sources=[
     spdlog_src / 'spdlog.cpp',],
     includes=[spdlog_inc],
     compile_definitions=['SPDLOG_COMPILED_LIB'],
-    static=True,
     preload_dependencies=[gitspdlog],
     dependencies=[fmt])
 

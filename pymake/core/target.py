@@ -61,8 +61,8 @@ class Target(Logging):
         self.parent = parent
         
         if name:
-            if current_makefile.parent_makefile:
-                self.name = f'{current_makefile.parent_makefile.name}.{name}'
+            if current_makefile.parent:
+                self.name = f'{current_makefile.parent.name}.{name}'
             else:
                 self.name = name
 

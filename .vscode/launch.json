@@ -30,12 +30,24 @@
     ],
     "configurations": [
         {
+            "name": "configure",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": ["configure", "-v", "-t", "gcc-12.2.0", "./build"],
+            "cwd": "${workspaceFolder}/tests",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
             "name": "tests",
             "type": "python",
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v", "./build2"],
+            "args": ["${input:makefileCommand}", "-v", "./build"],
             "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -47,7 +59,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "-m", "debug", "scan-toolchains"],
+            "args": ["scan-toolchains", "-v"],
             "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -59,7 +71,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v"],
             "cwd": "${workspaceFolder}/tests/${input:test}",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -71,7 +83,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v"],
             "cwd": "${workspaceFolder}/tests/cxx/modules",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -83,7 +95,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v"],
             "cwd": "${workspaceFolder}/tests/cxx",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -95,7 +107,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v", "build"],
             "cwd": "${workspaceFolder}/tests/cxx/simple",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -107,7 +119,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v", "build"],
             "cwd": "${workspaceFolder}/tests/cxx/libraries",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -119,7 +131,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["-v", "${input:makefileCommand}"],
+            "args": ["${input:makefileCommand}", "-v", "build"],
             "cwd": "${workspaceFolder}/tests/cxx/smc",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"

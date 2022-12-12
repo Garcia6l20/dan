@@ -10,7 +10,6 @@ fmt = Library(sources=[
     fmt_src / 'format.cc',
     fmt_src / 'os.cc'],
     includes=[fmt_inc],
-    static=True,
     preload_dependencies=[gitfmt])
 
 exports = fmt

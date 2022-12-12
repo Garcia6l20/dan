@@ -1,3 +1,4 @@
+from enum import Enum
 import os
 from pathlib import Path
 from typing import Callable
@@ -7,7 +8,7 @@ from pymake.core import asyncio
 
 
 class CXXObject(Target):
-    def __init__(self, parent:'CXXTarget', source: str) -> None:
+    def __init__(self, parent: 'CXXTarget', source: str) -> None:
         super().__init__(parent=parent)
         self.source = self.source_path / source
         from . import target_toolchain
@@ -31,13 +32,15 @@ class CXXObject(Target):
         await self.preload()
 
         ext = 'o' if os.name != 'nt' else 'obj'
-        self.output : Path = self.build_path / Path(f'{self.parent.sname}.{self.source.name}.{ext}')
-        
+        self.output: Path = self.build_path / \
+            Path(f'{self.parent.sname}.{self.source.name}.{ext}')
+
         if not self.clean_request:
             if not self.output.exists() or self.output.stat().st_mtime < self.source.stat().st_mtime or not hasattr(self.cache, 'deps'):
                 self.info(f'scanning dependencies of {self.source}')
                 deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
-                deps = set(filter(lambda d : str(d).startswith(str(self.source_path)), deps))
+                deps = set(filter(lambda d: str(d).startswith(
+                    str(self.source_path)), deps))
                 self.cache.deps = deps
             else:
                 deps = self.cache.deps
@@ -112,18 +115,18 @@ class CXXTarget(Target):
 
         self.dependencies = Dependencies(dependencies)
         self.preload_dependencies = Dependencies(preload_dependencies)
-        
+
         self.includes = OptionSet(self, 'includes',
-            transform=self.toolchain.make_include_options)
-        
+                                  transform=self.toolchain.make_include_options)
+
         self.compile_options = OptionSet(self, 'compile_options',
-            compile_options, private_compile_options)
-        
+                                         compile_options, private_compile_options)
+
         self.link_libraries = OptionSet(self, 'link_libraries',
-            link_libraries, private_link_libraries, transform=self.toolchain.make_link_options)
-        
+                                        link_libraries, private_link_libraries, transform=self.toolchain.make_link_options)
+
         self.compile_definitions = OptionSet(self, 'compile_definitions',
-            compile_definitions, private_compile_definitions, transform=self.toolchain.make_compile_definitions)
+                                             compile_definitions, private_compile_definitions, transform=self.toolchain.make_compile_definitions)
 
         for path in includes:
             path = Path(path)
@@ -135,7 +138,6 @@ class CXXTarget(Target):
             path = Path(path)
             self.includes.add(
                 path if path.is_absolute() else self.source_path / path)
-
 
     @property
     def cxx_dependencies(self) -> set['CXXTarget']:
@@ -150,7 +152,8 @@ class CXXTarget(Target):
         tmp = self.toolchain.make_link_options(
             {lib.output for lib in self.library_dependencies if lib.output})
         tmp.update(self.link_libraries.public)
-        tmp.update(self.link_libraries.private) # TODO move create private_libs()
+        # TODO move create private_libs()
+        tmp.update(self.link_libraries.private)
         for dep in self.cxx_dependencies:
             tmp.update(dep.libs)
         return tmp
@@ -182,9 +185,13 @@ class CXXObjectsTarget(CXXTarget):
                  sources: set[str] = set(), *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.objs: set[CXXObject] = set()
-
+        
         for source in sources:
             self.objs.add(CXXObject(self, source))
+
+    @property
+    def sources(self):
+        return {o.source for o in self.objs}
 
     @asyncio.once_method
     async def initialize(self):
@@ -209,7 +216,8 @@ class Executable(CXXObjectsTarget, AsyncRunner):
     async def initialize(self):
         await self.preload()
 
-        self.output = self.build_path / (self.sname if os.name != 'nt' else self.sname + '.exe')
+        self.output = self.build_path / \
+            (self.sname if os.name != 'nt' else self.sname + '.exe')
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
 
@@ -227,9 +235,32 @@ class Executable(CXXObjectsTarget, AsyncRunner):
 
 
 class Library(CXXObjectsTarget):
-    def __init__(self, *args, static=True, **kwargs):
+    class Type(Enum):
+        AUTO = 0
+        STATIC = 1
+        SHARED = 2
+        INTERFACE = 3
+
+    def __init__(self, *args, library_type: Type = Type.AUTO, **kwargs):
         super().__init__(*args, **kwargs)
-        self.static = static
+        if library_type == self.Type.AUTO:
+            if len(self.sources) == 0:
+                library_type = self.Type.INTERFACE
+            else:
+                library_type = self.Type.STATIC
+        self.library_type = library_type
+
+    @property
+    def static(self) -> bool:
+        return self.library_type == self.Type.STATIC
+
+    @property
+    def shared(self) -> bool:
+        return self.library_type == self.Type.SHARED
+
+    @property
+    def interface(self) -> bool:
+        return self.library_type == self.Type.INTERFACE
 
     @property
     def ext(self):
@@ -243,20 +274,23 @@ class Library(CXXObjectsTarget):
     @asyncio.once_method
     async def initialize(self):
         await self.preload()
-        
+
         from .msvc_toolchain import MSVCToolchain
-        if not self.static and isinstance(self.toolchain, MSVCToolchain):
+        if self.shared and isinstance(self.toolchain, MSVCToolchain):
             self.compile_definitions.add(f'{self.sname.upper()}_EXPORT=1')
 
-        self.load_dependencies(self.objs)
-        self.output = Path(f"lib{self.sname}.{self.ext}")
+        if self.library_type != self.Type.INTERFACE:
+            self.load_dependencies(self.objs)
+            self.output = Path(f"lib{self.sname}.{self.ext}")
+        else:
+            self.output = Path(f"lib{self.sname}.stamp")
         await super().initialize(recursive_once=True)
 
     async def __call__(self):
         await super().__call__()
 
         self.info(
-            f'creating {"static" if self.static else "shared"} library {self.output}...')
+            f'creating {self.library_type.name.lower()} library {self.output}...')
 
         objs = self.objs
         for dep in self.cxx_dependencies:
@@ -265,12 +299,15 @@ class Library(CXXObjectsTarget):
 
         if self.static:
             await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output, self.libs)
-        else:
+        elif self.shared:
             await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
-
-        from .msvc_toolchain import MSVCToolchain
-        if not self.static and isinstance(self.toolchain, MSVCToolchain):
-            self.compile_definitions.add(f'{self.sname.upper()}_IMPORT=1', public=True)
+            from .msvc_toolchain import MSVCToolchain
+            if isinstance(self.toolchain, MSVCToolchain):
+                self.compile_definitions.add(
+                    f'{self.sname.upper()}_IMPORT=1', public=True)
+        else:
+            assert self.interface
+            self.output.touch()
 
         self.debug(f'done')
 

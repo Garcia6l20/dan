@@ -1,6 +1,37 @@
 import importlib.util
 from pathlib import Path
 
+from types import ModuleType
+
+from pymake.core.target import Target
+
+
+def makefile_targets(makefile_or_module):
+    module = makefile_or_module.module if isinstance(makefile_or_module, MakeFile) else makefile_or_module
+    targets: dict[str, Target] = dict()
+    for k, v in module.__dict__.items():
+        if isinstance(v, Target):
+            targets[k] = v
+    return targets
+
+
+class MakeFile():
+    def __init__(self,
+                 name: str,
+                 module: ModuleType,
+                 parent: 'MakeFile',
+                 source_path: Path,
+                 build_path: Path) -> None:
+        self.name = name
+        self.module = module
+        self.parent = parent
+        self.source_path = source_path
+        self.build_path = build_path
+        if self.parent:
+            for name, target in makefile_targets(self.parent).items():
+                setattr(self.module, name, target)
+
+
 # patch root makefile
 root_makefile = None
 current_makefile = None
@@ -8,27 +39,32 @@ makefiles = list()
 
 
 def _init_makefile(module, name: str = 'root', build_path: Path = None):
-    global current_makefile
+    global current_makefile, root_makefile
     source_path = Path(module.__file__).parent
-    if module != root_makefile:
+    if root_makefile:
         build_path = build_path or current_makefile.build_path / name
         name = f'{current_makefile.name}.{name}'
     else:
         assert build_path
     build_path.mkdir(parents=True, exist_ok=True)
 
-    setattr(module, 'source_path', source_path)
-    setattr(module, 'build_path', build_path)
-    setattr(module, 'parent_makefile', current_makefile)
-    setattr(module, 'name', name)
-    current_makefile = module
+    parent = current_makefile
+
+    current_makefile = MakeFile(
+        name,
+        module,
+        parent,
+        source_path,
+        build_path)
+    if not root_makefile:
+        root_makefile = current_makefile
 
 
 def targets():
     from pymake.core.target import Target
     targets: dict[str, Target] = dict()
-    for makefile in makefiles:
-        for k, v in makefile.__dict__.items():
+    for makefile in makefiles:        
+        for k, v in makefile_targets(makefile).items():
             if isinstance(v, Target):
                 targets[f'{makefile.name}.{k}'] = v
     return targets
@@ -49,13 +85,11 @@ def include(name: str | Path, build_path: Path = None):
         spec = importlib.util.spec_from_file_location(
             f'{current_makefile.name}.{name}', module_path)
     module = importlib.util.module_from_spec(spec)
-    if not root_makefile:
-        current_makefile = root_makefile = module
     _init_makefile(module, name, build_path)
     spec.loader.exec_module(module)
     makefiles.append(current_makefile)
     exports = getattr(module, 'exports') if hasattr(
         module, 'exports') else None
     if current_makefile != root_makefile:
-        current_makefile = current_makefile.parent_makefile
+        current_makefile = current_makefile.parent
     return exports

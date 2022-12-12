@@ -5,12 +5,13 @@ target_toolchain.cpp_std = 17
 
 if os.name != 'nt':
     objects = Objects(sources=['lib.cpp'],
-                    includes=['.'])
+                      includes=['.'])
 
-    static = Library(dependencies=[objects])
+    static = Library(library_type=Library.Type.STATIC,
+                     dependencies=[objects])
 
-    shared = Library(static=False,
-                    dependencies=[objects])
+    shared = Library(library_type=Library.Type.SHARED,
+                     dependencies=[objects])
 
     statically_linked = Executable(sources=['main.cpp'], dependencies=[static])
     shared_linked = Executable(sources=['main.cpp'], dependencies=[shared])

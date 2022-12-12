@@ -46,13 +46,13 @@ class ColoredFormatter(logging.Formatter):
 
     COLOR_FORMAT = \
         f"[{colored('%(asctime)s.%(msecs)03d', 'grey')}]" \
-        f"[%(levelname)s][{colored('%(name)s', 'white', attrs=['bold'])}]: %(message)s "\
-        f"({colored('%(filename)s:%(lineno)d', 'grey')})"
+        f"[%(levelname)s] {colored('%(name)s:', 'white', attrs=['bold'])} %(message)s "# \
+        # f"({colored('%(filename)s:%(lineno)d', 'grey')})"
 
     FORMAT = \
         "[%(asctime)s.%(msecs)03d]" \
-        "[%(levelname)s][%(name)s]: %(message)s "\
-        "(%(filename)s:%(lineno)d)"
+        "[%(levelname)s] %(name)s: %(message)s " # \
+        # "(%(filename)s:%(lineno)d)"
 
     def __init__(self, use_color=True):
         super().__init__(self.COLOR_FORMAT if use_color else self.FORMAT, datefmt='%H:%M:%S')

@@ -4,6 +4,7 @@ from pymake.core.target import Target, TargetDependencyLike
 from typing import Callable
 import inspect
 
+
 class generator:
     def __init__(self, output: str, dependencies: TargetDependencyLike = None, name=None):
         self.output = Path(output)
@@ -11,7 +12,7 @@ class generator:
 
     def __call__(self, fn: Callable):
         class Generator(Target):
-            def __init__(self, output, dependencies) -> None:
+            def __init__(self, output, dependencies: list[TargetDependencyLike] = list()) -> None:
                 super().__init__()
                 self.output = output
                 self.load_dependencies(dependencies)

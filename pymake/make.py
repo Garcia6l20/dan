@@ -98,7 +98,7 @@ class Make(Logging):
     async def build(self):
         await self.initialize()
         target_count = len(self.active_targets)
-        pbar = tqdm(total=target_count)
+        pbar = tqdm(total=target_count, desc='building')
         tsks = list()
         def on_done(*args, **kwargs):
             pbar.update()

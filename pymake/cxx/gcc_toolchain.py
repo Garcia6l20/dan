@@ -1,4 +1,5 @@
 import asyncio
+from functools import cached_property
 from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner, unique
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
@@ -16,18 +17,32 @@ class GCCToolchain(Toolchain):
         self.ranlib = data['ranlib'] if 'ranlib' in data else tools['ranlib']
         self.as_ = data['readelf'] if 'readelf' in data else tools['readelf']
         self.env = data['env'] if 'env' in data else None
-        self.default_cflags = set()
-        self.default_ldflags = set()
-        self.default_cxxflags = {f'-std=c++{self.cpp_std}'}
+    
+    @cached_property
+    def default_cflags(self):
+        flags = set()
         if self.env:
             if 'SYSROOT' in self.env:
-                self.default_cflags.add(f'--sysroot={self.env["SYSROOT"]}')
+                flags.add(f'--sysroot={self.env["SYSROOT"]}')
             if 'CFLAGS' in self.env:
-                self.default_cflags.update(self.env["CXXFLAGS"].strip().split(' '))
+                flags.update(self.env["CFLAGS"].strip().split(' '))
+        return flags
+
+    @cached_property
+    def default_cxxflags(self):
+        flags = {f'-std=c++{self.cpp_std}'}
+        if self.env:
             if 'CXXFLAGS' in self.env:
-                self.default_cxxflags.update(self.env["CXXFLAGS"].strip().split(' '))
+                flags.update(self.env["CXXFLAGS"].strip().split(' '))
+        return flags
+    
+    @cached_property
+    def default_ldflags(self):
+        flags = set()
+        if self.env:
             if 'LDFLAGS' in self.env:
-                self.default_ldflags.update(self.env["LDFLAGS"].strip().split(' '))
+                flags.update(self.env["LDFLAGS"].strip().split(' '))
+        return flags
 
     def set_mode(self, mode: str):
         if mode == 'debug':

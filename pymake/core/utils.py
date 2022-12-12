@@ -19,11 +19,11 @@ class CommandError(RuntimeError):
 _encoding = 'cp1252' if os.name == 'nt' else 'utf-8'
 
 
-async def log_stream(stream):
+async def log_stream(stream, file=sys.stdout):
     while not stream.at_eof():
         data = await stream.readline()
-        line = data.decode(_encoding).rstrip()
-        tqdm.tqdm.write(line, end='')
+        line = data.decode(_encoding)
+        tqdm.tqdm.write(line, end='', file=file)
 
 
 class AsyncRunner:
@@ -32,14 +32,13 @@ class AsyncRunner:
             command = ' '.join([f'"{arg}"' if isinstance(
                 arg, Path) else arg for arg in command])
         self.debug(f'executing: {command}')
-        stdout = asyncio.subprocess.PIPE
         proc = await asyncio.subprocess.create_subprocess_shell(command,
-                                                                stdout=stdout,
-                                                                stderr=stdout,
+                                                                stdout=asyncio.subprocess.PIPE,
+                                                                stderr=asyncio.subprocess.PIPE,
                                                                 env=env,
                                                                 cwd=cwd)
         if not pipe:
-            await asyncio.wait([log_stream(proc.stdout), log_stream(proc.stderr), proc.wait()])
+            await asyncio.wait([log_stream(proc.stdout), log_stream(proc.stderr, file=sys.stderr), proc.wait()])
         else:
             out, err = await proc.communicate()
             if proc.returncode != 0 and not no_raise:
