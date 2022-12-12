@@ -62,12 +62,14 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
 
 def targets():
     from pymake.core.target import Target
-    targets: dict[str, Target] = dict()
+    targets: set[Target] = set()
     for makefile in makefiles:        
         for k, v in makefile_targets(makefile).items():
-            if isinstance(v, Target):
-                targets[f'{makefile.name}.{k}'] = v
-    return targets
+            if k != 'exports' and isinstance(v, Target):
+                if not v.name:
+                    v.name = f'{makefile.name}.{k}'
+                targets.add(v)                
+    return {t.name: t for t in targets}
 
 
 def include(name: str | Path, build_path: Path = None):

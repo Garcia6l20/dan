@@ -80,15 +80,15 @@ class Make(Logging):
 
         self.active_targets: dict[str, Target] = dict()
         self.all_targets = get_targets()
+        
+        if self.required_targets and len(self.required_targets) > 0:
+            for name, target in self.all_targets.items():
+                if name in self.required_targets or target.sname in self.required_targets:
+                    self.active_targets[name] = target
+        else:
+            self.active_targets = self.all_targets
 
-        for name, target in self.all_targets.items():
-            if name not in self.all_targets:
-                self.error(f'Unknown target {name}')
-                sys.exit(-1)
-            self.active_targets[name] = target
-            target.name = name
-
-        self.debug(f'targets: {[name for name in self.all_targets.keys()]}')
+        self.debug(f'targets: {[name for name in self.active_targets.keys()]}')
 
     @property
     def toolchains(self):
