@@ -1,6 +1,6 @@
-from .cli import cli
+from .cli import commands
 
 
 if __name__ == '__main__':
     import sys
-    sys.exit(cli())
+    sys.exit(commands())

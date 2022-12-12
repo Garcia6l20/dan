@@ -1,3 +1,4 @@
+from pymake import self
 from pymake.cxx import Library
 from pymake.smc import GitSources
 
@@ -12,4 +13,4 @@ fmt = Library(sources=[
     includes=[fmt_inc],
     preload_dependencies=[gitfmt])
 
-exports = fmt
+self.export(fmt)

@@ -1,9 +1,9 @@
 import os
-from pymake import include
+from pymake import self, include
 from pymake.cxx import Library
 from pymake.smc import GitSources
 
-fmt = include('fmt')
+fmt, = include('fmt')
 
 gitspdlog = GitSources('spdlog', 'https://github.com/gabime/spdlog.git', 'v1.11.0')
 
@@ -25,4 +25,4 @@ spdlog = Library(sources=[
 if os.name == 'posix':
     spdlog.link_libraries.add('pthread', public=True)
 
-exports = spdlog, fmt
+self.export(spdlog, fmt)

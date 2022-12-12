@@ -50,9 +50,9 @@ class Target(Logging):
     clean_request = False
 
     def __init__(self, name: str = None, parent:'Target' = None) -> None:
-        from pymake.core.include import current_makefile
-        self.source_path = current_makefile.source_path
-        self.build_path = current_makefile.build_path
+        from pymake.core.include import context
+        self.source_path = context.current.source_path
+        self.build_path = context.current.build_path
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
         self.preload_dependencies: Dependencies[Target] = Dependencies()
@@ -61,8 +61,8 @@ class Target(Logging):
         self.parent = parent
         
         if name:
-            if current_makefile.parent:
-                self.name = f'{current_makefile.parent.name}.{name}'
+            if context.current.parent:
+                self.name = f'{context.current.parent.name}.{name}'
             else:
                 self.name = name
 

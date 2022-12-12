@@ -14,8 +14,8 @@ scan = True
 
 class CompileCommands:
     def __init__(self) -> None:
-        from pymake.core.include import root_makefile
-        self.cc_path: Path = root_makefile.build_path / 'compile_commands.json'
+        from pymake.core.include import context
+        self.cc_path: Path = context.root.build_path / 'compile_commands.json'
         if self.cc_path.exists():
             self.cc_f = open(self.cc_path, 'r+')
             try:

@@ -110,14 +110,14 @@ class Logging:
 
 
 def __get_makefile_logger():
-    from pymake.core.include import current_makefile
-    if not hasattr(current_makefile, '_logger'):
-        makefile_logger = logging.getLogger(current_makefile.name)
+    from pymake.core.include import context
+    if not hasattr(context.current, '_logger'):
+        makefile_logger = logging.getLogger(context.current.name)
         setup_logger(makefile_logger)
-        setattr(current_makefile, '_logger', makefile_logger)
+        setattr(context.current, '_logger', makefile_logger)
     else:
         makefile_logger: logging.Logger = getattr(
-            current_makefile, '_logger')
+            context.current, '_logger')
     return makefile_logger
 
 
