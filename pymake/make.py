@@ -112,7 +112,7 @@ class Make(Logging):
 
         tsks = list()
         def set_desc():
-            desc = 'building: ' + ', '.join([t.name for t in targets])
+            desc = 'building ' + ', '.join([t.name for t in targets])
             if len(desc) > max_desc_width:
                 desc = desc[:max_desc_width] + ' ...'
             pbar.set_description_str(desc)
