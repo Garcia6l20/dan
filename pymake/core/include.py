@@ -112,7 +112,7 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
         build_path)
 
 
-def include(name: str | Path, build_path: Path = None) -> set[Target]:
+def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     ''' Include a sub-directory (or a sub-makefile).
     :returns: The set of exported targets.
     '''
@@ -135,3 +135,9 @@ def include(name: str | Path, build_path: Path = None) -> set[Target]:
     exports = context.current._exported_targets
     context.up()
     return exports
+
+def include(*names: str | Path) -> list[Target]:
+    result = list()
+    for name in names:
+        result.extend(include_makefile(name))
+    return result

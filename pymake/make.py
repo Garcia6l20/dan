@@ -6,7 +6,7 @@ import sys
 from tqdm import tqdm
 
 from pymake.core.cache import Cache
-from pymake.core.include import include
+from pymake.core.include import include_makefile
 from pymake.core import asyncio
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
@@ -83,7 +83,7 @@ class Make(Logging):
         build_type = self.config.build_type
         init_toolchains(toolchain)
         self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
-        include(self.source_path, self.build_path)
+        include_makefile(self.source_path, self.build_path)
 
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(build_type)

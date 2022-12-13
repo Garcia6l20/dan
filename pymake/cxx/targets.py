@@ -150,7 +150,7 @@ class CXXTarget(Target):
     @property
     def libs(self) -> set[str]:
         tmp = self.toolchain.make_link_options(
-            {lib.output for lib in self.library_dependencies if lib.output})
+            {lib.output for lib in self.library_dependencies if lib.output and not lib.interface})
         tmp.update(self.link_libraries.public)
         # TODO move create private_libs()
         tmp.update(self.link_libraries.private)
