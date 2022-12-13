@@ -1,4 +1,5 @@
 
+import functools
 import logging
 from pathlib import Path
 import sys
@@ -21,7 +22,7 @@ class Make(Logging):
     _config_name = 'pymake.config.yaml'
     _cache_name = 'pymake.cache.yaml'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False):        
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False):
         if quiet:
             assert not verbose, "'quiet' cannot be combined with 'verbose'"
             log_level = logging.ERROR
@@ -103,16 +104,30 @@ class Make(Logging):
 
     async def build(self):
         await self.initialize()
-        target_count = len(self.active_targets)
-        pbar = tqdm(total=target_count, desc='building')
-        tsks = list()
+        targets = set(self.active_targets.values())
+        pbar = tqdm(total=len(targets), desc='building')
+        import shutil
+        term_cols = shutil.get_terminal_size().columns
+        max_desc_width = int(term_cols * 0.25)
 
-        def on_done(*args, **kwargs):
+        tsks = list()
+        def set_desc():
+            desc = 'building: ' + ', '.join([t.name for t in targets])
+            if len(desc) > max_desc_width:
+                desc = desc[:max_desc_width] + ' ...'
+            pbar.set_description_str(desc)
+
+        def on_done(t: Target, *args, **kwargs):
+            targets.remove(t)
+            set_desc()
             pbar.update()
-        for t in self.active_targets.values():
+
+        for t in targets:
             tsk = asyncio.create_task(t.build())
-            tsk.add_done_callback(on_done)
+            tsk.add_done_callback(functools.partial(on_done, t))
             tsks.append(tsk)
+
+        set_desc()
 
         await asyncio.gather(*tsks)
 
