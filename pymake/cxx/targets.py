@@ -279,7 +279,7 @@ class Library(CXXObjectsTarget):
             self.load_dependencies(self.objs)
             self.output = self.build_path / f"lib{self.name}.{self.ext}"
         else:
-            self.output = self.build_path / "lib{self.name}.stamp"
+            self.output = self.build_path / f"lib{self.name}.stamp"
         await super().initialize(recursive_once=True)
 
     async def __call__(self):

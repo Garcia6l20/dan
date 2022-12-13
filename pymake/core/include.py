@@ -5,6 +5,31 @@ from pathlib import Path
 
 from pymake.core.target import Target
 
+_exported_targets : set[Target] = set()
+
+def export(*targets: Target):
+    global _exported_targets
+    for target in targets:
+        _exported_targets.add(target)
+
+class TargetNotFound(RuntimeError):
+    def __init__(self, name) -> None:
+        super().__init__(f'package {name} not found')
+
+def requires(*names) -> set[Target]:
+    global _exported_targets
+    res = set()
+    for name in names:
+        found = None
+        for t in _exported_targets:
+            if t.name == name:
+                found = t
+                break
+        if not found:
+            raise TargetNotFound(name)
+        res.add(found)
+    return res
+
 
 class MakeFile(sys.__class__):
 
@@ -26,6 +51,7 @@ class MakeFile(sys.__class__):
     def export(self, *targets: Target):
         for target in targets:
             self.__exports.add(target)
+        export(*targets)
 
     @property
     def _exported_targets(self) -> set[Target]:

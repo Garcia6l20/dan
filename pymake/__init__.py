@@ -1,6 +1,6 @@
 import sys
 import pymake.core.include
-from pymake.core.include import include
+from pymake.core.include import include, requires, export
 from pymake.core.generator import generator
 
 
