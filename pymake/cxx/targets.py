@@ -1,7 +1,9 @@
+from collections.abc import Iterable
 from enum import Enum
 import os
 from pathlib import Path
 from typing import Callable
+from pymake.core import cache
 from pymake.core.target import Dependencies, Target, TargetDependencyLike
 from pymake.core.utils import AsyncRunner
 from pymake.core import asyncio
@@ -180,21 +182,30 @@ class CXXTarget(Target):
 
 class CXXObjectsTarget(CXXTarget):
     def __init__(self, name: str,
-                 sources: set[str] = set(), *args, **kwargs):
+                 sources: set[str]|Callable = set(), *args, **kwargs):
         super().__init__(name, *args, **kwargs)
         self.objs: set[CXXObject] = set()
+        self.sources = sources
 
-        for source in sources:
+    @cache.once_method
+    def _init_sources(self):
+        if callable(self.sources):
+            self.sources = set(self.sources())
+        if not isinstance(self.sources, Iterable):
+            assert callable(
+                self.sources), f'{self.name} sources parameter should be an iterable or a callable returning an iterable'
+        for source in self.sources:
+            source = Path(source)
+            if not source.is_absolute():
+                source = self.source_path / source
             self.objs.add(
-                CXXObject(f'{name}.{Path(source).name}', self, source))
-
-    @property
-    def sources(self):
-        return {o.source for o in self.objs}
+                CXXObject(f'{self.name}.{Path(source).name}', self, source))
 
     @asyncio.once_method
     async def initialize(self):
         await self.preload()
+
+        self._init_sources()
 
         self.load_dependencies(self.objs)
         await super().initialize(recursive_once=True)
@@ -239,11 +250,6 @@ class Library(CXXObjectsTarget):
 
     def __init__(self, *args, library_type: Type = Type.AUTO, **kwargs):
         super().__init__(*args, **kwargs)
-        if library_type == self.Type.AUTO:
-            if len(self.sources) == 0:
-                library_type = self.Type.INTERFACE
-            else:
-                library_type = self.Type.STATIC
         self.library_type = library_type
 
     @property
@@ -270,6 +276,14 @@ class Library(CXXObjectsTarget):
     @asyncio.once_method
     async def initialize(self):
         await self.preload()
+
+        self._init_sources()
+
+        if self.library_type == self.Type.AUTO:
+            if len(self.sources) == 0:
+                self.library_type = self.Type.INTERFACE
+            else:
+                self.library_type = self.Type.STATIC
 
         from .msvc_toolchain import MSVCToolchain
         if self.shared and isinstance(self.toolchain, MSVCToolchain):

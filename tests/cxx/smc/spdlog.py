@@ -23,7 +23,8 @@ spdlog = Library('spdlog',
                  includes=[spdlog_inc],
                  compile_definitions=['SPDLOG_COMPILED_LIB'],
                  preload_dependencies=[gitspdlog],
-                 dependencies=[fmt])
+                 dependencies=[fmt],
+                 all=False)
 
 if os.name == 'posix':
     spdlog.link_libraries.add('pthread', public=True)

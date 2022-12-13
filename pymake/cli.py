@@ -66,13 +66,16 @@ def build(**kwargs):
 
 
 @commands.command()
+@click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
-def list(show_type: bool, **kwargs):
+def list(all: bool, show_type: bool, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
     from pymake.core.target import Target
-    for target in Target.all:
+
+    targets = Target.all if all else Target.default
+    for target in targets:
         s = target.fullname
         if show_type:
             s = s + ' - ' + type(target).__name__

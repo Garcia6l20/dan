@@ -7,7 +7,7 @@ from pymake.logging import Logging
 
 class GitSources(Target, Logging, AsyncRunner):
     def __init__(self, name: str, url: str, refspec: str = None) -> None:
-        super().__init__(name)
+        super().__init__(name, all=False)
         self.url = url
         self.refspec = refspec
         self.sha1 = None

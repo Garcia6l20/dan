@@ -1,5 +1,6 @@
 import atexit
 from functools import cached_property
+import functools
 from pathlib import Path
 from collections.abc import Iterable
 
@@ -82,3 +83,20 @@ class Cache:
     def save_all():
         for c in Cache.__all:
             c.save()
+
+
+def once_method(fn):    
+    result_name = f'_{fn.__name__}_result'
+
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwds):
+        if hasattr(self, result_name):
+            return getattr(self, result_name)
+        
+        result = fn(self, *args, **kwds)
+        setattr(self, result_name, result)
+        return result
+
+    return wrapper
+
+

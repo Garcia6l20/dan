@@ -62,6 +62,7 @@ config['CATCH_CONFIG_CONSOLE_WIDTH'] = shutil.get_terminal_size().columns
 # config['CATCH_CONFIG_FALLBACK_STRINGIFIER'] = "fallback ??"
 
 self.export(Library('catch2',
-                    sources=src.rglob('*.cpp'),
+                    sources=lambda: src.rglob('*.cpp'),
                     includes=[src, self.build_path / 'generated'],
-                    preload_dependencies=[config]))
+                    preload_dependencies=[config],
+                    all=False))

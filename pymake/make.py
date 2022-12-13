@@ -56,9 +56,12 @@ class Make(Logging):
         import pymake.core.globals
         pymake.core.globals.cache = self.cache
 
+        if self.source_path == self.build_path and self.config.source_path:
+            self.source_path = Path(self.config.source_path)
+
         self.debug(f'source path: {self.source_path}')
         self.debug(f'build path: {self.build_path}')
-
+        
         assert (self.source_path /
                 'makefile.py').exists(), f'no makefile in {self.source_path}'
         assert (self.source_path !=
@@ -92,7 +95,7 @@ class Make(Logging):
                 if target.name in self.required_targets or target.fullname in self.required_targets:
                     self.active_targets[target.fullname] = target
         else:
-            for target in Target.all:
+            for target in Target.default:
                 self.active_targets[target.fullname] = target
 
         self.debug(f'targets: {[name for name in self.active_targets.keys()]}')

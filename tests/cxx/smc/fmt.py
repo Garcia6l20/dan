@@ -13,6 +13,7 @@ fmt = Library('fmt',
                   fmt_src / 'os.cc',
               ],
               includes=[fmt_inc],
-              preload_dependencies=[gitfmt])
+              preload_dependencies=[gitfmt],
+              all=False)
 
 self.export(fmt)

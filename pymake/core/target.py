@@ -51,6 +51,7 @@ class FileDependency(PathImpl):
 class Target(Logging):
     clean_request = False
     all: set['Target'] = set()
+    default: set['Target'] = set()
 
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         from pymake.core.include import context
@@ -68,7 +69,8 @@ class Target(Logging):
         super().__init__(self.fullname)
         self.makefile.targets.add(self)
         if all:
-            Target.all.add(self)
+            Target.default.add(self)
+        Target.all.add(self)
 
     @property
     def name(self) -> str:
