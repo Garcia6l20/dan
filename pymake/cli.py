@@ -9,6 +9,8 @@ from pymake.make import Make
 _logger = logging.getLogger('cli')
 
 _common_opts = [
+    click.option('--quiet', '-q', is_flag=True,
+                 help='Dont print informations (errors only)'),
     click.option('--verbose', '-v', is_flag=True,
                  help='Pring debug informations'),
     click.argument('PATH'),
@@ -65,13 +67,13 @@ def build(**kwargs):
 
 @commands.command()
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
-@add_options(_common_opts)
+@common_opts
 def list(show_type: bool, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
     from pymake.core.target import Target
     for target in Target.all:
-        s = target.name
+        s = target.fullname
         if show_type:
             s = s + ' - ' + type(target).__name__
         click.echo(s)
@@ -85,13 +87,13 @@ def list_toolchains(**kwargs):
 
 
 @commands.command()
-@add_options(_common_opts)
+@common_opts
 def clean(**kwargs):
     asyncio.run(Make(**kwargs).clean())
 
 
 @commands.command()
-@add_options(_common_opts)
+@common_opts
 def run(**kwargs):
     make = Make(**kwargs)
     asyncio.run(make.run())

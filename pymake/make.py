@@ -21,8 +21,15 @@ class Make(Logging):
     _config_name = 'pymake.config.yaml'
     _cache_name = 'pymake.cache.yaml'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False):
-        logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False):        
+        if quiet:
+            assert not verbose, "'quiet' cannot be combined with 'verbose'"
+            log_level = logging.ERROR
+        elif verbose:
+            log_level = logging.DEBUG
+        else:
+            log_level = logging.INFO
+        logging.getLogger().setLevel(log_level)
 
         super().__init__('make')
 
@@ -78,7 +85,7 @@ class Make(Logging):
         target_toolchain.set_mode(build_type)
 
         self.active_targets: dict[str, Target] = dict()
-        
+
         if self.required_targets and len(self.required_targets) > 0:
             for target in Target.all:
                 if target.name in self.required_targets or target.fullname in self.required_targets:
@@ -99,6 +106,7 @@ class Make(Logging):
         target_count = len(self.active_targets)
         pbar = tqdm(total=target_count, desc='building')
         tsks = list()
+
         def on_done(*args, **kwargs):
             pbar.update()
         for t in self.active_targets.values():
