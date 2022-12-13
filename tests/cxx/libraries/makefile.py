@@ -4,23 +4,23 @@ from pymake.cxx import Library, Executable, Objects, target_toolchain
 target_toolchain.cpp_std = 17
 
 if os.name != 'nt':
-    objects = Objects(sources=['lib.cpp'],
+    objects = Objects('objects', sources=['lib.cpp'],
                       includes=['.'])
 
-    static = Library(library_type=Library.Type.STATIC,
+    static = Library('static', library_type=Library.Type.STATIC,
                      dependencies=[objects])
 
-    shared = Library(library_type=Library.Type.SHARED,
+    shared = Library('shared', library_type=Library.Type.SHARED,
                      dependencies=[objects])
 
-    statically_linked = Executable(sources=['main.cpp'], dependencies=[static])
-    shared_linked = Executable(sources=['main.cpp'], dependencies=[shared])
+    Executable('statically_linked', sources=['main.cpp'], dependencies=[static])
+    Executable('shared_linked', sources=['main.cpp'], dependencies=[shared])
 else:
     # On windows we cannot share object-library
     # since object compilations need different definition (ie.: LIB_IMPORTS/LIB_EXPORTS)
 
-    static = Library(sources=['lib.cpp'], includes=['.'])
+    static = Library('static', sources=['lib.cpp'], includes=['.'])
     statically_linked = Executable(sources=['main.cpp'], dependencies=[static])
 
-    shared = Library(sources=['lib.cpp'], includes=['.'], static=False)
-    shared_linked = Executable(sources=['main.cpp'], dependencies=[shared])
+    Library('shared', sources=['lib.cpp'], includes=['.'], static=False)
+    Executable(sources=['main.cpp'], dependencies=[shared])

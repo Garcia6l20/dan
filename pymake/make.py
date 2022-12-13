@@ -6,7 +6,6 @@ from tqdm import tqdm
 
 from pymake.core.cache import Cache
 from pymake.core.include import include
-from pymake.core.include import targets as get_targets
 from pymake.core import asyncio
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
@@ -42,7 +41,7 @@ class Make(Logging):
 
         self.required_targets = targets
         self.build_path.mkdir(exist_ok=True, parents=True)
-        sys.pycache_prefix = str(self.build_path)
+        sys.pycache_prefix = str(self.build_path / '__pycache__')
         self.config = Cache(self.config_path)
         self.cache = Cache(self.cache_path)
 
@@ -79,14 +78,14 @@ class Make(Logging):
         target_toolchain.set_mode(build_type)
 
         self.active_targets: dict[str, Target] = dict()
-        self.all_targets = get_targets()
         
         if self.required_targets and len(self.required_targets) > 0:
-            for name, target in self.all_targets.items():
-                if name in self.required_targets or target.sname in self.required_targets:
-                    self.active_targets[name] = target
+            for target in Target.all:
+                if target.name in self.required_targets or target.fullname in self.required_targets:
+                    self.active_targets[target.fullname] = target
         else:
-            self.active_targets = self.all_targets
+            for target in Target.all:
+                self.active_targets[target.fullname] = target
 
         self.debug(f'targets: {[name for name in self.active_targets.keys()]}')
 

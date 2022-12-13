@@ -2,12 +2,9 @@ import click
 
 import logging
 import asyncio
-import sys
 
 
 from pymake.make import Make
-
-pass_make = click.make_pass_decorator(Make)
 
 _logger = logging.getLogger('cli')
 
@@ -59,7 +56,6 @@ def configure(toolchain, build_type, **kwargs):
 
 @commands.command()
 @common_opts
-# @pass_make
 def build(**kwargs):
     make = Make(**kwargs)
     asyncio.run(make.build())
@@ -70,40 +66,41 @@ def build(**kwargs):
 @commands.command()
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @add_options(_common_opts)
-@pass_make
-def list(make: Make, show_type: bool, **kwargs):
-    for name, target in make.active_targets.items():
-        s = name
+def list(show_type: bool, **kwargs):
+    make = Make(**kwargs)
+    asyncio.run(make.initialize())
+    from pymake.core.target import Target
+    for target in Target.all:
+        s = target.name
         if show_type:
             s = s + ' - ' + type(target).__name__
         click.echo(s)
 
 
 @commands.command()
-@pass_make
-def list_toolchains(make: Make, **kwargs):
+def list_toolchains(**kwargs):
+    make = Make(**kwargs)
     for name, _ in make.toolchains['toolchains'].items():
         click.echo(name)
 
 
 @commands.command()
 @add_options(_common_opts)
-# @pass_make
 def clean(**kwargs):
     asyncio.run(Make(**kwargs).clean())
 
 
 @commands.command()
 @add_options(_common_opts)
-@pass_make
-def run(make: Make, **kwargs):
+def run(**kwargs):
+    make = Make(**kwargs)
     asyncio.run(make.run())
 
 
 @commands.command()
 @click.option('-s', '--script', help='Use a source script to resolve compilation environment')
-@pass_make
-def scan_toolchains(make: Make, script: str, **kwargs):
+def scan_toolchains(script: str, **kwargs):
+    make = Make(**kwargs)
     asyncio.run(make.scan_toolchains(script=script))
 
 

@@ -2,28 +2,8 @@ import importlib.util
 import sys
 
 from pathlib import Path
-from types import ModuleType
 
 from pymake.core.target import Target
-
-
-def makefile_targets(makefile):
-    targets: dict[str, Target] = dict()
-    for k, v in makefile.__dict__.items():
-        if isinstance(v, Target):
-            targets[k] = v
-    return targets
-
-
-def targets():
-    targets: set[Target] = set()
-    for makefile in context.all:
-        for k, v in makefile_targets(makefile).items():
-            if isinstance(v, Target):
-                if not v.name:
-                    v.name = f'{makefile.name}.{k}'
-                targets.add(v)
-    return {t.name: t for t in targets}
 
 
 class MakeFile(sys.__class__):
@@ -35,11 +15,13 @@ class MakeFile(sys.__class__):
         self.name = name
         self.source_path = source_path
         self.build_path = build_path
-        self.parent = self.parent if hasattr(self, 'parent') else None
+        self.parent: MakeFile = self.parent if hasattr(
+            self, 'parent') else None
+        self.targets: set[Target] = set()
         self.__exports: set[Target] = set()
         if self.parent:
-            for name, target in makefile_targets(self.parent).items():
-                setattr(self, name, target)
+            for target in self.parent.targets:
+                setattr(self, target.name, target)
 
     def export(self, *targets: Target):
         for target in targets:
@@ -63,7 +45,7 @@ class Context:
     @property
     def current(self):
         return self.__current
-    
+
     @property
     def all(self) -> set[Target]:
         return self.__all

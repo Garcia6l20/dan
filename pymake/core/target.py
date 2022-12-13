@@ -5,6 +5,7 @@ import inspect
 
 from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
+from pymake.core.errors import InvalidConfiguration
 from pymake.logging import Logging
 
 
@@ -30,6 +31,7 @@ class Dependencies(set):
                 t = mt
         return t
 
+
 TargetDependencyLike: TypeAlias = Union[list['Target'], 'Target']
 
 
@@ -48,43 +50,38 @@ class FileDependency(PathImpl):
 
 class Target(Logging):
     clean_request = False
+    all: set['Target'] = set()
 
-    def __init__(self, name: str = None, parent:'Target' = None) -> None:
+    def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         from pymake.core.include import context
+        self.makefile = context.current
         self.source_path = context.current.source_path
         self.build_path = context.current.build_path
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
         self.preload_dependencies: Dependencies[Target] = Dependencies()
-        self._name: str = None        
         self.output: Path = None
+        self._name = name
         self.parent = parent
-        
-        if name:
-            if context.current.parent:
-                self.name = f'{context.current.parent.name}.{name}'
-            else:
-                self.name = name
+        if self.fullname in Target.all:
+            raise InvalidConfiguration(f'target {self.fullname} already exists')
+        super().__init__(self.fullname)
+        self.makefile.targets.add(self)
+        if all:
+            Target.all.add(self)
 
     @property
     def name(self) -> str:
         return self._name
 
     @cached_property
-    def sname(self) -> str:
-        return self._name.split('.')[-1]
+    def fullname(self) -> str:
+        return f'{self.makefile.name}.{self._name}'
 
     @cached_property
     def cache(self) -> SubCache:
         from pymake.core.globals import cache
-        return cache.subcache(self._name)
-
-    @name.setter
-    def name(self, name):
-        if self._name:
-            return
-        self._name = name
-        super().__init__(self.name)
+        return cache.subcache(self.fullname)
 
     @asyncio.once_method
     async def preload(self):

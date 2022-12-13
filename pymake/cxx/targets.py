@@ -8,15 +8,11 @@ from pymake.core import asyncio
 
 
 class CXXObject(Target):
-    def __init__(self, parent: 'CXXTarget', source: str) -> None:
-        super().__init__(parent=parent)
+    def __init__(self, name, parent: 'CXXTarget', source: str) -> None:
+        super().__init__(name, parent=parent, all=False)
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain
-
-    @Target.name.setter
-    def name(self, value):
-        Target.name.fset(self, f'{value}.{self.source.stem}')
 
     @property
     def cxx_flags(self):
@@ -33,7 +29,7 @@ class CXXObject(Target):
 
         ext = 'o' if os.name != 'nt' else 'obj'
         self.output: Path = self.build_path / \
-            Path(f'{self.parent.sname}.{self.source.name}.{ext}')
+            Path(f'{self.parent.name}.{self.source.name}.{ext}')
 
         if not self.clean_request:
             if not self.output.exists() or self.output.stat().st_mtime < self.source.stat().st_mtime or not hasattr(self.cache, 'deps'):
@@ -99,6 +95,7 @@ class OptionSet:
 
 class CXXTarget(Target):
     def __init__(self,
+                 name: str,
                  includes: set[str] = set(),
                  private_includes: set[str] = set(),
                  compile_options: set[str] = set(),
@@ -108,8 +105,9 @@ class CXXTarget(Target):
                  dependencies: set[TargetDependencyLike] = set(),
                  link_libraries: set[str] = set(),
                  private_link_libraries: set[str] = set(),
-                 preload_dependencies: set[TargetDependencyLike] = set()) -> None:
-        super().__init__()
+                 preload_dependencies: set[TargetDependencyLike] = set(),
+                 all=True) -> None:
+        super().__init__(name, all=all)
         from . import target_toolchain
         self.toolchain = target_toolchain
 
@@ -181,13 +179,14 @@ class CXXTarget(Target):
 
 
 class CXXObjectsTarget(CXXTarget):
-    def __init__(self,
+    def __init__(self, name: str,
                  sources: set[str] = set(), *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(name, *args, **kwargs)
         self.objs: set[CXXObject] = set()
-        
+
         for source in sources:
-            self.objs.add(CXXObject(self, source))
+            self.objs.add(
+                CXXObject(f'{name}.{Path(source).name}', self, source))
 
     @property
     def sources(self):
@@ -196,9 +195,6 @@ class CXXObjectsTarget(CXXTarget):
     @asyncio.once_method
     async def initialize(self):
         await self.preload()
-
-        for obj in self.objs:
-            obj.name = self.name
 
         self.load_dependencies(self.objs)
         await super().initialize(recursive_once=True)
@@ -217,7 +213,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         await self.preload()
 
         self.output = self.build_path / \
-            (self.sname if os.name != 'nt' else self.sname + '.exe')
+            (self.name if os.name != 'nt' else self.name + '.exe')
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
 
@@ -277,13 +273,13 @@ class Library(CXXObjectsTarget):
 
         from .msvc_toolchain import MSVCToolchain
         if self.shared and isinstance(self.toolchain, MSVCToolchain):
-            self.compile_definitions.add(f'{self.sname.upper()}_EXPORT=1')
+            self.compile_definitions.add(f'{self.name.upper()}_EXPORT=1')
 
         if self.library_type != self.Type.INTERFACE:
             self.load_dependencies(self.objs)
-            self.output = Path(f"lib{self.sname}.{self.ext}")
+            self.output = self.build_path / f"lib{self.name}.{self.ext}"
         else:
-            self.output = Path(f"lib{self.sname}.stamp")
+            self.output = self.build_path / "lib{self.name}.stamp"
         await super().initialize(recursive_once=True)
 
     async def __call__(self):
@@ -304,7 +300,7 @@ class Library(CXXObjectsTarget):
             from .msvc_toolchain import MSVCToolchain
             if isinstance(self.toolchain, MSVCToolchain):
                 self.compile_definitions.add(
-                    f'{self.sname.upper()}_IMPORT=1', public=True)
+                    f'{self.name.upper()}_IMPORT=1', public=True)
         else:
             assert self.interface
             self.output.touch()

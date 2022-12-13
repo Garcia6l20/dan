@@ -12,8 +12,8 @@ class generator:
 
     def __call__(self, fn: Callable):
         class Generator(Target):
-            def __init__(self, output, dependencies: list[TargetDependencyLike] = list()) -> None:
-                super().__init__()
+            def __init__(self, output: Path, dependencies: list[TargetDependencyLike] = list()) -> None:
+                super().__init__(output.stem)
                 self.output = output
                 self.load_dependencies(dependencies)
 

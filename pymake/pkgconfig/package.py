@@ -27,20 +27,20 @@ class Package(CXXTarget):
             for line in lines:
                 pos = line.find('=')
                 if pos > 0:
-                    name = line[:pos].strip()
-                    value = line[pos+1:].strip()
-                    setattr(self, f'_{name}', value)
+                    k = line[:pos].strip()
+                    v = line[pos+1:].strip()
+                    setattr(self, f'_{k}', v)
                 else:
                     pos = line.find(':')
                     if pos > 0:
-                        name = line[:pos].strip().lower()
-                        value = line[pos+1:].strip()
-                        setattr(self, f'_{name}', value)
+                        k = line[:pos].strip().lower()
+                        v = line[pos+1:].strip()
+                        setattr(self, f'_{k}', v)
         deps = set()
         if hasattr(self, '_requires'):
             for req in self._requires.split():
                 deps.add(Package(req, search_paths))
-        super().__init__(includes={self._includedir}, dependencies=deps)
+        super().__init__(name, includes={self._includedir}, dependencies=deps, all=False)
         
     @property
     def cxx_flags(self):
