@@ -1,5 +1,6 @@
 from functools import cached_property
 from pathlib import Path
+import time
 from typing import Union, TypeAlias
 import inspect
 
@@ -48,12 +49,78 @@ class FileDependency(PathImpl):
         return self.stat().st_mtime
 
 
+class Option:
+    def __init__(self, parent: 'Target', name: str, default) -> None:
+        self.__parent = parent
+        self.__cache = parent.cache
+        self.fullname = f'{parent.name}.{name}'
+        self.name = name
+        self.__default = default
+        if name == 'console_width':
+            pass
+        self.__value = getattr(self.__cache, self.fullname) if hasattr(
+            self.__cache, self.fullname) else default
+        self.__value_type = type(default)
+
+    def reset(self):
+        self.value = self.__default
+
+    @property
+    def value(self):
+        return self.__value
+
+    @value.setter
+    def value(self, value):
+        if self.__value_type and not isinstance(value, self.__value_type):
+            err = f'option {self.fullname} is of type {self.__value_type}'
+            if type(value) == str:
+                import json
+                value = json.loads(value)
+                if not isinstance(value, self.__value_type):
+                    raise RuntimeError(err)
+            else:
+                raise RuntimeError(err)
+        if self.__value != value:
+            self.__value = value
+            setattr(self.__cache, self.fullname, value)
+            setattr(self.__cache,
+                    f'{self.__parent.fullname}.options.timestamp', time.time())
+
+
+class Options:
+    def __init__(self, parent : 'Target') -> None:
+        self.__parent = parent
+        self.__cache = parent.cache
+        self.__items: set[Option] = set()
+
+    def add(self, name: str, default_value):
+        opt = Option(self.__parent, name, default_value)
+        self.__items.add(opt)
+        return opt
+
+    def get(self, name: str):
+        for o in self.__items:
+            if name in {o.name, o.fullname}:
+                return o
+
+    @cached_property
+    def modification_date(self):
+        if hasattr(self.__cache, f'{self.__parent.fullname}.options.timestamp'):
+            return getattr(self.__cache, f'{self.__parent.fullname}.options.timestamp')
+        else:
+            return 0.0
+
+    def __iter__(self):
+        return iter(self.__items)
+
+
 class Target(Logging):
     clean_request = False
     all: set['Target'] = set()
     default: set['Target'] = set()
 
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
+        self._name = name
         from pymake.core.include import context
         self.makefile = context.current
         self.source_path = context.current.source_path
@@ -61,11 +128,12 @@ class Target(Logging):
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
         self.preload_dependencies: Dependencies[Target] = Dependencies()
+        self.options = Options(self)
         self.output: Path = None
-        self._name = name
         self.parent = parent
         if self.fullname in Target.all:
-            raise InvalidConfiguration(f'target {self.fullname} already exists')
+            raise InvalidConfiguration(
+                f'target {self.fullname} already exists')
         super().__init__(self.fullname)
         self.makefile.targets.add(self)
         if all:
@@ -123,9 +191,11 @@ class Target(Logging):
     def up_to_date(self):
         if self.output and not self.output.exists():
             return False
-        if not self.dependencies.up_to_date:
+        elif not self.dependencies.up_to_date:
             return False
-        if self.modification_time and self.dependencies.modification_time > self.modification_time:
+        elif self.modification_time and self.dependencies.modification_time > self.modification_time:
+            return False
+        elif self.modification_time and self.modification_time < self.options.modification_date:
             return False
         return True
 

@@ -13,12 +13,13 @@ class ConfigureFile(Target):
     _define_expr = re.compile(r'#\s?define\s+(\w+)\s+"?(@(\w+)@)"?')
 
     def __init__(self,
+                 name: str,
                  input_file: str | Path,
                  output_file: Path = None,
                  variables: dict[str, Any] = dict(),
                  dependencies: list = list()) -> None:
         self.input_file: Path = Path(input_file)
-        super().__init__(self.input_file.stem, all=False)
+        super().__init__(name, all=False)
         if not self.input_file.is_absolute():
             self.input_file = self.source_path / input_file
         if output_file:

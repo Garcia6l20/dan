@@ -10,7 +10,7 @@ from pymake.core.include import include_makefile
 from pymake.core import asyncio
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
-from pymake.core.target import Target
+from pymake.core.target import Option, Target
 from pymake.cxx.targets import Executable
 
 
@@ -68,8 +68,6 @@ class Make(Logging):
                 self.build_path), f'in-source build are not allowed'
 
     def configure(self, toolchain, build_type):
-        if not self.config:
-            self.config = dict()
         self.config.source_path = str(self.source_path)
         self.config.build_path = str(self.build_path)
         self.config.toolchain = toolchain
@@ -99,6 +97,18 @@ class Make(Logging):
                 self.active_targets[target.fullname] = target
 
         self.debug(f'targets: {[name for name in self.active_targets.keys()]}')
+
+    @staticmethod
+    def all_options() -> list[Option]:
+        from pymake.core.include import context
+        opts = []
+        for target in Target.all:
+            for o in target.options:
+                opts.append(o)
+        for makefile in context.all:
+            for o in makefile.options:
+                opts.append(o)
+        return opts
 
     @property
     def toolchains(self):

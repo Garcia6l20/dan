@@ -8,29 +8,16 @@ import aiofiles
 
 import yaml
 
-class SubCache:
-    pass
 
-class Cache:
-    __all: list['Cache'] = list()
 
-    def __init__(self, path: Path) -> None:
-        self.__path = path
-        if self.__path.exists():
-            data = yaml.load(
-                open(self.__path, 'r'), Loader=yaml.Loader)
-            if isinstance(data, dict):
-                self.__dict__.update(data)
-        self.__init_hash = hash(self)
-        Cache.__all.append(self)
+class SubCache(object):
+    def __init__(self, parent: 'SubCache', name:str) -> None:
+        self.__parent = parent
+        self.__name = name
 
     @property
-    def items(self):
-        return {k: v for k, v in self.__dict__.items() if not k.startswith('_') and not isinstance(v, property)}
-
-    @cached_property
-    def modification_time(self) -> float:
-        return self.__path.stat().st_mtime if self.__path.exists() else 0.0
+    def modification_time(self):
+        return self.__parent.modification_time
 
     @staticmethod
     def __iterable_hash(l: Iterable):
@@ -45,15 +32,47 @@ class Cache:
         for k, v in d.items():
             if isinstance(v, dict):
                 vh = Cache.__dict_hash(v)
-            if isinstance(v, Iterable):
+            elif isinstance(v, Iterable):
                 vh = Cache.__iterable_hash(v)
+            elif isinstance(v, SubCache):
+                vh = Cache.__dict_hash(v.__getstate__())
             else:
                 vh = hash(v)
             h ^= hash(k) ^ vh
         return h
 
     def __hash__(self) -> int:
-        return self.__dict_hash(self.items)
+        return self.__dict_hash(self.__getstate__())
+
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        for k in self.__dict__.keys():
+            if k.startswith('_'):
+                del state[k]
+        return state
+
+
+class Cache(SubCache):
+    __all: list['Cache'] = list()
+
+    def __init__(self, path: Path) -> None:
+        self.__path = path
+        if self.__path.exists():
+            data = yaml.load(
+                open(self.__path, 'r'), Loader=yaml.Loader)
+            if isinstance(data, dict):
+                self.__dict__.update(data)
+            self.__modification_date = self.__path.stat().st_mtime
+        else:
+            self.__modification_date = 0.0
+        self.__init_hash = hash(self)
+        Cache.__all.append(self)
+
+    @property
+    def modification_time(self) -> float:
+        return self.__modification_date
+
 
     @property
     def dirty(self):
@@ -67,17 +86,15 @@ class Cache:
         if hasattr(self, name):
             return getattr(self, name)
         else:
-            sub = SubCache()
+            sub = SubCache(self, name)
             setattr(self, name, sub)
             return sub
 
     async def save(self):
         if self.__path and self.dirty:
-            items = self.items
-            if 'modification_time' in items:
-                del items['modification_time']
-            data = yaml.dump(items)
+            data = yaml.dump(self.__getstate__())
             if data:
+                self.__path.parent.mkdir(exist_ok=True, parents=True)
                 async with aiofiles.open(self.__path, 'w') as f:
                     await f.write(data)
 

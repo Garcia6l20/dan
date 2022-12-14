@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from pymake.core.cache import Cache
 
-from pymake.core.target import Target
+from pymake.core.target import Options, Target
 
 _exported_targets : set[Target] = set()
 
@@ -49,6 +49,7 @@ class MakeFile(sys.__class__):
         if self.parent:
             for target in self.parent.targets:
                 setattr(self, target.name, target)
+        self.options = Options(self)
 
     @cached_property
     def cache(self) -> Cache:
@@ -79,7 +80,7 @@ class Context:
         return self.__current
 
     @property
-    def all(self) -> set[Target]:
+    def all(self) -> set[MakeFile]:
         return self.__all
 
     @current.setter

@@ -1,3 +1,4 @@
+from pathlib import Path
 import click
 
 import logging
@@ -44,17 +45,56 @@ def available_toolchains():
     return [name for name in get_toolchains()['toolchains'].keys()]
 
 
+_toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
+
+
 @commands.command()
+@click.option('--verbose', '-v', is_flag=True,
+              help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
-              type=click.Choice(available_toolchains(), case_sensitive=False),
-              prompt=True)
+              type=_toolchain_choice)
 @click.option('--build-type', '-b', help='Build type to use',
               type=click.Choice(['debug', 'release', 'release-min-size',
                                 'release-debug-infos'], case_sensitive=False),
               default='release')
-@common_opts
-def configure(toolchain, build_type, **kwargs):
-    Make(**kwargs).configure(toolchain, build_type)
+@click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True)
+@click.option('--option', '-o', 'options', help='Set or change an option', multiple=True)
+@click.argument('BUILD_PATH', type=click.Path(resolve_path=True, path_type=Path))
+@click.argument('SOURCE_PATH', type=click.Path(exists=True, resolve_path=True, path_type=Path), default=Path.cwd())
+def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
+    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+    config = Cache(build_path / Make._config_name)
+    config.source_path = config.source_path if hasattr(config, 'source_path') else str(source_path)
+    config.build_path = str(build_path)
+    _logger.info(f'source path: {config.source_path}')
+    _logger.info(f'build path: {config.build_path}')
+    config.toolchain = toolchain or config.toolchain if hasattr(config, 'toolchain') else click.prompt(
+        'Toolchain', type=_toolchain_choice)
+    config.build_type = build_type or config.build_type
+
+    if len(settings) or len(options):
+        asyncio.run(config.save())
+
+        make = Make(build_path, None, verbose, False)
+        asyncio.run(make.initialize())
+
+        if len(options):
+            all_opts = make.all_options()
+            for option in options:
+                name, value = option.split('=')
+                found = False
+                for opt in all_opts:
+                    if opt.fullname == name:
+                        found = True
+                        opt.value = value
+                        break
+                assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
+
+        if len(settings):
+            raise NotImplementedError('Settings not implemented yet')
+
+
+    asyncio.run(config.save())
 
 
 @commands.command()
@@ -64,6 +104,11 @@ def build(**kwargs):
     asyncio.run(make.build())
     from pymake.cxx import target_toolchain
     target_toolchain.compile_commands.update()
+
+# @commands.command()
+# def install(**kwargs):
+#     make = Make(**kwargs)
+#     asyncio.run(make.install())
 
 
 @commands.command()
@@ -108,6 +153,7 @@ def run(**kwargs):
 def scan_toolchains(script: str, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.scan_toolchains(script=script))
+
 
 @commands.result_callback()
 def process_result(result, **kwargs):
