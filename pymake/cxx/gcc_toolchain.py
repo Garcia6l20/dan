@@ -91,7 +91,7 @@ class GCCToolchain(Toolchain):
                         for dep in out.splitlines()]).split()
             _obj = all.pop(0)
             _src = all.pop(0)
-            return {FileDependency(dep) for dep in all}
+            return all
         else:
             return set()
 

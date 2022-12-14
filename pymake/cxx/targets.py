@@ -37,8 +37,7 @@ class CXXObject(Target):
             if not self.output.exists() or self.output.stat().st_mtime < self.source.stat().st_mtime or not hasattr(self.cache, 'deps'):
                 self.info(f'scanning dependencies of {self.source}')
                 deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
-                deps = set(filter(lambda d: str(d).startswith(
-                    str(self.source_path)), deps))
+                deps = [str(d) for d in deps if d.startswith(str(self.source_path)) or d.startswith(str(self.build_path))]
                 self.cache.deps = deps
             else:
                 deps = self.cache.deps
