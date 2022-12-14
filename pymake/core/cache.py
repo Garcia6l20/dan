@@ -1,8 +1,10 @@
+import asyncio
 import atexit
 from functools import cached_property
 import functools
 from pathlib import Path
 from collections.abc import Iterable
+import aiofiles
 
 import yaml
 
@@ -10,7 +12,7 @@ class SubCache:
     pass
 
 class Cache:
-    __all: list['Cache'] = None
+    __all: list['Cache'] = list()
 
     def __init__(self, path: Path) -> None:
         self.__path = path
@@ -20,9 +22,6 @@ class Cache:
             if isinstance(data, dict):
                 self.__dict__.update(data)
         self.__init_hash = hash(self)
-        if Cache.__all is None:
-            Cache.__all = list()
-            atexit.register(Cache.save_all)
         Cache.__all.append(self)
 
     @property
@@ -64,13 +63,6 @@ class Cache:
         if self.__path:
             self.__path.unlink(missing_ok=True)
 
-    def save(self):
-        if self.__path and self.dirty:
-            items = self.items
-            if 'modification_time' in items:
-                del items['modification_time']
-            yaml.dump(items, open(self.__path, 'w'))
-
     def subcache(self, name):
         if hasattr(self, name):
             return getattr(self, name)
@@ -79,10 +71,22 @@ class Cache:
             setattr(self, name, sub)
             return sub
 
+    async def save(self):
+        if self.__path and self.dirty:
+            items = self.items
+            if 'modification_time' in items:
+                del items['modification_time']
+            data = yaml.dump(items)
+            if data:
+                async with aiofiles.open(self.__path, 'w') as f:
+                    await f.write(data)
+
     @staticmethod
-    def save_all():
+    async def save_all():
+        saves = list()
         for c in Cache.__all:
-            c.save()
+            saves.append(c.save())
+        await asyncio.gather(*saves)
 
 
 def once_method(fn):    

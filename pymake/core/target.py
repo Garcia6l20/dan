@@ -82,8 +82,7 @@ class Target(Logging):
 
     @cached_property
     def cache(self) -> SubCache:
-        from pymake.core.globals import cache
-        return cache.subcache(self.fullname)
+        return self.makefile.cache.subcache(self.fullname)
 
     @asyncio.once_method
     async def preload(self):

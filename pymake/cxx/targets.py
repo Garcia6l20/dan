@@ -14,6 +14,7 @@ class CXXObject(Target):
         super().__init__(name, parent=parent, all=False)
         self.source_path = parent.source_path
         self.build_path = parent.build_path
+        self.makefile = parent.makefile
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain

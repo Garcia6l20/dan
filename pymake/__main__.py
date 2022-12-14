@@ -1,6 +1,5 @@
-from .cli import commands
+from pymake.cli import commands
 
 
 if __name__ == '__main__':
-    import sys
-    sys.exit(commands())
+    commands(auto_envvar_prefix='PYMAKE')

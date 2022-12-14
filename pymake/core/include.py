@@ -1,7 +1,9 @@
+from functools import cached_property
 import importlib.util
 import sys
 
 from pathlib import Path
+from pymake.core.cache import Cache
 
 from pymake.core.target import Target
 
@@ -47,6 +49,10 @@ class MakeFile(sys.__class__):
         if self.parent:
             for target in self.parent.targets:
                 setattr(self, target.name, target)
+
+    @cached_property
+    def cache(self) -> Cache:
+        return Cache(self.build_path / f'{self.name}.cache.yaml')
 
     def export(self, *targets: Target):
         for target in targets:

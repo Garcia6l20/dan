@@ -2,6 +2,7 @@ import click
 
 import logging
 import asyncio
+from pymake.core.cache import Cache
 
 
 from pymake.make import Make
@@ -108,11 +109,15 @@ def scan_toolchains(script: str, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.scan_toolchains(script=script))
 
+@commands.result_callback()
+def process_result(result, **kwargs):
+    asyncio.run(Cache.save_all())
+
 
 def main():
     import sys
     try:
-        return commands(auto_envvar_prefix='PYMAKE')
+        commands(auto_envvar_prefix='PYMAKE')
     except Exception as err:
         _logger.error(str(err))
         ex_type, ex, tb = sys.exc_info()
