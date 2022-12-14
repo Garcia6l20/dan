@@ -12,6 +12,8 @@ from pymake.core import asyncio
 class CXXObject(Target):
     def __init__(self, name, parent: 'CXXTarget', source: str) -> None:
         super().__init__(name, parent=parent, all=False)
+        self.source_path = parent.source_path
+        self.build_path = parent.build_path
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain
