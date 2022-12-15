@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
-from pymake.core import asyncio
+from pymake.core import aiofiles, asyncio
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 from pymake.core.target import Option, Target
@@ -146,6 +146,34 @@ class Make(Logging):
         set_desc()
 
         await asyncio.gather(*tsks)
+
+    async def install(self, destination : Path):
+        from pymake.core.include import context
+        
+        await self.initialize()
+
+        targets = dict()
+        for target in context.installed_targets:
+            if target.fullname in self.active_targets.keys():
+                targets[target.fullname] = target
+
+        self.active_targets = targets
+
+        await self.build()
+
+        tasks = []
+        for target in targets.values():
+            if isinstance(target, Executable):
+                dest = destination / 'bin' / target.output.name
+            else:
+                raise NotImplementedError(f'installation of {type(target)} is not implemented yet !')
+            if dest.exists() and dest.younger_than(target.output):
+                self.info(f'{dest} is up-to-date')
+            else:
+                self.info(f'installing {target.fullname} to {dest}')            
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                tasks.append(aiofiles.copy(target.output, dest))
+        await asyncio.gather(*tasks)
 
     @property
     def executable_targets(self) -> list[Executable]:

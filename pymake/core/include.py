@@ -66,6 +66,9 @@ class MakeFile(sys.__class__):
         for target in targets:
             self.__exports.add(target)
         export(*targets)
+    
+    def install(self, *targets: Target):
+        context.install(*targets)
 
     @property
     def _exported_targets(self) -> set[Target]:
@@ -77,6 +80,7 @@ class Context:
         self.__root: MakeFile = None
         self.__current: MakeFile = None
         self.__all: set[MakeFile] = set()
+        self.__installed_targets: set[Target] = set()
 
     @property
     def root(self):
@@ -89,6 +93,13 @@ class Context:
     @property
     def all(self) -> set[MakeFile]:
         return self.__all
+
+    def install(self, *targets: Target):
+        self.__installed_targets.update(targets)
+
+    @property
+    def installed_targets(self) -> set[Target]:
+        return self.__installed_targets
 
     @current.setter
     def current(self, current: MakeFile):

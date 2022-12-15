@@ -105,10 +105,12 @@ def build(**kwargs):
     from pymake.cxx import target_toolchain
     target_toolchain.compile_commands.update()
 
-# @commands.command()
-# def install(**kwargs):
-#     make = Make(**kwargs)
-#     asyncio.run(make.install())
+@commands.command()
+@common_opts
+@click.argument('DESTINATION', type=click.Path(file_okay=False, path_type=Path))
+def install(destination: Path, **kwargs):
+    make = Make(**kwargs)
+    asyncio.run(make.install(destination))
 
 
 @commands.command()

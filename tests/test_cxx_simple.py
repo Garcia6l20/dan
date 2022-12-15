@@ -1,4 +1,5 @@
 import os
+import shutil
 from pymake.core import asyncio
 from pymake.core.cache import Cache
 from pymake.core.pathlib import Path
@@ -12,6 +13,11 @@ class CXXSimpleTest(PyMakeBaseTest):
     def __init__(self, methodName: str = None) -> None:
         super().__init__('cxx/simple', methodName)
 
+    def tearDown(self) -> None:
+        if (self.build_path / 'dist').exists():
+            shutil.rmtree(self.build_path / 'dist')
+        return super().tearDown()
+
     async def test_build(self):
 
         ########################################
@@ -19,7 +25,7 @@ class CXXSimpleTest(PyMakeBaseTest):
         make = await self.configure()
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        simple, = Target.get('simple')
+        simple, = Target.get('pymake-simple')
         await simple.initialize()
         self.assertFalse(simple.output.exists())
         await simple.build()
@@ -30,7 +36,7 @@ class CXXSimpleTest(PyMakeBaseTest):
         self.section("no-modification => no-rebuild")
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        simple, = Target.get('simple')
+        simple, = Target.get('pymake-simple')
         await simple.build()
         self.assertTrue(simple.output.exists())
         self.assertEqual(self.modified_at, simple.output.modification_time,
@@ -42,7 +48,7 @@ class CXXSimpleTest(PyMakeBaseTest):
         src.utime()
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        simple, = Target.get('simple')
+        simple, = Target.get('pymake-simple')
         await simple.build()
         self.assertTrue(simple.output.younger_than(self.modified_at),
                         "a source modification should trigger a re-build")
@@ -57,7 +63,7 @@ class CXXSimpleTest(PyMakeBaseTest):
         self.section("option modification => rebuild")
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        simple, = Target.get('simple')
+        simple, = Target.get('pymake-simple')
         await simple.build()
         self.assertTrue(simple.output.younger_than(self.modified_at),
                         "an option change should trigger a re-build")
@@ -65,3 +71,14 @@ class CXXSimpleTest(PyMakeBaseTest):
         out, err, rc = await simple.execute(pipe=True)
         self.assertEqual(rc, 0)
         self.assertEqual(out, f'{expected_output} !\n')
+
+
+    async def test_install(self):
+
+        ########################################
+        self.section("install")
+        make = await self.configure()
+        make = Make(self.build_path, verbose=True)
+        await make.initialize()
+        await make.install(self.build_path / 'dist')
+        self.assertTrue((self.build_path / 'dist/bin/pymake-simple').exists())
