@@ -105,10 +105,7 @@ class Options:
 
     @cached_property
     def modification_date(self):
-        if hasattr(self.__cache, f'{self.__parent.fullname}.options.timestamp'):
-            return getattr(self.__cache, f'{self.__parent.fullname}.options.timestamp')
-        else:
-            return 0.0
+        return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
 
     def __iter__(self):
         return iter(self.__items)

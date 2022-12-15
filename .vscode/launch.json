@@ -26,6 +26,12 @@
                 {"label": "CXX/qt", "value": "cxx/qt"},
                 {"label": "CXX/modules", "value": "cxx/modules"},
             ]
+        },
+        {
+            "id": "unitTestName",
+            "description": "Enter a unit test matcher",
+            "type": "promptString",
+            "default": ""
         }
     ],
     "configurations": [
@@ -143,7 +149,7 @@
             "request": "launch",
             "module": "unittest",
             "justMyCode": false,
-            "args": ["discover", "-v", ".", "test_*.py"],
+            "args": ["discover", "-v", ".", "test_*${input:unitTestName}*.py"],
             "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"

@@ -23,6 +23,10 @@ class Make(Logging):
     _cache_name = 'pymake.cache.yaml'
 
     def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False):
+
+        from pymake.core.include import _reset as reset_context
+        reset_context()
+
         if quiet:
             assert not verbose, "'quiet' cannot be combined with 'verbose'"
             log_level = logging.ERROR

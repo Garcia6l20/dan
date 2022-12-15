@@ -12,14 +12,6 @@ class CXXSimpleTest(PyMakeBaseTest):
     def __init__(self, methodName: str = None) -> None:
         super().__init__('cxx/simple', methodName)
 
-    def section(self, desc):
-        self.reset()
-        separator = "=================================================="
-        center_width = len(separator) - 4
-        print(f"\n{separator}\n"
-              f"= {desc: ^{center_width}} ="
-              f"\n{separator}\n")
-
     async def test_build(self):
 
         ########################################

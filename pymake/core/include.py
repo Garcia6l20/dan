@@ -7,16 +7,19 @@ from pymake.core.cache import Cache
 
 from pymake.core.target import Options, Target
 
-_exported_targets : set[Target] = set()
+_exported_targets: set[Target] = set()
+
 
 def export(*targets: Target):
     global _exported_targets
     for target in targets:
         _exported_targets.add(target)
 
+
 class TargetNotFound(RuntimeError):
     def __init__(self, name) -> None:
         super().__init__(f'package {name} not found')
+
 
 def requires(*names) -> set[Target]:
     global _exported_targets
@@ -109,7 +112,6 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
         name = f'{context.current.name}.{name}'
     else:
         assert build_path
-        context = Context()
     build_path.mkdir(parents=True, exist_ok=True)
 
     module.__class__ = MakeFile
@@ -118,6 +120,11 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
         name,
         source_path,
         build_path)
+
+
+def _reset():
+    global context
+    context = Context()
 
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
@@ -143,6 +150,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     exports = context.current._exported_targets
     context.up()
     return exports
+
 
 def include(*names: str | Path) -> list[Target]:
     result = list()

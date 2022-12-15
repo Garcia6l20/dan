@@ -29,7 +29,15 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase):
     def reset(self):
         Target.reset()
         Cache.reset()
-        self.assertEqual(0, len(Target.all))        
+        self.assertEqual(0, len(Target.all))
+
+    __section_separator = "==============================================================================="
+    __section_center_width = len(__section_separator) - 4
+    def section(self, desc):
+        self.reset()
+        print(f"\n{self.__section_separator}\n"
+              f"= {desc: ^{self.__section_center_width}} ="
+              f"\n{self.__section_separator}\n")
 
     async def clean(self):
         if self.build_path.exists():
