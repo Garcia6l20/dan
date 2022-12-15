@@ -36,7 +36,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["configure", "-v", "-t", "gcc-12.2.0", "./build"],
-            "cwd": "${workspaceFolder}/tests",
+            "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -48,7 +48,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "./build"],
-            "cwd": "${workspaceFolder}/tests",
+            "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -60,7 +60,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["scan-toolchains", "-v"],
-            "cwd": "${workspaceFolder}/tests",
+            "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -72,7 +72,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/tests/${input:test}",
+            "cwd": "${workspaceFolder}/examples/${input:test}",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -84,7 +84,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/tests/cxx/modules",
+            "cwd": "${workspaceFolder}/examples/cxx/modules",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -96,7 +96,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/tests/cxx",
+            "cwd": "${workspaceFolder}/examples/cxx",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -108,7 +108,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "build"],
-            "cwd": "${workspaceFolder}/tests/cxx/simple",
+            "cwd": "${workspaceFolder}/examples/cxx/simple",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -120,7 +120,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "build"],
-            "cwd": "${workspaceFolder}/tests/cxx/libraries",
+            "cwd": "${workspaceFolder}/examples/cxx/libraries",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -132,7 +132,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "build"],
-            "cwd": "${workspaceFolder}/tests/cxx/smc",
+            "cwd": "${workspaceFolder}/examples/cxx/smc",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }

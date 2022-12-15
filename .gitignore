@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-build/
+build*/
 *.egg-info/
 toolchains.yaml
 temp.obj

@@ -5,4 +5,3 @@ pyyaml
 aiofiles
 termcolor
 tqdm
-pytest-asyncio
