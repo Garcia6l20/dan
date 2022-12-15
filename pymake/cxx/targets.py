@@ -238,9 +238,9 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs)
         self.debug(f'done')
 
-    async def execute(self, *args):
+    async def execute(self, *args, pipe=False):
         await self.build()
-        await self.run(f'{self.output} {" ".join(args)}', pipe=False)
+        return await self.run(f'{self.output} {" ".join(args)}', pipe=pipe)
 
 
 class Library(CXXObjectsTarget):

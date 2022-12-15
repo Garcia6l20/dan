@@ -17,7 +17,6 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, subproject: str = None, methodName: str = None) -> None:
         super().__init__(methodName)
-        logging.getLogger().setLevel(logging.DEBUG)
         self.subproject = subproject
         if self.subproject:
             self.source_path = PyMakeBaseTest.source_path / self.subproject
