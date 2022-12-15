@@ -141,16 +141,24 @@ class Target(Logging):
 
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         self._name = name
-        from pymake.core.include import context
-        self.makefile = context.current
-        self.source_path = context.current.source_path
-        self.build_path = context.current.build_path
+        self.parent = parent
+        if parent is None:
+            from pymake.core.include import context
+            self.makefile = context.current
+            self.source_path = context.current.source_path
+            self.build_path = context.current.build_path
+            self.options = Options(self)
+        else:
+            self.source_path = parent.source_path
+            self.build_path = parent.build_path
+            self.makefile = parent.makefile
+            self.options = parent.options
+
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
         self.preload_dependencies: Dependencies[Target] = Dependencies()
-        self.options = Options(self)
         self.output: Path = None
-        self.parent = parent
+
         if self.fullname in Target.all:
             raise InvalidConfiguration(
                 f'target {self.fullname} already exists')

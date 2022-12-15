@@ -58,7 +58,7 @@ class CXXSimpleTest(PyMakeBaseTest):
 
         ########################################
         greater = simple.options.get('greater')
-        expected_output = '\\"=== test ===\\"'
+        expected_output = '=== test ==='
         greater.value = expected_output
         await simple.makefile.cache.save()
 
@@ -72,4 +72,4 @@ class CXXSimpleTest(PyMakeBaseTest):
         self.modified_at = simple.output.modification_time
         out, err, rc = await simple.execute(pipe=True)
         self.assertEqual(rc, 0)
-        self.assertRegex(out, rf'.+{expected_output}.+')
+        self.assertEqual(out, f'{expected_output} !\n')
