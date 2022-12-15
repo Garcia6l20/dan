@@ -239,29 +239,29 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         await self.build()
         return await self.run(f'{self.output} {" ".join(args)}', pipe=pipe)
 
+class LibraryType(Enum):
+    AUTO = 0
+    STATIC = 1
+    SHARED = 2
+    INTERFACE = 3
 
 class Library(CXXObjectsTarget):
-    class Type(Enum):
-        AUTO = 0
-        STATIC = 1
-        SHARED = 2
-        INTERFACE = 3
 
-    def __init__(self, *args, library_type: Type = Type.AUTO, **kwargs):
+    def __init__(self, *args, library_type: LibraryType = LibraryType.AUTO, **kwargs):
         super().__init__(*args, **kwargs)
         self.library_type = library_type
 
     @property
     def static(self) -> bool:
-        return self.library_type == self.Type.STATIC
+        return self.library_type == LibraryType.STATIC
 
     @property
     def shared(self) -> bool:
-        return self.library_type == self.Type.SHARED
+        return self.library_type == LibraryType.SHARED
 
     @property
     def interface(self) -> bool:
-        return self.library_type == self.Type.INTERFACE
+        return self.library_type == LibraryType.INTERFACE
 
     @property
     def ext(self):
@@ -278,17 +278,17 @@ class Library(CXXObjectsTarget):
 
         self._init_sources()
 
-        if self.library_type == self.Type.AUTO:
+        if self.library_type == LibraryType.AUTO:
             if len(self.sources) == 0:
-                self.library_type = self.Type.INTERFACE
+                self.library_type = LibraryType.INTERFACE
             else:
-                self.library_type = self.Type.STATIC
+                self.library_type = LibraryType.STATIC
 
         from .msvc_toolchain import MSVCToolchain
         if self.shared and isinstance(self.toolchain, MSVCToolchain):
             self.compile_definitions.add(f'{self.name.upper()}_EXPORT=1')
 
-        if self.library_type != self.Type.INTERFACE:
+        if self.library_type != LibraryType.INTERFACE:
             self.load_dependencies(self.objs)
             self.output = self.build_path / f"lib{self.name}.{self.ext}"
         else:

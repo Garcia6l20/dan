@@ -55,6 +55,10 @@ class MakeFile(sys.__class__):
         self.options = Options(self)
 
     @cached_property
+    def fullname(self):
+        return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
+
+    @cached_property
     def cache(self) -> Cache:
         return Cache(self.build_path / f'{self.name}.cache.yaml')
 

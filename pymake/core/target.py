@@ -1,3 +1,4 @@
+from enum import Enum
 from functools import cached_property
 from pymake.core.pathlib import Path
 import time
@@ -74,8 +75,16 @@ class Option:
         if self.__value_type and not isinstance(value, self.__value_type):
             err = f'option {self.fullname} is of type {self.__value_type}'
             if type(value) == str:
-                import json
-                value = json.loads(value)
+                if isinstance(self.__value, Enum):
+                    names = [n.lower() for n in self.__value_type._member_names_]
+                    value = value.lower()
+                    if value in names:
+                        value = self.__value_type(names.index(value))
+                    else:
+                        err = f'option {self.fullname} should be one of {names}'
+                else:
+                    import json
+                    value = json.loads(value)
                 if not isinstance(value, self.__value_type):
                     raise RuntimeError(err)
             else:
@@ -106,6 +115,11 @@ class Options:
     @cached_property
     def modification_date(self):
         return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
+    
+    def __getattr__(self, name):
+        opt = self.get(name)
+        if opt:
+            return opt.value
 
     def __iter__(self):
         return iter(self.__items)

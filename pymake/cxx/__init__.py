@@ -56,5 +56,5 @@ def __pick_arg(*names, env=None, default=None):
 
 #__init_toolchains()
 
-from .targets import Executable, Library, Module
+from .targets import Executable, Library, LibraryType, Module
 from .targets import CXXObjectsTarget as Objects
