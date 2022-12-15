@@ -24,33 +24,33 @@ config.options = catch2.options
 
 
 def add_overridable_catch2_option(name: str, value: bool):
-    o = catch2.options.add(name.lower(), value)
-    config[f'CATCH_CONFIG_{name}'] = o.value
-    config[f'CATCH_CONFIG_NO_{name}'] = not o.value
+    o = catch2.options.add(name, value)
+    config[f'CATCH_CONFIG_{name.upper()}'] = o.value
+    config[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
 
 def add_catch2_option(name: str, value):
-    o = catch2.options.add(name.lower(), value)
-    config[f'CATCH_CONFIG_{name}'] = o.value
+    o = catch2.options.add(name, value)
+    config[f'CATCH_CONFIG_{name.upper()}'] = o.value
 
 
-add_overridable_catch2_option('COUNTER', True)
-add_overridable_catch2_option('ANDROID_LOGWRITE', False)
-add_overridable_catch2_option('COLOUR_WIN32', os.name == 'nt')
+add_overridable_catch2_option('counter', True)
+add_overridable_catch2_option('android_logwrite', False)
+add_overridable_catch2_option('colour_win32', os.name == 'nt')
 add_overridable_catch2_option(
-    'CPP11_TO_STRING', target_toolchain.cpp_std >= 11)
-add_overridable_catch2_option('CPP17_BYTE', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option('CPP17_OPTIONAL', target_toolchain.cpp_std >= 17)
+    'cpp11_to_string', target_toolchain.cpp_std >= 11)
+add_overridable_catch2_option('cpp17_byte', target_toolchain.cpp_std >= 17)
+add_overridable_catch2_option('cpp17_optional', target_toolchain.cpp_std >= 17)
 add_overridable_catch2_option(
-    'CPP17_STRING_VIEW', target_toolchain.cpp_std >= 17)
+    'cpp17_string_view', target_toolchain.cpp_std >= 17)
 add_overridable_catch2_option(
-    'CPP17_UNCAUGHT_EXCEPTIONS', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option('CPP17_VARIANT', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option('GLOBAL_NEXTAFTER', True)
-add_overridable_catch2_option('POSIX_SIGNALS', os.name == 'posix')
-add_overridable_catch2_option('GETENV', True)
-add_overridable_catch2_option('USE_ASYNC', True)
+    'cpp17_uncaught_exceptions', target_toolchain.cpp_std >= 17)
+add_overridable_catch2_option('cpp17_variant', target_toolchain.cpp_std >= 17)
+add_overridable_catch2_option('global_nextafter', True)
+add_overridable_catch2_option('posix_signals', os.name == 'posix')
+add_overridable_catch2_option('getenv', True)
+add_overridable_catch2_option('use_async', True)
 # add_overridable_catch2_option('WCHAR', False)
-add_overridable_catch2_option('WINDOWS_SEH', os.name == 'nt')
+add_overridable_catch2_option('windows_seh', os.name == 'nt')
 
 add_catch2_option('bazel_support', False)
 add_catch2_option('disable_exceptions', False)

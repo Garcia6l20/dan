@@ -3,6 +3,11 @@
     "terminal.integrated.env.linux": {
         "PYTHONPATH": "${workspaceFolder}"
     },
+    "python.testing.pytestArgs": [
+        "tests", "-s"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
     "files.associations": {
         "string_view": "cpp"
     },
