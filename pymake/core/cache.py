@@ -52,6 +52,9 @@ class SubCache(object):
                 del state[k]
         return state
 
+    def get(self, name : str, default = None):
+        return getattr(self, name) if hasattr(self, name) else default
+
 
 class Cache(SubCache):
     __all: list['Cache'] = list()
@@ -68,6 +71,10 @@ class Cache(SubCache):
             self.__modification_date = 0.0
         self.__init_hash = hash(self)
         Cache.__all.append(self)
+    
+    @classmethod
+    def reset(cls):
+        cls.__all = list()
 
     @property
     def modification_time(self) -> float:

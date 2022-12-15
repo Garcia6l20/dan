@@ -136,6 +136,18 @@
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
-        }
+        },
+        {
+            "name": "unit tests",
+            "type": "python",
+            "request": "launch",
+            "module": "unittest",
+            "justMyCode": false,
+            "args": ["discover", "-v", ".", "test_*.py"],
+            "cwd": "${workspaceFolder}/tests",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
     ]
 }

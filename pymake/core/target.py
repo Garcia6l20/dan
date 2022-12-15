@@ -132,6 +132,12 @@ class Target(Logging):
             if not found:
                 raise RuntimeError(f'target not found: {name}')
         return targets
+    
+    @classmethod
+    def reset(cls):
+        cls.clean_request = False
+        cls.all = set()
+        cls.default = set()
 
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         self._name = name

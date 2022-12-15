@@ -151,8 +151,11 @@ def run(**kwargs):
 @commands.command()
 @click.option('-s', '--script', help='Use a source script to resolve compilation environment')
 def scan_toolchains(script: str, **kwargs):
-    make = Make(**kwargs)
-    asyncio.run(make.scan_toolchains(script=script))
+    from pymake.cxx.detect import create_toolchains, load_env_toolchain
+    if script:
+        load_env_toolchain(script)
+    else:
+        create_toolchains()
 
 
 @commands.result_callback()

@@ -109,6 +109,7 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
         name = f'{context.current.name}.{name}'
     else:
         assert build_path
+        context = Context()
     build_path.mkdir(parents=True, exist_ok=True)
 
     module.__class__ = MakeFile

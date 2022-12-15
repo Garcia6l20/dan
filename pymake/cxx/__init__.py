@@ -1,18 +1,25 @@
 import logging
 
 from pymake.core.errors import InvalidConfiguration
-from .toolchain import Toolchain
+from pymake.cxx.toolchain import Toolchain
+from pymake.cxx.detect import get_toolchains
 
 target_toolchain: Toolchain = None
 host_toolchain: Toolchain = None
 
 auto_fpic = True
 
-def init_toolchains(name):
-    from .detect import get_toolchains
+def get_default_toolchain(data = None):
+    data = data or get_toolchains()
+    return data['default']
+    
+
+
+def init_toolchains(name: str = None):
     data = get_toolchains()
     if name is None or name == 'default':
-        name = data['default']
+        name = get_default_toolchain(data)
+
     toolchain_data = data['toolchains'][name]
 
     global target_toolchain, host_toolchain

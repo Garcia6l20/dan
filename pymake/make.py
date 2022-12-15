@@ -56,8 +56,7 @@ class Make(Logging):
         import pymake.core.globals
         pymake.core.globals.cache = self.cache
 
-        if self.source_path == self.build_path and self.config.source_path:
-            self.source_path = Path(self.config.source_path)
+        self.source_path = Path(self.config.get('source_path', self.source_path))
 
         self.debug(f'source path: {self.source_path}')
         self.debug(f'build path: {self.build_path}')
@@ -153,7 +152,7 @@ class Make(Logging):
         if script:
             load_env_toolchain(script)
         else:
-            create_toolchains(script)
+            create_toolchains()
 
     async def run(self):
         await self.initialize()
