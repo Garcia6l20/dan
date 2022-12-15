@@ -1,6 +1,6 @@
 import logging
 import os
-from pathlib import Path
+from pymake.core.pathlib import Path
 import subprocess
 import sys
 import tempfile

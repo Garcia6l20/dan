@@ -2,7 +2,7 @@ import logging
 import sys
 import tqdm
 import asyncio
-from pathlib import Path
+from pymake.core.pathlib import Path
 import os
 import subprocess
 from collections.abc import Iterable

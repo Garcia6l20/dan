@@ -2,7 +2,7 @@ import asyncio
 import atexit
 from functools import cached_property
 import functools
-from pathlib import Path
+from pymake.core.pathlib import Path
 from collections.abc import Iterable
 import aiofiles
 

@@ -11,7 +11,7 @@ auto_fpic = True
 def init_toolchains(name):
     from .detect import get_toolchains
     data = get_toolchains()
-    if name is None:
+    if name is None or name == 'default':
         name = data['default']
     toolchain_data = data['toolchains'][name]
 

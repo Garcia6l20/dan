@@ -1,5 +1,5 @@
 from functools import cached_property
-from pathlib import Path
+from pymake.core.pathlib import Path
 import time
 from typing import Union, TypeAlias
 import inspect
@@ -118,6 +118,20 @@ class Target(Logging):
     clean_request = False
     all: set['Target'] = set()
     default: set['Target'] = set()
+
+    @classmethod
+    def get(cls, *names) -> list['Target']:
+        targets = list()
+        for name in names:
+            found = False
+            for target in cls.all:
+                if name in [target.fullname, target.name]:
+                    found = True
+                    targets.append(target)
+                    break
+            if not found:
+                raise RuntimeError(f'target not found: {name}')
+        return targets
 
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         self._name = name

@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from enum import Enum
 import os
-from pathlib import Path
+from pymake.core.pathlib import Path
 from typing import Callable
 from pymake.core import cache
 from pymake.core.target import Dependencies, Target, TargetDependencyLike

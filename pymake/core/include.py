@@ -2,7 +2,7 @@ from functools import cached_property
 import importlib.util
 import sys
 
-from pathlib import Path
+from pymake.core.pathlib import Path
 from pymake.core.cache import Cache
 
 from pymake.core.target import Options, Target

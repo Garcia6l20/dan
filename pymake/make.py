@@ -1,7 +1,7 @@
 
 import functools
 import logging
-from pathlib import Path
+from pymake.core.pathlib import Path
 import sys
 from tqdm import tqdm
 

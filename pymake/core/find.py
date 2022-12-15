@@ -1,6 +1,6 @@
 
 import os
-from pathlib import Path
+from pymake.core.pathlib import Path
 import re
 
 include_paths_lookup = [

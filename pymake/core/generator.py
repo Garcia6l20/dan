@@ -1,4 +1,4 @@
-from pathlib import Path
+from pymake.core.pathlib import Path
 from pymake.core import asyncio
 from pymake.core.target import Target, TargetDependencyLike
 from typing import Callable

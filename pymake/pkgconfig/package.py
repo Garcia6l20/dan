@@ -1,4 +1,4 @@
-from pathlib import Path
+from pymake.core.pathlib import Path
 import re
 import pkgconfig
 
