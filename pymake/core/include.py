@@ -134,7 +134,9 @@ class Context:
     def get(self, name, default=None):
         if hasattr(self, name):
             return getattr(self, name)
-        return default
+        if default is not None:
+            setattr(self, name, default)
+            return default
 
     def set(self, name, value):        
         setattr(self, name, value)

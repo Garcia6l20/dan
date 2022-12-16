@@ -58,7 +58,6 @@ class SubCache(object):
 
 
 class Cache(SubCache):
-    # __all: list['Cache'] = list()
 
     def __init__(self, path: Path) -> None:
         self.__path = path
@@ -74,10 +73,7 @@ class Cache(SubCache):
         from pymake.core.include import context
         caches = context.get('_caches', list())
         caches.append(self)
-    
-    # @classmethod
-    # def reset(cls):
-    #     cls.__all = list()
+
 
     @property
     def modification_time(self) -> float:

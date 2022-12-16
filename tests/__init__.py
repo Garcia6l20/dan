@@ -4,7 +4,7 @@ import shutil
 import sys
 import tempfile
 import unittest
-from build.lib.pymake.logging import Logging
+from pymake.logging import Logging
 
 from pymake.core import aiofiles
 from pymake.core.include import MakeFile
