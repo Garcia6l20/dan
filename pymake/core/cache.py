@@ -58,7 +58,7 @@ class SubCache(object):
 
 
 class Cache(SubCache):
-    __all: list['Cache'] = list()
+    # __all: list['Cache'] = list()
 
     def __init__(self, path: Path) -> None:
         self.__path = path
@@ -71,11 +71,13 @@ class Cache(SubCache):
         else:
             self.__modification_date = 0.0
         self.__init_hash = hash(self)
-        Cache.__all.append(self)
+        from pymake.core.include import context
+        caches = context.get('_caches', list())
+        caches.append(self)
     
-    @classmethod
-    def reset(cls):
-        cls.__all = list()
+    # @classmethod
+    # def reset(cls):
+    #     cls.__all = list()
 
     @property
     def modification_time(self) -> float:
@@ -108,10 +110,13 @@ class Cache(SubCache):
 
     @staticmethod
     async def save_all():
-        saves = list()
-        for c in Cache.__all:
-            saves.append(c.save())
-        await asyncio.gather(*saves)
+        from pymake.core.include import context
+        caches = context.get('_caches')
+        if caches:
+            saves = list()
+            for c in context._caches:
+                saves.append(c.save())
+            await asyncio.gather(*saves)
 
 
 def once_method(fn):    

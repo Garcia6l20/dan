@@ -127,15 +127,14 @@ class Options:
 
 class Target(Logging):
     clean_request = False
-    all: set['Target'] = set()
-    default: set['Target'] = set()
 
     @classmethod
     def get(cls, *names) -> list['Target']:
+        from pymake.core.include import context
         targets = list()
         for name in names:
             found = False
-            for target in cls.all:
+            for target in context.all_targets:
                 if name in [target.fullname, target.name]:
                     found = True
                     targets.append(target)
@@ -143,19 +142,13 @@ class Target(Logging):
             if not found:
                 raise RuntimeError(f'target not found: {name}')
         return targets
-    
-    @classmethod
-    def reset(cls):
-        cls.clean_request = False
-        cls.all = set()
-        cls.default = set()
 
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
+        from pymake.core.include import context
         self._name = name
         self.parent = parent
         self.__cache: SubCache = None
         if parent is None:
-            from pymake.core.include import context
             self.makefile = context.current
             self.source_path = context.current.source_path
             self.build_path = context.current.build_path
@@ -171,14 +164,15 @@ class Target(Logging):
         self.preload_dependencies: Dependencies[Target] = Dependencies()
         self.output: Path = None
 
-        if self.fullname in Target.all:
+        if self.fullname in context.all_targets:
             raise InvalidConfiguration(
                 f'target {self.fullname} already exists')
         super().__init__(self.fullname)
         self.makefile.targets.add(self)
+        from pymake.core.include import context
         if all:
-            Target.default.add(self)
-        Target.all.add(self)
+            context.default_targets.add(self)
+        context.all_targets.add(self)
 
     @property
     def name(self) -> str:

@@ -1,4 +1,4 @@
-import logging
+import sys
 
 from pymake.core.errors import InvalidConfiguration
 from pymake.cxx.toolchain import Toolchain
@@ -7,10 +7,20 @@ from pymake.cxx.detect import get_toolchains
 target_toolchain: Toolchain = None
 host_toolchain: Toolchain = None
 
-def _reset():
-    global target_toolchain, host_toolchain
-    target_toolchain = None
-    host_toolchain = None
+class __LazyContext(sys.__class__):
+    @property
+    def target_toolchain(__):
+        from pymake.core.include import context
+        return context.get('cxx_target_toolchain')
+
+    @property
+    def host_toolchain(__):
+        from pymake.core.include import context
+        return context.get('cxx_host_toolchain')
+    
+
+sys.modules[__name__].__class__ = __LazyContext
+
 
 auto_fpic = True
 
@@ -26,7 +36,6 @@ def init_toolchains(name: str = None):
 
     toolchain_data = data['toolchains'][name]
 
-    global target_toolchain, host_toolchain
     tc_type = toolchain_data['type']
     if tc_type == 'gcc':
         from .gcc_toolchain import GCCToolchain
@@ -36,10 +45,12 @@ def init_toolchains(name: str = None):
         tc_type = MSVCToolchain
     else:
         raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
-    if target_toolchain is None: 
-        target_toolchain = tc_type(toolchain_data, data['tools'])
-    if host_toolchain is None:
-        host_toolchain = target_toolchain
+    target_toolchain = tc_type(toolchain_data, data['tools'])
+    host_toolchain = target_toolchain
+
+    from pymake.core.include import context
+    context.set('cxx_target_toolchain', target_toolchain)
+    context.set('cxx_host_toolchain', host_toolchain)
 
 def __pick_arg(*names, env=None, default=None):
     import sys

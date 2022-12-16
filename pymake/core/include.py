@@ -7,13 +7,11 @@ from pymake.core.cache import Cache
 
 from pymake.core.target import Options, Target
 
-_exported_targets: set[Target] = set()
-
 
 def export(*targets: Target):
-    global _exported_targets
+    global context
     for target in targets:
-        _exported_targets.add(target)
+        context.exported_targets.add(target)
 
 
 class TargetNotFound(RuntimeError):
@@ -82,8 +80,11 @@ class Context:
     def __init__(self) -> None:
         self.__root: MakeFile = None
         self.__current: MakeFile = None
-        self.__all: set[MakeFile] = set()
+        self.__all_makefiles: set[MakeFile] = set()
+        self.__all_targets: set[Target] = set()
+        self.__default_targets: set[Target] = set()
         self.__installed_targets: set[Target] = set()
+        self.__exported_targets: set[Target] = set()
 
     @property
     def root(self):
@@ -94,11 +95,23 @@ class Context:
         return self.__current
 
     @property
-    def all(self) -> set[MakeFile]:
-        return self.__all
+    def all_makefiles(self) -> set[MakeFile]:
+        return self.__all_makefiles
 
     def install(self, *targets: Target):
         self.__installed_targets.update(targets)
+
+    @property
+    def all_targets(self) -> set[Target]:
+        return self.__all_targets
+
+    @property
+    def exported_targets(self) -> set[Target]:
+        return self.__exported_targets
+
+    @property
+    def default_targets(self) -> set[Target]:
+        return self.__default_targets
 
     @property
     def installed_targets(self) -> set[Target]:
@@ -112,12 +125,19 @@ class Context:
         else:
             current.parent = self.__current
             self.__current = current
-        self.__all.add(current)
+        self.__all_makefiles.add(current)
 
     def up(self):
         if self.__current != self.__root:
             self.__current = self.__current.parent
 
+    def get(self, name, default=None):
+        if hasattr(self, name):
+            return getattr(self, name)
+        return default
+
+    def set(self, name, value):        
+        setattr(self, name, value)
 
 context = Context()
 
@@ -140,13 +160,12 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
         build_path)
 
 
-def _reset():
-    global context, _exported_targets
-    for m in context.all:
+def context_reset():
+    global context
+    for m in context.all_makefiles:
         del m
     del context
     context = Context()
-    _exported_targets = set()
 
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:

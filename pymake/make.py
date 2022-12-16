@@ -24,8 +24,8 @@ class Make(Logging):
 
     def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False):
 
-        from pymake.core.include import _reset as reset_context
-        reset_context()
+        from pymake.core.include import context_reset
+        context_reset()
 
         if quiet:
             assert not verbose, "'quiet' cannot be combined with 'verbose'"
@@ -83,17 +83,18 @@ class Make(Logging):
         self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
         include_makefile(self.source_path, self.build_path)
 
+        from pymake.core.include import context
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(build_type)
 
         self.active_targets: dict[str, Target] = dict()
 
         if self.required_targets and len(self.required_targets) > 0:
-            for target in Target.all:
+            for target in context.all_targets:
                 if target.name in self.required_targets or target.fullname in self.required_targets:
                     self.active_targets[target.fullname] = target
         else:
-            for target in Target.default:
+            for target in context.default_targets:
                 self.active_targets[target.fullname] = target
 
         self.debug(f'targets: {[name for name in self.active_targets.keys()]}')
@@ -102,10 +103,10 @@ class Make(Logging):
     def all_options() -> list[Option]:
         from pymake.core.include import context
         opts = []
-        for target in Target.all:
+        for target in context.all_targets:
             for o in target.options:
                 opts.append(o)
-        for makefile in context.all:
+        for makefile in context.all_makefiles:
             for o in makefile.options:
                 opts.append(o)
         return opts

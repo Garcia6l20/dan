@@ -120,9 +120,9 @@ def install(destination: Path, **kwargs):
 def list(all: bool, show_type: bool, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
-    from pymake.core.target import Target
+    from pymake.core.include import context
 
-    targets = Target.all if all else Target.default
+    targets = context.all_targets if all else context.default_targets
     for target in targets:
         s = target.fullname
         if show_type:

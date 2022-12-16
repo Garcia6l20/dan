@@ -49,14 +49,8 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
     def reset(self):
         import gc
 
-        Target.reset()
-        Cache.reset()
-
-        from pymake.core.include import _reset as context_reset
+        from pymake.core.include import context_reset
         context_reset()
-
-        from pymake.cxx import _reset as cxx_reset
-        cxx_reset()
 
         gc.collect()
 
