@@ -44,6 +44,9 @@ class GCCToolchain(Toolchain):
                 flags.extend(self.env["LDFLAGS"].strip().split(' '))
         return unique(flags)
 
+    def set_rpath(self, rpath : str):
+        self.rpath = rpath
+
     def set_mode(self, mode: str):
         if mode == 'debug':
             self.default_cflags.extend(('-g', ))
@@ -66,10 +69,14 @@ class GCCToolchain(Toolchain):
 
     def make_link_options(self, libraries: set[Path | str]) -> list[str]:
         opts = list()
+        if self.rpath:
+            opts.append(f'-Wl,-rpath,{self.rpath}')
+
         for lib in libraries:
             if isinstance(lib, Path):
                 opts.append(f'-L{lib.parent}')
-                opts.append(f'-Wl,-rpath,{lib.parent}')
+                if not self.rpath:
+                    opts.append(f'-Wl,-rpath,{lib.parent}')
                 opts.append(f'-l{lib.stem.removeprefix("lib")}')
             else:
                 assert isinstance(lib, str)
@@ -102,22 +109,32 @@ class GCCToolchain(Toolchain):
     def cxxmodules_flags(self) -> list[str]:
         return ['-std=c++20', '-fmodules-ts']
 
-    async def compile(self, sourcefile: Path, output: Path, options: list[str]):
+    async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False):
         args = [*unique(self.default_cflags, self.default_cxxflags, options), '-MD', '-MT',
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         if auto_fpic:
             args.insert(0, '-fPIC')
-        args.insert(0, self.cxx)
+        args.insert(0, self.cxx)        
         self.compile_commands.insert(sourcefile, output.parent, args)
-        await self.run('cc', output, args)
+        if not dry_run:
+            await self.run('cc', output, args)
+        return args
 
-    async def link(self, objects: set[Path], output: Path, options: list[str]):
+    async def link(self, objects: set[Path], output: Path, options: list[str], dry_run=False):
         args = [self.cxx, *objects, '-o', output, *unique(self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
-        await self.run('link', output, args)
+        if not dry_run:
+            await self.run('link', output, args)
+        return args
 
-    async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
-        await self.run('static_lib', output, [self.ar, 'qc', output, *objects])
-        await AsyncRunner.run(self, [self.ranlib, output])
+    async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
+        args = [self.ar, 'qc', output, *objects]
+        if not dry_run:
+            await self.run('static_lib', output, args)
+            await AsyncRunner.run(self, [self.ranlib, output])
+        return args
 
-    async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
-        await self.run('shared_lib', output, [self.cxx, '-shared', *unique(self.default_ldflags, options), *objects, '-o', output])
+    async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
+        args = [self.cxx, '-shared', *unique(self.default_ldflags, options), *objects, '-o', output]
+        if not dry_run:
+            await self.run('shared_lib', output, args)
+        return args

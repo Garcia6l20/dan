@@ -37,7 +37,8 @@ class CXXObject(Target):
             if not self.output.exists() or self.output.stat().st_mtime < self.source.stat().st_mtime or not hasattr(self.cache, 'deps'):
                 self.info(f'scanning dependencies of {self.source}')
                 deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
-                deps = [str(d) for d in deps if d.startswith(str(self.source_path)) or d.startswith(str(self.build_path))]
+                deps = [str(d) for d in deps if d.startswith(
+                    str(self.source_path)) or d.startswith(str(self.build_path))]
                 self.cache.deps = deps
             else:
                 deps = self.cache.deps
@@ -48,9 +49,22 @@ class CXXObject(Target):
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
+        previous_args = self.cache.get('compile_args')
+        if previous_args and \
+                previous_args != await self.toolchain.compile(self.source, self.output, self.private_cxx_flags, dry_run=True):
+            self.__dirty = True
+        else:
+            self.__dirty = False
+
+    @property
+    def up_to_date(self):
+        if self.__dirty:
+            return False
+        return super().up_to_date
+
     async def __call__(self):
         self.info(f'generating {self.output}...')
-        await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+        self.cache.compile_args = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
 
 
 class OptionSet:
@@ -75,7 +89,7 @@ class OptionSet:
 
     @property
     def public(self) -> list:
-        items : list = self._transform(self._public)
+        items: list = self._transform(self._public)
         for dep in self._parent.cxx_dependencies:
             items.extend(getattr(dep, self._name).public)
         return unique(items)
@@ -183,7 +197,7 @@ class CXXTarget(Target):
 
 class CXXObjectsTarget(CXXTarget):
     def __init__(self, name: str,
-                 sources: set[str]|Callable = set(), *args, **kwargs):
+                 sources: set[str] | Callable = set(), *args, **kwargs):
         super().__init__(name, *args, **kwargs)
         self.objs: set[CXXObject] = set()
         self.sources = sources
@@ -229,23 +243,38 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
 
+        previous_args = self.cache.get('link_args')
+        if previous_args and \
+                previous_args != await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True):
+            self.__dirty = True
+        else:
+            self.__dirty = False
+
+    @property
+    def up_to_date(self):
+        if self.__dirty:
+            return False
+        return super().up_to_date
+
     async def __call__(self):
         await super().__call__()
 
         # link
         self.info(f'linking {self.output}...')
-        await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs)
+        self.cache.link_args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs)
         self.debug(f'done')
 
     async def execute(self, *args, pipe=False):
         await self.build()
         return await self.run(f'{self.output} {" ".join(args)}', pipe=pipe)
 
+
 class LibraryType(Enum):
     AUTO = 0
     STATIC = 1
     SHARED = 2
     INTERFACE = 3
+
 
 class Library(CXXObjectsTarget):
 
@@ -296,6 +325,30 @@ class Library(CXXObjectsTarget):
         else:
             self.output = self.build_path / f"lib{self.name}.stamp"
         await super().initialize(recursive_once=True)
+
+        previous_args = self.cache.get('generate_args')
+        if self.static:
+            if previous_args and \
+                    previous_args != await self.toolchain.static_lib(
+                        [str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True):
+                self.__dirty = True
+            else:
+                self.__dirty = False
+        elif self.shared:
+            if previous_args and \
+                    previous_args != await self.toolchain.shared_lib(
+                        [str(obj.output) for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs}, dry_run=True):
+                self.__dirty = True
+            else:
+                self.__dirty = False
+        else:
+            self.__dirty = False
+
+    @property
+    def up_to_date(self):
+        if self.__dirty:
+            return False
+        return super().up_to_date
 
     async def __call__(self):
         await super().__call__()

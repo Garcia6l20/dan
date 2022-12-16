@@ -12,4 +12,4 @@ self.options.add('library_type', LibraryType.AUTO)
 lib = Library('simplelib', sources=sources, includes=includes, library_type=self.options.library_type)
 exe = Executable('pymake-simple-lib', sources=['main.cpp'], dependencies=[lib])
 
-self.install(exe)
+self.install(exe, lib)

@@ -6,7 +6,7 @@ import asyncio
 from pymake.core.cache import Cache
 
 
-from pymake.make import Make
+from pymake.make import InstallMode, Make
 
 _logger = logging.getLogger('cli')
 
@@ -98,6 +98,7 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
 
 
 @commands.command()
+@click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
 def build(**kwargs):
     make = Make(**kwargs)
@@ -107,10 +108,11 @@ def build(**kwargs):
 
 @commands.command()
 @common_opts
-@click.argument('DESTINATION', type=click.Path(file_okay=False, path_type=Path))
-def install(destination: Path, **kwargs):
+@click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
+def install(mode: str, **kwargs):    
     make = Make(**kwargs)
-    asyncio.run(make.install(destination))
+    mode = InstallMode[mode]
+    asyncio.run(make.install(mode))
 
 
 @commands.command()

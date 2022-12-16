@@ -65,6 +65,7 @@ class Toolchain(AsyncRunner, Logging):
         self.cxx_flags = set()
         self.cpp_std = 17
         self.env = None
+        self.rpath = None
     
     @property
     def compile_commands(self):
@@ -93,16 +94,16 @@ class Toolchain(AsyncRunner, Logging):
     def compile_generated_files(self, output: Path) -> set[Path]:
         return set()
 
-    async def compile(self, sourcefile: Path, output: Path, options: set[str]):
+    async def compile(self, sourcefile: Path, output: Path, options: set[str], dry_run=False):
         ...
 
-    async def link(self, objects: set[Path], output: Path, options: set[str]):
+    async def link(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
         ...
 
-    async def static_lib(self, objects: set[Path], output: Path, options: set[str]):
+    async def static_lib(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
         ...
 
-    async def shared_lib(self, objects: set[Path], output: Path, options: set[str]):
+    async def shared_lib(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
         ...
 
     async def run(self, name: str, output: Path, args, **kwargs):

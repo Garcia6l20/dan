@@ -54,7 +54,11 @@ class SubCache(object):
         return state
 
     def get(self, name : str, default = None):
-        return getattr(self, name) if hasattr(self, name) else default
+        if hasattr(self, name):
+            return getattr(self, name)
+        if default is not None:
+            setattr(self, name, default)
+            return default
 
 
 class Cache(SubCache):
