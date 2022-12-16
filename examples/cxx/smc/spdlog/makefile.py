@@ -7,3 +7,5 @@ Executable('test_spdlog',
            sources=['test_spdlog.cpp'],
            private_includes=['.'],
            dependencies=[spdlog, fmt])
+
+self.install(spdlog)

@@ -1,8 +1,6 @@
 
-from enum import Enum
 import functools
 import logging
-import os
 from pymake.core.pathlib import Path
 import sys
 from tqdm import tqdm
@@ -10,7 +8,7 @@ from tqdm import tqdm
 from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
-from pymake.core.utils import AsyncRunner
+from pymake.core.settings import InstallMode, Settings
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 from pymake.core.target import Option, Target
@@ -19,24 +17,6 @@ from pymake.cxx.targets import Executable, Library, LibraryType
 
 def make_target_name(name: str):
     return name.replace('_', '-')
-
-class InstallSettings:
-    def __init__(self):
-        self.destination = '/usr/local'
-        self.runtime_prefix = 'bin'
-        self.libraries_prefix = 'lib'
-        self.data_prefix = 'share'
-        self.project_prefix = None
-
-class Settings:
-
-    def __init__(self):
-        self.install = InstallSettings()
-
-
-class InstallMode(Enum):
-    user = 0,
-    dev = 1
 
 
 class Make(Logging):
@@ -79,6 +59,8 @@ class Make(Logging):
         self.config = Cache(self.config_path)
         self.cache = Cache(self.cache_path)
 
+        self.settings: Settings = self.config.get('settings', Settings())
+
         self.source_path = Path(self.config.get(
             'source_path', self.source_path))
 
@@ -111,8 +93,8 @@ class Make(Logging):
         from pymake.cxx import target_toolchain
         target_toolchain.set_mode(build_type)
         if self.for_install:
-            settings: Settings = self.config.get('settings', Settings())
-            library_dest = Path(settings.install.destination) / settings.install.libraries_prefix
+            library_dest = Path(self.settings.install.destination) / \
+                self.settings.install.libraries_prefix
             target_toolchain.set_rpath(str(library_dest.absolute()))
 
         self.active_targets: dict[str, Target] = dict()
@@ -176,8 +158,6 @@ class Make(Logging):
 
     async def install(self, mode: InstallMode = InstallMode.user):
 
-        settings: Settings = self.config.get('settings', Settings())
-
         from pymake.core.include import context
 
         self.for_install = True
@@ -186,33 +166,17 @@ class Make(Logging):
 
         targets = dict()
         for target in context.installed_targets:
-            if target.fullname in self.active_targets.keys():
-                targets[target.fullname] = target
+            # if target.fullname in self.active_targets.keys():
+            targets[target.fullname] = target
 
         self.active_targets = targets
 
         await self.build()
 
         tasks = []
-        runtime_dest = Path(settings.install.destination) / settings.install.runtime_prefix
-        library_dest = Path(settings.install.destination) / settings.install.libraries_prefix
 
         for target in targets.values():
-            if isinstance(target, Executable):
-                dest = runtime_dest / target.output.name
-            elif isinstance(target, Library):
-                if mode == InstallMode.user and target.library_type != LibraryType.SHARED:
-                    continue
-                dest = library_dest / target.output.name
-            else:
-                raise NotImplementedError(
-                    f'installation of {type(target)} is not implemented yet !')
-            if dest.exists() and dest.younger_than(target.output):
-                self.info(f'{dest} is up-to-date')
-            else:
-                self.info(f'installing {target.fullname} to {dest}')
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                tasks.append(aiofiles.copy(target.output, dest))
+            tasks.append(target.install(self.settings.install, mode))
 
         await asyncio.gather(*tasks)
 

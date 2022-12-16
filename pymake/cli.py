@@ -64,17 +64,18 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
 def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     config = Cache(build_path / Make._config_name)
-    config.source_path = config.source_path if hasattr(config, 'source_path') else str(source_path)
+    config.source_path = config.source_path if hasattr(
+        config, 'source_path') else str(source_path)
     config.build_path = str(build_path)
     _logger.info(f'source path: {config.source_path}')
     _logger.info(f'build path: {config.build_path}')
     config.toolchain = toolchain or config.toolchain if hasattr(config, 'toolchain') else click.prompt(
         'Toolchain', type=_toolchain_choice)
     config.build_type = build_type or config.build_type
+    asyncio.run(config.save())
+
 
     if len(settings) or len(options):
-        asyncio.run(config.save())
-
         make = Make(build_path, None, verbose, False)
         asyncio.run(make.initialize())
 
@@ -91,10 +92,20 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
                 assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
 
         if len(settings):
-            raise NotImplementedError('Settings not implemented yet')
+            for setting in settings:
+                name, value = setting.split('=')
+                parts = name.split('.')
+                setting = make.settings
+                for part in parts[:-1]:
+                    if not hasattr(setting, part):
+                        raise RuntimeError(f'no such setting: {name}')
+                    setting = getattr(setting, part)
+                if not hasattr(setting, parts[-1]):
+                    raise RuntimeError(f'no such setting: {name}')
+                setattr(setting, parts[-1], value)
 
+            asyncio.run(make.config.save())
 
-    asyncio.run(config.save())
 
 
 @commands.command()
@@ -106,10 +117,11 @@ def build(**kwargs):
     from pymake.cxx import target_toolchain
     target_toolchain.compile_commands.update()
 
+
 @commands.command()
 @common_opts
 @click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
-def install(mode: str, **kwargs):    
+def install(mode: str, **kwargs):
     make = Make(**kwargs)
     mode = InstallMode[mode]
     asyncio.run(make.install(mode))

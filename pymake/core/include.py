@@ -46,7 +46,7 @@ class MakeFile(sys.__class__):
         self.parent: MakeFile = self.parent if hasattr(
             self, 'parent') else None
         self.targets: set[Target] = set()
-        self.__exports: set[Target] = set()
+        self.__exports: list[Target] = list()
         self.__cache: Cache = None
         if self.parent:
             for target in self.parent.targets:
@@ -65,14 +65,14 @@ class MakeFile(sys.__class__):
 
     def export(self, *targets: Target):
         for target in targets:
-            self.__exports.add(target)
+            self.__exports.append(target)
         export(*targets)
     
     def install(self, *targets: Target):
         context.install(*targets)
 
     @property
-    def _exported_targets(self) -> set[Target]:
+    def _exported_targets(self) -> list[Target]:
         return self.__exports
 
 

@@ -3,7 +3,8 @@ from enum import Enum
 import os
 from pymake.core.pathlib import Path
 from typing import Callable
-from pymake.core import cache
+from pymake.core import aiofiles, cache
+from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.target import Dependencies, Target, TargetDependencyLike
 from pymake.core.utils import AsyncRunner, unique
 from pymake.core import asyncio
@@ -93,6 +94,14 @@ class OptionSet:
         for dep in self._parent.cxx_dependencies:
             items.extend(getattr(dep, self._name).public)
         return unique(items)
+
+    @property
+    def private_raw(self) -> list:
+        return self._private
+
+    @property
+    def public_raw(self) -> list:
+        return self._public
 
     def add(self, *values, public=False):
         if public:
@@ -264,6 +273,16 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         self.cache.link_args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs)
         self.debug(f'done')
 
+    @asyncio.once_method
+    async def install(self, settings: InstallSettings, mode: InstallMode):
+        dest = settings.runtime_destination / self.output.name
+        if dest.exists() and dest.younger_than(self.output):
+            self.info(f'{dest} is up-to-date')
+        else:
+            self.info(f'installing {dest}')
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            await aiofiles.copy(self.output, dest)
+
     async def execute(self, *args, pipe=False):
         await self.build()
         return await self.run(f'{self.output} {" ".join(args)}', pipe=pipe)
@@ -374,6 +393,38 @@ class Library(CXXObjectsTarget):
             self.output.touch()
 
         self.debug(f'done')
+
+    @asyncio.once_method
+    async def install(self, settings: InstallSettings, mode: InstallMode):
+        if mode == InstallMode.user and not self.shared:
+            return
+
+        tasks = list()
+        def do_install(src: Path, dest: Path):
+            if dest.exists() and dest.younger_than(src):
+                self.info(f'{dest} is up-to-date')
+            else:
+                self.info(f'installing {dest}')
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                tasks.append(aiofiles.copy(src, dest))
+
+
+        dest = settings.libraries_destination / self.output.name
+        do_install(self.output, dest)
+
+        if mode == InstallMode.dev:
+            for dependency in self.library_dependencies:
+                tasks.append(dependency.install(settings, mode))
+
+            includes_dest = settings.includes_destination
+            for public_include_dir in self.includes.public_raw:
+                headers = public_include_dir.rglob('*.h*')
+                for header in headers:
+                    dest = includes_dest / \
+                        header.relative_to(public_include_dir)
+                    do_install(header, dest)
+
+        await asyncio.gather(*tasks)
 
 
 class Module(CXXObjectsTarget):

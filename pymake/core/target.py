@@ -8,6 +8,7 @@ import inspect
 from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
 from pymake.core.errors import InvalidConfiguration
+from pymake.core.settings import InstallMode, InstallSettings
 from pymake.logging import Logging
 
 
@@ -271,6 +272,11 @@ class Target(Logging):
             await asyncio.gather(*clean_tasks)
         except FileNotFoundError as err:
             self.warn(f'file not found: {err.filename}')
+
+
+    @asyncio.once_method
+    async def install(self, settings : InstallSettings, mode : InstallMode):
+        return
 
     def __call__(self):
         ...
