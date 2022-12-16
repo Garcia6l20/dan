@@ -78,13 +78,13 @@ class Toolchain(AsyncRunner, Logging):
     def has_cxx_compile_options(*opts) -> bool:
         ...
 
-    def make_compile_definitions(self, definitions: set[str]) -> set[str]:
+    def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         ...
 
-    def make_include_options(self, include_paths: set[Path]) -> set[str]:
+    def make_include_options(self, include_paths: set[Path]) -> list[str]:
         ...
 
-    def make_link_options(self, libraries: set[Path]) -> set[str]:
+    def make_link_options(self, libraries: set[Path]) -> list[str]:
         ...
 
     async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
@@ -109,5 +109,5 @@ class Toolchain(AsyncRunner, Logging):
         return await super().run(args, env=self.env, **kwargs)
 
     @property
-    def cxxmodules_flags(self) -> set[str]:
+    def cxxmodules_flags(self) -> list[str]:
         ...

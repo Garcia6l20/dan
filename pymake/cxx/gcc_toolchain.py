@@ -20,39 +20,39 @@ class GCCToolchain(Toolchain):
     
     @cached_property
     def default_cflags(self):
-        flags = set()
+        flags = list()
         if self.env:
             if 'SYSROOT' in self.env:
-                flags.add(f'--sysroot={self.env["SYSROOT"]}')
+                flags.append(f'--sysroot={self.env["SYSROOT"]}')
             if 'CFLAGS' in self.env:
-                flags.update(self.env["CFLAGS"].strip().split(' '))
-        return flags
+                flags.extend(self.env["CFLAGS"].strip().split(' '))
+        return unique(flags)
 
     @cached_property
     def default_cxxflags(self):
-        flags = {f'-std=c++{self.cpp_std}'}
+        flags = [f'-std=c++{self.cpp_std}']
         if self.env:
             if 'CXXFLAGS' in self.env:
-                flags.update(self.env["CXXFLAGS"].strip().split(' '))
-        return flags
+                flags.extend(self.env["CXXFLAGS"].strip().split(' '))
+        return unique(flags)
     
     @cached_property
     def default_ldflags(self):
-        flags = set()
+        flags = list()
         if self.env:
             if 'LDFLAGS' in self.env:
-                flags.update(self.env["LDFLAGS"].strip().split(' '))
-        return flags
+                flags.extend(self.env["LDFLAGS"].strip().split(' '))
+        return unique(flags)
 
     def set_mode(self, mode: str):
         if mode == 'debug':
-            self.default_cflags.update(('-g', ))
+            self.default_cflags.extend(('-g', ))
         elif mode == 'release':
-            self.default_cflags.update(('-O3', '-DNDEBUG'))
+            self.default_cflags.extend(('-O3', '-DNDEBUG'))
         elif mode == 'release-min-size':
-            self.default_cflags.update(('-Os', '-DNDEBUG'))
+            self.default_cflags.extend(('-Os', '-DNDEBUG'))
         elif mode == 'release-debug-infos':
-            self.default_cflags.update(('-O2', '-g', '-DNDEBUG'))
+            self.default_cflags.extend(('-O2', '-g', '-DNDEBUG'))
         else:
             raise InvalidConfiguration(f'unknown build mode: {mode}')
 
@@ -61,25 +61,25 @@ class GCCToolchain(Toolchain):
             self.run(f'{self.cxx} {" ".join(opts)}', no_raise=True))
         return err.splitlines()[0].find('no input files') >= 0
 
-    def make_include_options(self, include_paths: set[Path]) -> set[str]:
-        return {f'-I{p}' for p in include_paths}
+    def make_include_options(self, include_paths: set[Path]) -> list[str]:
+        return unique([f'-I{p}' for p in include_paths])
 
-    def make_link_options(self, libraries: set[Path | str]) -> set[str]:
-        opts = set()
+    def make_link_options(self, libraries: set[Path | str]) -> list[str]:
+        opts = list()
         for lib in libraries:
             if isinstance(lib, Path):
-                opts.add(f'-L{lib.parent}')
-                opts.add(f'-Wl,-rpath,{lib.parent}')
-                opts.add(f'-l{lib.stem.removeprefix("lib")}')
+                opts.append(f'-L{lib.parent}')
+                opts.append(f'-Wl,-rpath,{lib.parent}')
+                opts.append(f'-l{lib.stem.removeprefix("lib")}')
             else:
                 assert isinstance(lib, str)
-                opts.add(f'-l{lib}')
-        return opts
+                opts.append(f'-l{lib}')
+        return unique(opts)
 
-    def make_compile_definitions(self, definitions: set[str]) -> set[str]:
-        return {f'-D{d}' for d in definitions}
+    def make_compile_definitions(self, definitions: set[str]) -> list[str]:
+        return unique([f'-D{d}' for d in definitions])
 
-    async def scan_dependencies(self, file: Path, options: set[str], build_path:Path) -> set[FileDependency]:
+    async def scan_dependencies(self, file: Path, options: list[str], build_path:Path) -> set[FileDependency]:
         if not scan:
             return set()
 
@@ -99,10 +99,10 @@ class GCCToolchain(Toolchain):
         return {output.with_suffix(output.suffix + '.d')}
 
     @property
-    def cxxmodules_flags(self) -> set[str]:
-        return {'-std=c++20', '-fmodules-ts'}
+    def cxxmodules_flags(self) -> list[str]:
+        return ['-std=c++20', '-fmodules-ts']
 
-    async def compile(self, sourcefile: Path, output: Path, options: set[str]):
+    async def compile(self, sourcefile: Path, output: Path, options: list[str]):
         args = [*unique(self.default_cflags, self.default_cxxflags, options), '-MD', '-MT',
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         if auto_fpic:
@@ -111,13 +111,13 @@ class GCCToolchain(Toolchain):
         self.compile_commands.insert(sourcefile, output.parent, args)
         await self.run('cc', output, args)
 
-    async def link(self, objects: set[Path], output: Path, options: set[str]):
+    async def link(self, objects: set[Path], output: Path, options: list[str]):
         args = [self.cxx, *objects, '-o', output, *unique(self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
         await self.run('link', output, args)
 
-    async def static_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
+    async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
         await self.run('static_lib', output, [self.ar, 'qc', output, *objects])
         await AsyncRunner.run(self, [self.ranlib, output])
 
-    async def shared_lib(self, objects: set[Path], output: Path, options: set[str] = set()):
+    async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
         await self.run('shared_lib', output, [self.cxx, '-shared', *unique(self.default_ldflags, options), *objects, '-o', output])

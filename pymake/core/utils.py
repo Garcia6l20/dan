@@ -91,8 +91,7 @@ class chdir:
 
 def unique(*seqs):
     seen = set()
-    seen_add = seen.add
     full = list()
     for seq in seqs:
         full.extend(seq)
-    return [x for x in full if not (x in seen or seen_add(x))]
+    return [x for x in full if not (x in seen or seen.add(x))]

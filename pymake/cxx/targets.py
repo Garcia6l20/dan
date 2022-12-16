@@ -5,7 +5,7 @@ from pymake.core.pathlib import Path
 from typing import Callable
 from pymake.core import cache
 from pymake.core.target import Dependencies, Target, TargetDependencyLike
-from pymake.core.utils import AsyncRunner
+from pymake.core.utils import AsyncRunner, unique
 from pymake.core import asyncio
 
 
@@ -62,31 +62,33 @@ class OptionSet:
         self._parent = parent
         self._name = name
         self._transform = transform or OptionSet._no_transform
-        self._public = set(public)
-        self._private = set(private)
+        self._public = list(public)
+        self._private = list(private)
 
     @staticmethod
     def _no_transform(items):
         return items
 
     @property
-    def private(self) -> set:
-        return self._transform(self._private)
+    def private(self) -> list:
+        return unique(self._transform(self._private))
 
     @property
-    def public(self) -> set:
-        items = self._transform(self._public)
+    def public(self) -> list:
+        items : list = self._transform(self._public)
         for dep in self._parent.cxx_dependencies:
-            items.update(getattr(dep, self._name).public)
-        return items
+            items.extend(getattr(dep, self._name).public)
+        return unique(items)
 
     def add(self, *values, public=False):
         if public:
             for value in values:
-                self._public.add(value)
+                if not value in self._public:
+                    self._public.append(value)
         else:
             for value in values:
-                self._private.add(value)
+                if not value in self._private:
+                    self._private.append(value)
 
     def update(self, values: 'OptionSet', private=False):
         self._public = values._public
@@ -147,32 +149,32 @@ class CXXTarget(Target):
         return {dep for dep in self.dependencies if isinstance(dep, Library)}
 
     @property
-    def libs(self) -> set[str]:
+    def libs(self) -> list[str]:
         tmp = self.toolchain.make_link_options(
             {lib.output for lib in self.library_dependencies if lib.output and not lib.interface})
-        tmp.update(self.link_libraries.public)
+        tmp.extend(self.link_libraries.public)
         # TODO move create private_libs()
-        tmp.update(self.link_libraries.private)
+        tmp.extend(self.link_libraries.private)
         for dep in self.cxx_dependencies:
-            tmp.update(dep.libs)
-        return tmp
+            tmp.extend(dep.libs)
+        return unique(tmp)
 
     @property
     def cxx_flags(self):
         flags = self.includes.public
-        flags.update(self.compile_options.public)
-        flags.update(self.compile_definitions.public)
+        flags.extend(self.compile_options.public)
+        flags.extend(self.compile_definitions.public)
         for dep in self.cxx_dependencies:
-            flags.update(dep.cxx_flags)
-        return flags
+            flags.extend(dep.cxx_flags)
+        return unique(flags)
 
     @property
     def private_cxx_flags(self):
         flags = self.includes.private
-        flags.update(self.cxx_flags)
-        flags.update(self.compile_options.private)
-        flags.update(self.compile_definitions.private)
-        return flags
+        flags.extend(self.cxx_flags)
+        flags.extend(self.compile_options.private)
+        flags.extend(self.compile_definitions.private)
+        return unique(flags)
 
     async def __call__(self):
         # NOP
