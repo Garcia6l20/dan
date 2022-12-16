@@ -153,6 +153,7 @@ class Target(Logging):
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         self._name = name
         self.parent = parent
+        self.__cache: SubCache = None
         if parent is None:
             from pymake.core.include import context
             self.makefile = context.current
@@ -187,9 +188,11 @@ class Target(Logging):
     def fullname(self) -> str:
         return f'{self.makefile.name}.{self._name}'
 
-    @cached_property
+    @property
     def cache(self) -> SubCache:
-        return self.makefile.cache.subcache(self.fullname)
+        if not self.__cache:
+            self.__cache = self.makefile.cache.subcache(self.fullname)
+        return self.__cache
 
     @asyncio.once_method
     async def preload(self):

@@ -7,12 +7,16 @@ from pymake.cxx.detect import get_toolchains
 target_toolchain: Toolchain = None
 host_toolchain: Toolchain = None
 
+def _reset():
+    global target_toolchain, host_toolchain
+    target_toolchain = None
+    host_toolchain = None
+
 auto_fpic = True
 
 def get_default_toolchain(data = None):
     data = data or get_toolchains()
     return data['default']
-    
 
 
 def init_toolchains(name: str = None):

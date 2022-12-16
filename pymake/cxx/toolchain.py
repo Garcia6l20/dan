@@ -17,26 +17,22 @@ class CompileCommands:
         from pymake.core.include import context
         self.cc_path: Path = context.root.build_path / 'compile_commands.json'
         if self.cc_path.exists():
-            self.cc_f = open(self.cc_path, 'r+')
-            try:
-                self.data = json.load(self.cc_f)
-            except json.JSONDecodeError:
-                self.data = list()
+            with open(self.cc_path, 'r') as cc_f:
+                try:
+                    self.data = json.load(cc_f)
+                except json.JSONDecodeError:
+                    self.data = list()
         else:
             self.data = list()
             self.cc_path.parent.mkdir(parents=True, exist_ok=True)
-            self.cc_f = open(self.cc_path, 'w')
 
     def clear(self):
-        self.cc_f.seek(0)
-        self.cc_f.truncate()
-        self.cc_f.close()
+        with open(self.cc_path, 'w'):
+            pass
 
     def update(self):
-        self.cc_f.seek(0)
-        self.cc_f.truncate()
-        json.dump(self.data, self.cc_f)
-        self.cc_f.close()
+        with open(self.cc_path, 'w') as cc_f:
+            json.dump(self.data, cc_f)
 
     def get(self, file: Path):
         fname = file.name

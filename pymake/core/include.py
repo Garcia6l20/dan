@@ -49,6 +49,7 @@ class MakeFile(sys.__class__):
             self, 'parent') else None
         self.targets: set[Target] = set()
         self.__exports: set[Target] = set()
+        self.__cache: Cache = None
         if self.parent:
             for target in self.parent.targets:
                 setattr(self, target.name, target)
@@ -58,9 +59,11 @@ class MakeFile(sys.__class__):
     def fullname(self):
         return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
 
-    @cached_property
+    @property
     def cache(self) -> Cache:
-        return Cache(self.build_path / f'{self.name}.cache.yaml')
+        if not self.__cache:
+            self.__cache = Cache(self.build_path / f'{self.name}.cache.yaml')
+        return self.__cache
 
     def export(self, *targets: Target):
         for target in targets:
@@ -139,6 +142,9 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
 
 def _reset():
     global context
+    for m in context.all:
+        del m
+    del context
     context = Context()
 
 

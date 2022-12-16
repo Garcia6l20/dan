@@ -57,9 +57,6 @@ class Make(Logging):
         self.config = Cache(self.config_path)
         self.cache = Cache(self.cache_path)
 
-        import pymake.core.globals
-        pymake.core.globals.cache = self.cache
-
         self.source_path = Path(self.config.get('source_path', self.source_path))
 
         self.debug(f'source path: {self.source_path}')

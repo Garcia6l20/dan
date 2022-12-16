@@ -2,6 +2,7 @@ import asyncio
 import atexit
 from functools import cached_property
 import functools
+import weakref
 from pymake.core.pathlib import Path
 from collections.abc import Iterable
 import aiofiles
@@ -12,12 +13,12 @@ import yaml
 
 class SubCache(object):
     def __init__(self, parent: 'SubCache', name:str) -> None:
-        self.__parent = parent
+        self.__parent = weakref.ref(parent)
         self.__name = name
 
     @property
     def modification_time(self):
-        return self.__parent.modification_time
+        return self.__parent().modification_time
 
     @staticmethod
     def __iterable_hash(l: Iterable):
@@ -62,11 +63,11 @@ class Cache(SubCache):
     def __init__(self, path: Path) -> None:
         self.__path = path
         if self.__path.exists():
-            data = yaml.load(
-                open(self.__path, 'r'), Loader=yaml.Loader)
-            if isinstance(data, dict):
-                self.__dict__.update(data)
-            self.__modification_date = self.__path.stat().st_mtime
+            with open(self.__path, 'r') as f:
+                data = yaml.load(f, Loader=yaml.Loader)
+                if isinstance(data, dict):
+                    self.__dict__.update(data)
+                self.__modification_date = self.__path.stat().st_mtime
         else:
             self.__modification_date = 0.0
         self.__init_hash = hash(self)
