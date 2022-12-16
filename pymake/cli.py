@@ -69,11 +69,9 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
     config.build_path = str(build_path)
     _logger.info(f'source path: {config.source_path}')
     _logger.info(f'build path: {config.build_path}')
-    config.toolchain = toolchain or config.toolchain if hasattr(config, 'toolchain') else click.prompt(
-        'Toolchain', type=_toolchain_choice)
+    config.toolchain = toolchain or config.get('toolchain') or click.prompt('Toolchain', type=_toolchain_choice)
     config.build_type = build_type or config.build_type
     asyncio.run(config.save())
-
 
     if len(settings) or len(options):
         make = Make(build_path, None, verbose, False)
@@ -105,7 +103,6 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
                 setattr(setting, parts[-1], value)
 
             asyncio.run(make.config.save())
-
 
 
 @commands.command()
