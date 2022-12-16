@@ -1,6 +1,7 @@
 import importlib
 import logging
 import shutil
+import sys
 import tempfile
 import unittest
 from build.lib.pymake.logging import Logging
@@ -53,6 +54,7 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
 
         from pymake.core.include import _reset as context_reset
         context_reset()
+
         from pymake.cxx import _reset as cxx_reset
         cxx_reset()
 
@@ -62,7 +64,7 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         for obj in gc.get_objects():
             if isinstance(obj, (Make, Target, MakeFile, Cache, CompileCommands, Toolchain)):                
                 tb = tracemalloc.get_object_traceback(obj)
-                self.warning(f'{obj} [{type(obj)}] still alive !\n{tb}')
+                self.warning(f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1}) !\n{tb}')
                 active_objects.append(obj)
         
         self.assertEqual(len(active_objects), 0)

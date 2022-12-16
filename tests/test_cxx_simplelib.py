@@ -4,18 +4,19 @@ from pymake.make import Make
 from tests import PyMakeBaseTest
 
 
-class CXXSimpleTest(PyMakeBaseTest):
+class CXXSimpleLibTest(PyMakeBaseTest):
     def __init__(self, methodName: str = None) -> None:
-        super().__init__('cxx/simple', methodName)
+        super().__init__('cxx/libraries', methodName)
 
     async def test_build(self):
+        target_name = 'pymake-simple-lib'
 
         ########################################
         self.section("base build")
         await self.configure()
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        target, = Target.get('pymake-simple')
+        target, = Target.get(target_name)
         await target.initialize()
         self.assertFalse(target.output.exists())
         await target.build()
@@ -28,7 +29,7 @@ class CXXSimpleTest(PyMakeBaseTest):
         self.section("no-modification => no-rebuild")
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        target, = Target.get('pymake-simple')
+        target, = Target.get(target_name)
         await target.build()
         self.assertTrue(target.output.exists())
         self.assertEqual(self.modified_at, target.output.modification_time,
@@ -43,41 +44,8 @@ class CXXSimpleTest(PyMakeBaseTest):
         self.section("source modification => rebuild")
         make = Make(self.build_path, verbose=True)
         await make.initialize()
-        target, = Target.get('pymake-simple')
+        target, = Target.get(target_name)
         await target.build()
         self.assertTrue(target.output.younger_than(self.modified_at),
                         "a source modification should trigger a re-build")
         self.modified_at = target.output.modification_time
-
-        ########################################
-        greater = target.options.get('greater')
-        expected_output = '=== test ==='
-        greater.value = expected_output
-        await target.makefile.cache.save()
-
-        del make, target, greater
-        self.section("option modification => rebuild")
-        make = Make(self.build_path, verbose=True)
-        await make.initialize()
-        target, = Target.get('pymake-simple')
-        await target.build()
-        self.assertTrue(target.output.younger_than(self.modified_at),
-                        "an option change should trigger a re-build")
-        self.modified_at = target.output.modification_time
-        out, err, rc = await target.execute(pipe=True)
-        self.assertEqual(rc, 0)
-        self.assertEqual(out, f'{expected_output} !\n')
-
-        del make, target
-
-    async def test_install(self):
-
-        ########################################
-        self.section("install")
-        await self.configure()
-        make = Make(self.build_path, verbose=True)
-        await make.initialize()
-        await make.install(self.build_path / 'dist')
-        self.assertTrue((self.build_path / 'dist/bin/pymake-simple').exists())
-
-        del make

@@ -17,9 +17,10 @@ class CXXCatch2Test(PyMakeBaseTest):
 
         ########################################
         self.section("base build")
-        make = await self.configure()
+        await self.configure()
         make = Make(self.build_path, verbose=True)
         await make.initialize()
+        
         target, = Target.get(target_name)
         await target.initialize()
         await target.build()
@@ -31,6 +32,8 @@ class CXXCatch2Test(PyMakeBaseTest):
         counter.value = not counter.value
         await Cache.save_all()
 
+        del make, target, counter
+
         self.section("option modification => rebuild")
         make = Make(self.build_path, verbose=True)
         await make.initialize()
@@ -41,6 +44,7 @@ class CXXCatch2Test(PyMakeBaseTest):
                         "an option change should trigger a re-build")
         self.modified_at = target.output.modification_time
 
+        del make, target
 
     async def test_build(self):
 
@@ -61,6 +65,8 @@ class CXXCatch2Test(PyMakeBaseTest):
         counter.value = counter.value + 20
         await Cache.save_all()
 
+        del make, target, counter
+
         self.section("option modification => rebuild")
         make = Make(self.build_path, verbose=True)
         await make.initialize()
@@ -69,3 +75,5 @@ class CXXCatch2Test(PyMakeBaseTest):
         self.assertTrue(target.output.younger_than(self.modified_at),
                         "an option change should trigger a re-build")
         self.modified_at = target.output.modification_time
+
+        del make, target

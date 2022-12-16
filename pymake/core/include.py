@@ -141,11 +141,12 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
 
 
 def _reset():
-    global context
+    global context, _exported_targets
     for m in context.all:
         del m
     del context
     context = Context()
+    _exported_targets = set()
 
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
