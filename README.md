@@ -25,3 +25,40 @@ async def hello_cpy(self):
         async with aiofiles.open(self.output, 'w') as dst:
             await dst.write(await src.read())
 ```
+
+
+## Cli usage:
+
+### Toolchain scan
+
+```bash
+pymake scan-toolchains [-s <env-script>]
+```
+
+### Configuration
+
+```bash
+pymake configure <build_path> [-t <toolchain>] [-s <setting>=<value>] [-o <option>=<value>]
+```
+
+### Build
+
+```bash
+pymake build <build_path> [-v] [--for-install] [TARGETS]...
+```
+
+### Install
+
+Install targets marked with `self.install(...)` to the *install.destination* setting.
+
+```bash
+pymake install <build_path> [TARGETS]... [user|dev]
+```
+
+Settings:
+- *install.destination*: The install destination (default: /usr/local).
+- *install.runtime_prefix*: Executables prefix (default: bin).
+- *install.libraries_prefix*: Executables prefix (default: lib).
+- *install.includes_prefix*: Executables prefix (default: include).
+- *install.data_prefix*: Executables prefix (default: share).
+- *install.project_prefix*: !!! NOT USED YET !!! Project prefix (default: None).
