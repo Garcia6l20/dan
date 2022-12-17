@@ -20,19 +20,19 @@ class InstallSettings(SubCache):
 
     @property
     def runtime_destination(self):
-        return Path(self.destination) / self.runtime_prefix
+        return Path(self.destination).absolute() / self.runtime_prefix
 
     @property
     def libraries_destination(self):
-        return Path(self.destination) / self.libraries_prefix
+        return Path(self.destination).absolute() / self.libraries_prefix
 
     @property
     def data_destination(self):
-        return Path(self.destination) / self.data_prefix
+        return Path(self.destination).absolute() / self.data_prefix
 
     @property
     def includes_destination(self):
-        return Path(self.destination) / self.includes_prefix
+        return Path(self.destination).absolute() / self.includes_prefix
 
 
 class Settings(SubCache):
