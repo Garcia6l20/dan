@@ -17,6 +17,7 @@ from pymake.make import Make
 
 import tracemalloc
 
+
 class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
     tests_path = Path(__file__).parent
     root_path = tests_path.parent
@@ -46,7 +47,7 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         tracemalloc.stop()
         return super().tearDown()
 
-    def reset(self, check_still_alive = True):
+    def reset(self, check_still_alive=True):
         import gc
 
         from pymake.core.include import context_reset
@@ -57,43 +58,62 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         if check_still_alive:
             active_objects = list()
             for obj in gc.get_objects():
-                if isinstance(obj, (Make, Target, MakeFile, Cache, CompileCommands, Toolchain)):                
+                if isinstance(obj, (Make, Target, MakeFile, Cache, CompileCommands, Toolchain)):
                     tb = tracemalloc.get_object_traceback(obj)
-                    self.warning(f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1}) !\n{tb}')
+                    self.warning(
+                        f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1}) !\n{tb}')
                     active_objects.append(obj)
-            
-            self.assertEqual(len(active_objects), 0)
 
+            self.assertEqual(len(active_objects), 0)
 
     class __MakeSection:
         __section_separator = "==============================================================================="
         __section_center_width = len(__section_separator) - 4
 
-        def __init__(self, test : 'PyMakeBaseTest', desc : str, clean : bool, init: bool) -> None:
+        def __init__(self,
+                     test: 'PyMakeBaseTest',
+                     desc: str,
+                     options: list[str],
+                     settings: list[str],
+                     clean: bool,
+                     init: bool) -> None:
             self.test = test
             self.desc = desc
             self.clean = clean
+            self.options = options
+            self.settings = settings
             self.init = init
-        
+
         async def __aenter__(self):
             print(f"\n{self.__section_separator}\n"
-                f"= {self.desc: ^{self.__section_center_width}} ="
-                f"\n{self.__section_separator}\n")
+                  f"= {self.desc: ^{self.__section_center_width}} ="
+                  f"\n{self.__section_separator}\n")
             if self.clean:
                 await self.test.clean()
                 await self.test.configure()
             make = Make(self.test.build_path, verbose=True)
-            await make.initialize()
+            if len(self.options) or len(self.settings):
+                await make.initialize()
+                if len(self.options):
+                    make.apply_options(*self.options)
+                if len(self.settings):
+                    make.apply_settings(*self.settings)
+                await Cache.save_all()
+                del make
+                self.test.reset()
+                make = Make(self.test.build_path, verbose=True)
+            
+            if self.init:
+                await make.initialize()
+
             return make
 
         async def __aexit__(self, *err):
             await Cache.save_all()
             self.test.reset()
 
-           
-    def section(self, desc:str, clean=False, init=True):
-        return self.__MakeSection(self, desc, clean, init)
-
+    def section(self, desc: str, options=list(), settings=list(), clean=False, init=True):
+        return self.__MakeSection(self, desc, options, settings, clean, init)
 
     async def clean(self):
         if self.build_path.exists():
