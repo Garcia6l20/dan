@@ -121,7 +121,7 @@ class GCCToolchain(Toolchain):
         return args
 
     async def link(self, objects: set[Path], output: Path, options: list[str], dry_run=False):
-        args = [self.cxx, *objects, '-o', output, *unique(self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
+        args = [self.cxx, *objects, '-o', str(output), *unique(self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
         if not dry_run:
             await self.run('link', output, args)
         return args

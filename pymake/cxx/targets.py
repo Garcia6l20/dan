@@ -51,11 +51,11 @@ class CXXObject(Target):
             self.toolchain.compile_generated_files(self.output))
 
         previous_args = self.cache.get('compile_args')
-        if previous_args and \
-                previous_args != await self.toolchain.compile(self.source, self.output, self.private_cxx_flags, dry_run=True):
-            self.__dirty = True
-        else:
-            self.__dirty = False
+        self.__dirty = False
+        if previous_args:
+            args = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags, dry_run=True)
+            if sorted(args) != sorted(previous_args):
+                self.__dirty = True
 
     @property
     def up_to_date(self):
@@ -208,7 +208,7 @@ class CXXObjectsTarget(CXXTarget):
     def __init__(self, name: str,
                  sources: set[str] | Callable = set(), *args, **kwargs):
         super().__init__(name, *args, **kwargs)
-        self.objs: set[CXXObject] = set()
+        self.objs: list[CXXObject] = list()
         self.sources = sources
 
     @cache.once_method
@@ -222,8 +222,16 @@ class CXXObjectsTarget(CXXTarget):
             source = Path(source)
             if not source.is_absolute():
                 source = self.source_path / source
-            self.objs.add(
+            self.objs.append(
                 CXXObject(f'{self.name}.{Path(source).name}', self, source))
+
+    @property
+    def file_dependencies(self):
+        return unique(super().file_dependencies, *[o.file_dependencies for o in self.objs])
+
+    @property
+    def headers(self):
+        return [f for f in self.file_dependencies if f.suffix.startswith('.h')]
 
     @asyncio.once_method
     async def initialize(self):
@@ -253,11 +261,11 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         await super().initialize(recursive_once=True)
 
         previous_args = self.cache.get('link_args')
-        if previous_args and \
-                previous_args != await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True):
-            self.__dirty = True
-        else:
-            self.__dirty = False
+        self.__dirty = False
+        if previous_args:
+            args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True)
+            if sorted(previous_args) != sorted(args):
+                self.__dirty = True
 
     @property
     def up_to_date(self):

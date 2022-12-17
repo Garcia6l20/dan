@@ -3,6 +3,7 @@ import re
 import pkgconfig
 
 from pymake.core.find import find_file, library_paths_lookup
+from pymake.core.utils import unique
 from pymake.cxx.targets import CXXTarget
 
 
@@ -44,17 +45,17 @@ class Package(CXXTarget):
         
     @property
     def cxx_flags(self):
-        tmp = set(self._cflags.split())
+        tmp = list(self._cflags.split())
         for dep in self.cxx_dependencies:
-            tmp.update(dep.cxx_flags)
-        return tmp
+            tmp.extend(dep.cxx_flags)
+        return unique(tmp)
     
     @property
     def libs(self):
-        tmp = set(self._libs.split())
+        tmp = list(self._libs.split())
         for dep in self.cxx_dependencies:
-            tmp.update(dep.libs)
-        return tmp
+            tmp.extend(dep.libs)
+        return unique(tmp)
     
     @property
     def up_to_date(self):

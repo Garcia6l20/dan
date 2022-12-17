@@ -240,6 +240,10 @@ class Target(Logging):
     def target_dependencies(self):
         return [t for t in self.dependencies if isinstance(t, Target)]
 
+    @property
+    def file_dependencies(self):
+        return [t for t in self.dependencies if isinstance(t, FileDependency)]
+
     @asyncio.once_method
     async def clean(self):
         await self.initialize()
