@@ -40,13 +40,13 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         return super().setUp()
 
     def tearDown(self) -> None:
-        self.reset()
+        self.reset(False)
         # self._build_path.cleanup()
         # del self._build_path
         tracemalloc.stop()
         return super().tearDown()
 
-    def reset(self):
+    def reset(self, check_still_alive = True):
         import gc
 
         from pymake.core.include import context_reset
@@ -54,23 +54,46 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
 
         gc.collect()
 
-        active_objects = list()
-        for obj in gc.get_objects():
-            if isinstance(obj, (Make, Target, MakeFile, Cache, CompileCommands, Toolchain)):                
-                tb = tracemalloc.get_object_traceback(obj)
-                self.warning(f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1}) !\n{tb}')
-                active_objects.append(obj)
+        if check_still_alive:
+            active_objects = list()
+            for obj in gc.get_objects():
+                if isinstance(obj, (Make, Target, MakeFile, Cache, CompileCommands, Toolchain)):                
+                    tb = tracemalloc.get_object_traceback(obj)
+                    self.warning(f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1}) !\n{tb}')
+                    active_objects.append(obj)
+            
+            self.assertEqual(len(active_objects), 0)
+
+
+    class __MakeSection:
+        __section_separator = "==============================================================================="
+        __section_center_width = len(__section_separator) - 4
+
+        def __init__(self, test : 'PyMakeBaseTest', desc : str, clean : bool, init: bool) -> None:
+            self.test = test
+            self.desc = desc
+            self.clean = clean
+            self.init = init
         
-        self.assertEqual(len(active_objects), 0)
+        async def __aenter__(self):
+            print(f"\n{self.__section_separator}\n"
+                f"= {self.desc: ^{self.__section_center_width}} ="
+                f"\n{self.__section_separator}\n")
+            if self.clean:
+                await self.test.clean()
+                await self.test.configure()
+            make = Make(self.test.build_path, verbose=True)
+            await make.initialize()
+            return make
 
+        async def __aexit__(self, *err):
+            await Cache.save_all()
+            self.test.reset()
 
-    __section_separator = "==============================================================================="
-    __section_center_width = len(__section_separator) - 4
-    def section(self, desc):
-        self.reset()
-        print(f"\n{self.__section_separator}\n"
-              f"= {desc: ^{self.__section_center_width}} ="
-              f"\n{self.__section_separator}\n")
+           
+    def section(self, desc:str, clean=False, init=True):
+        return self.__MakeSection(self, desc, clean, init)
+
 
     async def clean(self):
         if self.build_path.exists():

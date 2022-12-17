@@ -129,21 +129,6 @@ class Options:
 class Target(Logging):
     clean_request = False
 
-    @classmethod
-    def get(cls, *names) -> list['Target']:
-        from pymake.core.include import context
-        targets = list()
-        for name in names:
-            found = False
-            for target in context.all_targets:
-                if name in [target.fullname, target.name]:
-                    found = True
-                    targets.append(target)
-                    break
-            if not found:
-                raise RuntimeError(f'target not found: {name}')
-        return targets
-
     def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
         from pymake.core.include import context
         self._name = name
@@ -271,7 +256,7 @@ class Target(Logging):
         try:
             await asyncio.gather(*clean_tasks)
         except FileNotFoundError as err:
-            self.warn(f'file not found: {err.filename}')
+            self.warning(f'file not found: {err.filename}')
 
 
     @asyncio.once_method

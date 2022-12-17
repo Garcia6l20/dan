@@ -121,6 +121,46 @@ class Make(Logging):
                 opts.append(o)
         return opts
 
+    def apply_options(self, *options):
+        all_opts = self.all_options()
+        for option in options:
+            name, value = option.split('=')
+            found = False
+            for opt in all_opts:
+                if opt.fullname == name:
+                    found = True
+                    opt.value = value
+                    break
+            assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
+
+    def apply_settings(self, *settings):
+        for setting in settings:
+            name, value = setting.split('=')
+            parts = name.split('.')
+            setting = self.settings
+            for part in parts[:-1]:
+                if not hasattr(setting, part):
+                    raise RuntimeError(f'no such setting: {name}')
+                setting = getattr(setting, part)
+            if not hasattr(setting, parts[-1]):
+                raise RuntimeError(f'no such setting: {name}')
+            setattr(setting, parts[-1], value)
+
+    @staticmethod
+    def get(*names) -> list['Target']:
+        from pymake.core.include import context
+        targets = list()
+        for name in names:
+            found = False
+            for target in context.all_targets:
+                if name in [target.fullname, target.name]:
+                    found = True
+                    targets.append(target)
+                    break
+            if not found:
+                raise RuntimeError(f'target not found: {name}')
+        return targets
+
     @property
     def toolchains(self):
         from pymake.cxx.detect import get_toolchains

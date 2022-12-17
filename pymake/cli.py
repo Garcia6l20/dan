@@ -78,31 +78,10 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
         asyncio.run(make.initialize())
 
         if len(options):
-            all_opts = make.all_options()
-            for option in options:
-                name, value = option.split('=')
-                found = False
-                for opt in all_opts:
-                    if opt.fullname == name:
-                        found = True
-                        opt.value = value
-                        break
-                assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
+            make.apply_options(*options)
 
         if len(settings):
-            for setting in settings:
-                name, value = setting.split('=')
-                parts = name.split('.')
-                setting = make.settings
-                for part in parts[:-1]:
-                    if not hasattr(setting, part):
-                        raise RuntimeError(f'no such setting: {name}')
-                    setting = getattr(setting, part)
-                if not hasattr(setting, parts[-1]):
-                    raise RuntimeError(f'no such setting: {name}')
-                setattr(setting, parts[-1], value)
-
-            asyncio.run(make.config.save())
+            make.apply_settings(*settings)
 
 
 @commands.command()
