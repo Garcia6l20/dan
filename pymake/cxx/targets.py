@@ -132,8 +132,8 @@ class CXXTarget(Target):
                  link_libraries: set[str] = set(),
                  private_link_libraries: set[str] = set(),
                  preload_dependencies: set[TargetDependencyLike] = set(),
-                 all=True) -> None:
-        super().__init__(name, all=all)
+                 **kw_args) -> None:
+        super().__init__(name, **kw_args)
         from . import target_toolchain
         self.toolchain = target_toolchain
 
@@ -408,6 +408,11 @@ class Library(CXXObjectsTarget):
             return
 
         tasks = list()
+
+        if settings.create_pkg_config:
+            from pymake.pkgconfig.package import create_pkg_config
+            tasks.append(create_pkg_config(self, settings))
+
         def do_install(src: Path, dest: Path):
             if dest.exists() and dest.younger_than(src):
                 self.info(f'{dest} is up-to-date')
@@ -415,7 +420,6 @@ class Library(CXXObjectsTarget):
                 self.info(f'installing {dest}')
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 tasks.append(aiofiles.copy(src, dest))
-
 
         dest = settings.libraries_destination / self.output.name
         do_install(self.output, dest)

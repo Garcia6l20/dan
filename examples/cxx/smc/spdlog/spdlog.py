@@ -5,13 +5,18 @@ from pymake.smc import GitSources
 
 fmt, = include('fmt')
 
+version = '1.11.0'
+description = 'Fast C++ logging library'
+
 gitspdlog = GitSources(
-    'gitspdlog', 'https://github.com/gabime/spdlog.git', 'v1.11.0')
+    'gitspdlog', 'https://github.com/gabime/spdlog.git', f'v{version}')
 
 spdlog_src = gitspdlog.output / 'src'
 spdlog_inc = gitspdlog.output / 'include'
 
 spdlog = Library('spdlog',
+                 description=description,
+                 version=version,
                  sources=[
                      spdlog_src / 'async.cpp',
                      spdlog_src / 'cfg.cpp',

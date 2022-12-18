@@ -5,8 +5,11 @@ from pymake.cxx import Library, target_toolchain
 from pymake.smc import GitSources
 from pymake.cmake import ConfigureFile
 
+version = '2.13.10'
+description = 'A modern, C++-native, test framework for unit-tests, TDD and BDD'
+
 git = GitSources(
-    'git-catch2', 'https://github.com/catchorg/Catch2.git', 'v2.13.10')
+    'git-catch2', 'https://github.com/catchorg/Catch2.git', f'v{version}')
 
 src = git.output / 'src'
 
@@ -15,6 +18,8 @@ config = ConfigureFile('catch2.config', src / 'catch2/catch_user_config.hpp.in',
                        dependencies=[git])
 
 catch2 = Library('catch2',
+                 description=description,
+                 version=version,
                  sources=lambda: src.rglob('*.cpp'),
                  includes=[src, self.build_path / 'generated'],
                  preload_dependencies=[config],
@@ -27,6 +32,7 @@ def add_overridable_catch2_option(name: str, value: bool):
     o = catch2.options.add(name, value)
     config[f'CATCH_CONFIG_{name.upper()}'] = o.value
     config[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
+
 
 def add_catch2_option(name: str, value):
     o = catch2.options.add(name, value)

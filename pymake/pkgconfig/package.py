@@ -1,10 +1,13 @@
+import jinja2
+from pymake.core import aiofiles
 from pymake.core.pathlib import Path
 import re
 import pkgconfig
 
 from pymake.core.find import find_file, library_paths_lookup
+from pymake.core.settings import InstallSettings
 from pymake.core.utils import unique
-from pymake.cxx.targets import CXXTarget
+from pymake.cxx.targets import CXXTarget, Library
 
 
 class MissingPackage(RuntimeError):
@@ -41,22 +44,23 @@ class Package(CXXTarget):
         if hasattr(self, '_requires'):
             for req in self._requires.split():
                 deps.add(Package(req, search_paths))
-        super().__init__(name, includes={self._includedir}, dependencies=deps, all=False)
-        
+        super().__init__(name, includes={
+            self._includedir}, dependencies=deps, all=False)
+
     @property
     def cxx_flags(self):
         tmp = list(self._cflags.split())
         for dep in self.cxx_dependencies:
             tmp.extend(dep.cxx_flags)
         return unique(tmp)
-    
+
     @property
     def libs(self):
         tmp = list(self._libs.split())
         for dep in self.cxx_dependencies:
             tmp.extend(dep.libs)
         return unique(tmp)
-    
+
     @property
     def up_to_date(self):
         return True
@@ -68,7 +72,30 @@ class Package(CXXTarget):
                 m = re.search(r'\${(\w+)}', value)
                 if m:
                     var = m.group(1)
-                    value = value.replace(f'${{{var}}}', getattr(self, f'_{var}'))
+                    value = value.replace(
+                        f'${{{var}}}', getattr(self, f'_{var}'))
                 else:
                     break
         return value
+
+
+_jinja_env: jinja2.Environment = None
+
+
+def _get_jinja_env():
+    global _jinja_env
+    if _jinja_env is None:
+        _jinja_env = jinja2.Environment(
+            loader=jinja2.PackageLoader('pymake.pkgconfig'))
+    return _jinja_env
+
+
+async def create_pkg_config(lib: Library, settings: InstallSettings):
+    dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
+    lib.info(f'creating pkgconfig: {dest}')
+    data = _get_jinja_env()\
+        .get_template('pkg.pc.jinja2')\
+        .render({'lib': lib, 'settings': settings, 'prefix': Path(settings.destination).absolute()})
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    async with aiofiles.open(dest, 'w') as f:
+        await f.write(data)

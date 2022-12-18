@@ -16,7 +16,7 @@ class InstallSettings(SubCache):
         self.libraries_prefix = 'lib'
         self.includes_prefix = 'include'
         self.data_prefix = 'share'
-        self.project_prefix = None
+        self.create_pkg_config = True
 
     @property
     def runtime_destination(self):

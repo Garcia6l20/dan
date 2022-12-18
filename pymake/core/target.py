@@ -9,6 +9,7 @@ from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
 from pymake.core.errors import InvalidConfiguration
 from pymake.core.settings import InstallMode, InstallSettings
+from pymake.core.version import Version
 from pymake.logging import Logging
 
 
@@ -77,7 +78,8 @@ class Option:
             err = f'option {self.fullname} is of type {self.__value_type}'
             if type(value) == str:
                 if isinstance(self.__value, Enum):
-                    names = [n.lower() for n in self.__value_type._member_names_]
+                    names = [n.lower()
+                             for n in self.__value_type._member_names_]
                     value = value.lower()
                     if value in names:
                         value = self.__value_type(names.index(value))
@@ -98,7 +100,7 @@ class Option:
 
 
 class Options:
-    def __init__(self, parent : 'Target') -> None:
+    def __init__(self, parent: 'Target') -> None:
         self.__parent = parent
         self.__cache = parent.cache
         self.__items: set[Option] = set()
@@ -116,7 +118,7 @@ class Options:
     @cached_property
     def modification_date(self):
         return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
-    
+
     def __getattr__(self, name):
         opt = self.get(name)
         if opt:
@@ -129,9 +131,16 @@ class Options:
 class Target(Logging):
     clean_request = False
 
-    def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
+    def __init__(self,
+                 name: str,
+                 description: str = None,
+                 version: str = None,
+                 parent: 'Target' = None,
+                 all=True) -> None:
         from pymake.core.include import context
         self._name = name
+        self.description = description
+        self.version = Version(version) if version else None
         self.parent = parent
         self.__cache: SubCache = None
         if parent is None:
@@ -262,9 +271,8 @@ class Target(Logging):
         except FileNotFoundError as err:
             self.warning(f'file not found: {err.filename}')
 
-
     @asyncio.once_method
-    async def install(self, settings : InstallSettings, mode : InstallMode):
+    async def install(self, settings: InstallSettings, mode: InstallMode):
         return
 
     def __call__(self):

@@ -1,0 +1,12 @@
+prefix={{ prefix }}
+exec_prefix=${prefix}/{{ settings.runtime_prefix }}
+libdir=${prefix}/{{ settings.libraries_prefix }}
+includedir=${prefix}/{{ settings.includes_prefix }}
+
+
+Name: {{ lib.name }}
+Description: {{ lib.description }}
+Version: {{ lib.version }}
+Libs: -l{{ lib.name }} 
+Cflags:{% for def in lib.compile_definitions.public %} {{ def }}{% endfor %} -I${includedir}
+Requires:{% for dep in lib.library_dependencies %} {{ dep.name }}{% endfor %}
