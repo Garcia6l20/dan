@@ -1,3 +1,5 @@
+import os
+from pymake.core.find import find_file
 from pymake.core.pathlib import Path
 import click
 
@@ -69,7 +71,8 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
     config.build_path = str(build_path)
     _logger.info(f'source path: {config.source_path}')
     _logger.info(f'build path: {config.build_path}')
-    config.toolchain = toolchain or config.get('toolchain') or click.prompt('Toolchain', type=_toolchain_choice)
+    config.toolchain = toolchain or config.get(
+        'toolchain') or click.prompt('Toolchain', type=_toolchain_choice)
     config.build_type = build_type or config.build_type
     asyncio.run(config.save())
 
@@ -101,6 +104,43 @@ def install(mode: str, **kwargs):
     make = Make(**kwargs)
     mode = InstallMode[mode]
     asyncio.run(make.install(mode))
+
+
+@commands.command()
+@click.option('--yes', '-y', is_flag=True, help='Proceed without asking')
+@click.option('--root', '-r', help='Root path to search for installation manifest', type=click.Path(exists=True, file_okay=False))
+@click.argument('NAME')
+def uninstall(yes: bool, root: str, name: str):
+    if root:
+        paths = [root]
+    else:
+        paths = [
+            '~/.local/share/pymake',
+            '/usr/local/share/pymake',
+            '/usr/share/pymake',
+        ]
+    manifest = find_file(f'{name}-manifest.txt', paths=paths)
+    with open(manifest, 'r') as f:
+        files = [(manifest.parent / mf.strip()).resolve()
+                 for mf in f.readlines()]
+    to_be_removed = '\n'.join([f" - {f}" for f in files])
+    yes = yes or click.confirm(f'Following files will be removed:\n {to_be_removed}\nProceed ?')
+    if yes:
+        def rm_empty(dir : Path):
+            empty = True
+            for p in dir.iterdir():
+                empty = False
+                break
+            if empty:
+                os.rmdir(dir)
+                rm_empty(dir.parent)
+
+        for f in files:
+            os.remove(f)
+            rm_empty(f.parent)
+        
+        os.remove(manifest)
+        rm_empty(manifest.parent)
 
 
 @commands.command()

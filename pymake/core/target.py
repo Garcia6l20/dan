@@ -140,7 +140,7 @@ class Target(Logging):
         from pymake.core.include import context
         self._name = name
         self.description = description
-        self.version = Version(version) if version else None
+        self.version = Version(version) if version else None        
         self.parent = parent
         self.__cache: SubCache = None
         if parent is None:
@@ -153,6 +153,12 @@ class Target(Logging):
             self.build_path = parent.build_path
             self.makefile = parent.makefile
             self.options = parent.options
+
+        if self.version is None and hasattr(self.makefile, 'version'):
+            self.version = self.makefile.version
+
+        if self.description is None and hasattr(self.makefile, 'description'):
+            self.description = self.makefile.description
 
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()

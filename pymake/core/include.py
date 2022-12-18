@@ -20,11 +20,11 @@ class TargetNotFound(RuntimeError):
 
 
 def requires(*names) -> set[Target]:
-    global _exported_targets
+    global context
     res = set()
     for name in names:
         found = None
-        for t in _exported_targets:
+        for t in context.exported_targets:
             if t.name == name:
                 found = t
                 break

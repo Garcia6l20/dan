@@ -1,6 +1,7 @@
 
 import functools
 import logging
+import os
 from pymake.core.pathlib import Path
 import sys
 from tqdm import tqdm
@@ -12,7 +13,8 @@ from pymake.core.settings import InstallMode, Settings
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 from pymake.core.target import Option, Target
-from pymake.cxx.targets import Executable, Library, LibraryType
+from pymake.cxx.targets import Executable
+from collections.abc import Iterable
 
 
 def make_target_name(name: str):
@@ -218,7 +220,20 @@ class Make(Logging):
         for target in targets.values():
             tasks.append(target.install(self.settings.install, mode))
 
-        await asyncio.gather(*tasks)
+        def flatten(list_of_lists):
+            if len(list_of_lists) == 0:
+                return list_of_lists
+            if isinstance(list_of_lists[0], Iterable):
+                return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
+            return list_of_lists[:1] + flatten(list_of_lists[1:])
+
+        installed_files = await asyncio.gather(*tasks)
+        installed_files = flatten(installed_files)
+        manifest_path = self.settings.install.data_destination / 'pymake' / f'{context.root.name}-manifest.txt'
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+        async with aiofiles.open(manifest_path, 'w') as f:
+            await f.writelines([os.path.relpath(p, manifest_path.parent) + '\n' for p in installed_files])
 
     @property
     def executable_targets(self) -> list[Executable]:

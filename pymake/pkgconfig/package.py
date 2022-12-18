@@ -90,7 +90,7 @@ def _get_jinja_env():
     return _jinja_env
 
 
-async def create_pkg_config(lib: Library, settings: InstallSettings):
+async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
     data = _get_jinja_env()\
@@ -99,3 +99,4 @@ async def create_pkg_config(lib: Library, settings: InstallSettings):
     dest.parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(dest, 'w') as f:
         await f.write(data)
+    return dest

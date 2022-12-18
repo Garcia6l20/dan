@@ -282,7 +282,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         self.debug(f'done')
 
     @asyncio.once_method
-    async def install(self, settings: InstallSettings, mode: InstallMode):
+    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
         dest = settings.runtime_destination / self.output.name
         if dest.exists() and dest.younger_than(self.output):
             self.info(f'{dest} is up-to-date')
@@ -290,6 +290,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
             self.info(f'installing {dest}')
             dest.parent.mkdir(parents=True, exist_ok=True)
             await aiofiles.copy(self.output, dest)
+        return [dest]
 
     async def execute(self, *args, pipe=False):
         await self.build()
@@ -403,26 +404,27 @@ class Library(CXXObjectsTarget):
         self.debug(f'done')
 
     @asyncio.once_method
-    async def install(self, settings: InstallSettings, mode: InstallMode):
+    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
         if mode == InstallMode.user and not self.shared:
-            return
+            return list()
 
         tasks = list()
 
         if settings.create_pkg_config:
             from pymake.pkgconfig.package import create_pkg_config
             tasks.append(create_pkg_config(self, settings))
-
-        def do_install(src: Path, dest: Path):
+        
+        async def do_install(src: Path, dest: Path):
             if dest.exists() and dest.younger_than(src):
                 self.info(f'{dest} is up-to-date')
             else:
                 self.info(f'installing {dest}')
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                tasks.append(aiofiles.copy(src, dest))
+                await aiofiles.copy(src, dest)
+            return dest
 
         dest = settings.libraries_destination / self.output.name
-        do_install(self.output, dest)
+        tasks.append(do_install(self.output, dest))
 
         if mode == InstallMode.dev:
             for dependency in self.library_dependencies:
@@ -434,9 +436,8 @@ class Library(CXXObjectsTarget):
                 for header in headers:
                     dest = includes_dest / \
                         header.relative_to(public_include_dir)
-                    do_install(header, dest)
-
-        await asyncio.gather(*tasks)
+                    tasks.append(do_install(header, dest))
+        return await asyncio.gather(*tasks)
 
 
 class Module(CXXObjectsTarget):
