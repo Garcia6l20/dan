@@ -292,9 +292,9 @@ class Executable(CXXObjectsTarget, AsyncRunner):
             await aiofiles.copy(self.output, dest)
         return [dest]
 
-    async def execute(self, *args, pipe=False):
+    async def execute(self, *args, **kwargs):
         await self.build()
-        return await self.run(f'{self.output} {" ".join(args)}', pipe=pipe)
+        return await self.run(f'{self.output} {" ".join(args)}', **kwargs)
 
 
 class LibraryType(Enum):

@@ -4,7 +4,7 @@ import logging
 import os
 from pymake.core.pathlib import Path
 import sys
-from tqdm import tqdm
+import tqdm
 
 from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
@@ -20,6 +20,14 @@ from collections.abc import Iterable
 
 def make_target_name(name: str):
     return name.replace('_', '-')
+
+
+def flatten(list_of_lists):
+    if len(list_of_lists) == 0:
+        return list_of_lists
+    if isinstance(list_of_lists[0], Iterable):
+        return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
+    return list_of_lists[:1] + flatten(list_of_lists[1:])
 
 
 class Make(Logging):
@@ -169,35 +177,52 @@ class Make(Logging):
         from pymake.cxx.detect import get_toolchains
         return get_toolchains()
 
+    class progress:
+        
+        def __init__(self, desc, targets, task_builder) -> None:
+            self.desc = desc
+            self.targets = targets
+            self.builder = task_builder
+            import shutil
+            term_cols = shutil.get_terminal_size().columns
+            self.max_desc_width = int(term_cols * 0.25)
+            self.pbar = tqdm.tqdm(total=len(targets), desc='building')
+            self.pbar.unit = ' targets'
+
+        def __enter__(self):
+            def update():
+                desc = self.desc + ' ' + \
+                    ', '.join([t.name for t in self.targets])                
+                if len(desc) > self.max_desc_width:
+                    desc = desc[:self.max_desc_width] + ' ...'
+                self.pbar.set_description_str(desc)
+                self.pbar.update()
+            update()
+
+            def on_done(t: Target, *args, **kwargs):
+                self.targets.remove(t)
+                update()
+
+            tasks = list()
+
+            for t in self.targets:
+                tsk = asyncio.create_task(self.builder(t))
+                tsk.add_done_callback(functools.partial(on_done, t))
+                tasks.append(tsk)
+
+            return tasks
+
+        def __exit__(self, *args):
+            self.pbar.set_description_str(self.desc + ' done')
+            self.pbar.update()
+            return
+
     async def build(self):
         await self.initialize()
         targets = set(self.active_targets.values())
-        pbar = tqdm(total=len(targets), desc='building')
-        import shutil
-        term_cols = shutil.get_terminal_size().columns
-        max_desc_width = int(term_cols * 0.25)
 
-        tsks = list()
-
-        def set_desc():
-            desc = 'building ' + ', '.join([t.name for t in targets])
-            if len(desc) > max_desc_width:
-                desc = desc[:max_desc_width] + ' ...'
-            pbar.set_description_str(desc)
-
-        def on_done(t: Target, *args, **kwargs):
-            targets.remove(t)
-            set_desc()
-            pbar.update()
-
-        for t in targets:
-            tsk = asyncio.create_task(t.build())
-            tsk.add_done_callback(functools.partial(on_done, t))
-            tsks.append(tsk)
-
-        set_desc()
-
-        await asyncio.gather(*tsks)
+        with self.progress('building', targets, lambda t: t.build()) as tasks:
+            await asyncio.gather(*tasks)
 
     async def install(self, mode: InstallMode = InstallMode.user):
 
@@ -206,35 +231,22 @@ class Make(Logging):
         self.for_install = True
 
         await self.initialize()
-
-        targets = dict()
+        self.active_targets = dict()
         for target in context.installed_targets:
-            # if target.fullname in self.active_targets.keys():
-            targets[target.fullname] = target
-
-        self.active_targets = targets
+            self.active_targets[target.fullname] = target
 
         await self.build()
 
-        tasks = []
+        targets = list(self.active_targets.values())
+        with self.progress('installing', targets, lambda t: t.install(self.settings.install, mode)) as tasks:
+            installed_files = await asyncio.gather(*tasks)
+            installed_files = unique(flatten(installed_files))
+            manifest_path = self.settings.install.data_destination / \
+                'pymake' / f'{context.root.name}-manifest.txt'
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
-        for target in targets.values():
-            tasks.append(target.install(self.settings.install, mode))
-
-        def flatten(list_of_lists):
-            if len(list_of_lists) == 0:
-                return list_of_lists
-            if isinstance(list_of_lists[0], Iterable):
-                return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
-            return list_of_lists[:1] + flatten(list_of_lists[1:])
-
-        installed_files = await asyncio.gather(*tasks)
-        installed_files = unique(flatten(installed_files))
-        manifest_path = self.settings.install.data_destination / 'pymake' / f'{context.root.name}-manifest.txt'
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        async with aiofiles.open(manifest_path, 'w') as f:
-            await f.writelines([os.path.relpath(p, manifest_path.parent) + '\n' for p in installed_files])
+            async with aiofiles.open(manifest_path, 'w') as f:
+                await f.writelines([os.path.relpath(p, manifest_path.parent) + '\n' for p in installed_files])
 
     @property
     def executable_targets(self) -> list[Executable]:
@@ -250,6 +262,22 @@ class Make(Logging):
     async def run(self):
         await self.initialize()
         await asyncio.gather(*[t.execute() for t in self.executable_targets])
+
+    async def test(self):
+        await self.initialize()
+        tests = list()
+        from pymake.core.include import context
+        for makefile in context.all_makefiles:
+            for test in makefile.tests:
+                tests.append(test)
+        with self.progress('testing', tests, lambda t: t.__call__()) as tasks:
+            results = await asyncio.gather(*tasks)
+            if all(results):
+                self.info('Success !')
+                return False
+            else:
+                self.error('Failed !')
+                return True
 
     async def clean(self, target: str = None):
         await self.initialize()

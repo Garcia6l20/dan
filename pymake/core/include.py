@@ -6,12 +6,7 @@ from pymake.core.pathlib import Path
 from pymake.core.cache import Cache
 
 from pymake.core.target import Options, Target
-
-
-def export(*targets: Target):
-    global context
-    for target in targets:
-        context.exported_targets.add(target)
+from pymake.core.test import Test, AsyncExecutable
 
 
 class TargetNotFound(RuntimeError):
@@ -19,9 +14,9 @@ class TargetNotFound(RuntimeError):
         super().__init__(f'package {name} not found')
 
 
-def requires(*names) -> set[Target]:
+def requires(*names) -> list[Target]:
     global context
-    res = set()
+    res = list()
     for name in names:
         found = None
         for t in context.exported_targets:
@@ -30,7 +25,7 @@ def requires(*names) -> set[Target]:
                 break
         if not found:
             raise TargetNotFound(name)
-        res.add(found)
+        res.append(found)
     return res
 
 
@@ -48,6 +43,7 @@ class MakeFile(sys.__class__):
         self.targets: set[Target] = set()
         self.__exports: list[Target] = list()
         self.__cache: Cache = None
+        self.__tests: list[Test] = list()
         if self.parent:
             for target in self.parent.targets:
                 setattr(self, target.name, target)
@@ -66,10 +62,17 @@ class MakeFile(sys.__class__):
     def export(self, *targets: Target):
         for target in targets:
             self.__exports.append(target)
-        export(*targets)
-    
+            context.exported_targets.add(target)
+
     def install(self, *targets: Target):
         context.install(*targets)
+
+    def add_test(self, executable: AsyncExecutable, *args):
+        self.__tests.append(Test(executable, *args))
+
+    @property
+    def tests(self):
+        return self.__tests
 
     @property
     def _exported_targets(self) -> list[Target]:
@@ -138,8 +141,9 @@ class Context:
             setattr(self, name, default)
             return default
 
-    def set(self, name, value):        
+    def set(self, name, value):
         setattr(self, name, value)
+
 
 context = Context()
 

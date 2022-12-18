@@ -1,4 +1,5 @@
 import os
+import sys
 from pymake.core.find import find_file
 from pymake.core.pathlib import Path
 import click
@@ -178,7 +179,14 @@ def clean(**kwargs):
 @common_opts
 def run(**kwargs):
     make = Make(**kwargs)
-    asyncio.run(make.run())
+    success = asyncio.run(make.run())
+    sys.exit(0 if success else 255)
+
+@commands.command()
+@common_opts
+def test(**kwargs):
+    make = Make(**kwargs)
+    asyncio.run(make.test())
 
 
 @commands.command()
