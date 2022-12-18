@@ -107,10 +107,13 @@ def install(mode: str, **kwargs):
 
 
 @commands.command()
+@click.option('--verbose', '-v', is_flag=True,
+              help='Pring debug informations')
 @click.option('--yes', '-y', is_flag=True, help='Proceed without asking')
 @click.option('--root', '-r', help='Root path to search for installation manifest', type=click.Path(exists=True, file_okay=False))
 @click.argument('NAME')
-def uninstall(yes: bool, root: str, name: str):
+def uninstall(verbose: bool, yes: bool, root: str, name: str):
+    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     if root:
         paths = [root]
     else:
@@ -127,15 +130,13 @@ def uninstall(yes: bool, root: str, name: str):
     yes = yes or click.confirm(f'Following files will be removed:\n {to_be_removed}\nProceed ?')
     if yes:
         def rm_empty(dir : Path):
-            empty = True
-            for p in dir.iterdir():
-                empty = False
-                break
-            if empty:
+            if dir.is_empty:
+                _logger.debug(f'removing empty directory: {dir}')
                 os.rmdir(dir)
                 rm_empty(dir.parent)
 
         for f in files:
+            _logger.debug(f'removing: {f}')
             os.remove(f)
             rm_empty(f.parent)
         

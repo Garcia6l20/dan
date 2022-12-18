@@ -17,3 +17,15 @@ class Path(type(pathlib.Path())):
 
     def utime(self, *args, **kw_args):
         os.utime(self, *args, **kw_args)
+
+    @property
+    def is_empty(self):
+        if os.path.exists(self) and not os.path.isfile(self):
+    
+            # Checking if the directory is empty or not
+            if not os.listdir(self):
+                return True
+            else:
+                return False
+        else:
+            return False

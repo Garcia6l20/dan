@@ -10,6 +10,7 @@ from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
 from pymake.core.settings import InstallMode, Settings
+from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 from pymake.core.target import Option, Target
@@ -228,7 +229,7 @@ class Make(Logging):
             return list_of_lists[:1] + flatten(list_of_lists[1:])
 
         installed_files = await asyncio.gather(*tasks)
-        installed_files = flatten(installed_files)
+        installed_files = unique(flatten(installed_files))
         manifest_path = self.settings.install.data_destination / 'pymake' / f'{context.root.name}-manifest.txt'
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
