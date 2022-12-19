@@ -89,10 +89,13 @@ class GCCToolchain(Toolchain):
     async def scan_dependencies(self, file: Path, options: list[str], build_path:Path) -> set[FileDependency]:
         if not scan:
             return set()
+        args = [self.cxx, '-M', file, *unique(self.default_cflags, self.default_cxxflags, options)]
+        if auto_fpic:
+            args.insert(2, '-fPIC')
 
         build_path.mkdir(parents=True, exist_ok=True)
         output = build_path / file.name
-        out, _, _ = await self.run('scan', output, [self.cxx, '-M', file, *unique(self.default_cflags, self.default_cxxflags, options)], cwd=build_path)
+        out, _, _ = await self.run('scan', output, args, cwd=build_path)
         if out:
             all = ''.join([dep.replace('\\', ' ')
                         for dep in out.splitlines()]).split()
@@ -114,7 +117,7 @@ class GCCToolchain(Toolchain):
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         if auto_fpic:
             args.insert(0, '-fPIC')
-        args.insert(0, self.cxx)        
+        args.insert(0, self.cxx)
         self.compile_commands.insert(sourcefile, output.parent, args)
         if not dry_run:
             await self.run('cc', output, args)
