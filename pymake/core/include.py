@@ -1,6 +1,7 @@
 from functools import cached_property
 import importlib.util
 import sys
+from pymake.core import asyncio
 
 from pymake.core.pathlib import Path
 from pymake.core.cache import Cache
@@ -15,7 +16,13 @@ class TargetNotFound(RuntimeError):
 
 
 def requires(*names) -> list[Target]:
+    ''' Requirement lookup
+    1 - Search for existing-exported target
+    2 - Look a recipe to build
+    3 - Look for pkg-config library
+    '''
     global context
+    from pymake.core.local_package import LocalPackage
     res = list()
     for name in names:
         found = None
@@ -23,6 +30,13 @@ def requires(*names) -> list[Target]:
             if t.name == name:
                 found = t
                 break
+        if not found:
+            # look for recipe
+            path = context.current.source_path / f'{name}.py'
+            if path.exists():
+                found = LocalPackage(load_makefile(
+                    path, context.root.build_path / 'pkgs-build' / name))
+
         if not found:
             raise TargetNotFound(name)
         res.append(found)
@@ -36,12 +50,15 @@ class MakeFile(sys.__class__):
                source_path: Path,
                build_path: Path) -> None:
         self.name = name
+        self.description = None
+        self.version = None
         self.source_path = source_path
         self.build_path = build_path
         self.parent: MakeFile = self.parent if hasattr(
             self, 'parent') else None
         self.targets: set[Target] = set()
         self.__exports: list[Target] = list()
+        self.__installs: list[Target] = list()
         self.__cache: Cache = None
         self.__tests: list[Test] = list()
         if self.parent:
@@ -65,7 +82,11 @@ class MakeFile(sys.__class__):
             context.exported_targets.add(target)
 
     def install(self, *targets: Target):
-        context.install(*targets)
+        self.__installs.extend(targets)
+
+    @property
+    def installed_targets(self):
+        return self.__installs
 
     def add_test(self, executable: AsyncExecutable, *args):
         self.__tests.append(Test(executable, *args))
@@ -86,7 +107,6 @@ class Context:
         self.__all_makefiles: set[MakeFile] = set()
         self.__all_targets: set[Target] = set()
         self.__default_targets: set[Target] = set()
-        self.__installed_targets: set[Target] = set()
         self.__exported_targets: set[Target] = set()
 
     @property
@@ -118,7 +138,10 @@ class Context:
 
     @property
     def installed_targets(self) -> set[Target]:
-        return self.__installed_targets
+        targets = set()
+        for m in self.all_makefiles:
+            targets.update(m.installed_targets)
+        return targets
 
     @current.setter
     def current(self, current: MakeFile):
@@ -148,30 +171,40 @@ class Context:
 context = Context()
 
 
-def _init_makefile(module, name: str = 'root', build_path: Path = None):
-    global context
-    source_path = Path(module.__file__).parent
-    if context.root:
-        build_path = build_path or context.current.build_path / name
-        name = f'{context.current.name}.{name}'
-    else:
-        assert build_path
-    build_path.mkdir(parents=True, exist_ok=True)
-
-    module.__class__ = MakeFile
-    context.current = module
-    context.current._setup(
-        name,
-        source_path,
-        build_path)
-
-
 def context_reset():
     global context
     for m in context.all_makefiles:
         del m
     del context
     context = Context()
+
+
+def _init_makefile(module, name: str = 'root', build_path: Path = None):
+    global context
+    source_path = Path(module.__file__).parent
+    if not build_path:
+        assert context.current
+        build_path = build_path or context.current.build_path / name
+        name = f'{context.current.name}.{name}'
+    build_path.mkdir(parents=True, exist_ok=True)
+
+    module.__class__ = MakeFile
+    context.current = module
+    module._setup(
+        name,
+        source_path,
+        build_path)
+
+
+def load_makefile(module_path: Path, build_path: Path) -> MakeFile:
+    name = module_path.stem
+    spec = importlib.util.spec_from_file_location(
+        f'{name}', module_path)
+    module = importlib.util.module_from_spec(spec)
+    _init_makefile(module, name, build_path)
+    spec.loader.exec_module(module)
+    context.up()
+    return module
 
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:

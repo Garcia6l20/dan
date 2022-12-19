@@ -1,9 +1,7 @@
 import os
-from pymake import self, include
+from pymake import self, requires
 from pymake.cxx import Library
 from pymake.smc import GitSources
-
-fmt, = include('fmt')
 
 version = '1.11.0'
 description = 'Fast C++ logging library'
@@ -28,10 +26,10 @@ spdlog = Library('spdlog',
                  includes=[spdlog_inc],
                  compile_definitions=['SPDLOG_COMPILED_LIB'],
                  preload_dependencies=[gitspdlog],
-                 dependencies=[fmt],
+                 dependencies=requires('fmt'),
                  all=False)
 
 if os.name == 'posix':
     spdlog.link_libraries.add('pthread', public=True)
 
-self.export(spdlog, fmt)
+self.install(spdlog)

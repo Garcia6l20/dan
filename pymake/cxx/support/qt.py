@@ -5,14 +5,16 @@ from pymake.core.pathlib import Path
 from pymake.cxx.targets import CXXObject, Executable, Library
 from pymake.pkgconfig.package import Package
 
+
 class _QtMoccer:
     @asyncio.once_method
     async def initialize(self):
         qt_core = Package('Qt5Core')
+        await qt_core.initialize()
         self.moc = self.makefile.cache.get('moc_executable')
         if not self.moc:
             self.moc = find_executable(
-                'moc', paths=[qt_core._host_bins], default_paths=False)
+                'moc', paths=[qt_core.host_bins], default_paths=False)
             self.makefile.cache.moc_executable = str(self.moc)
         self.load_dependency(qt_core)
 
@@ -20,6 +22,7 @@ class _QtMoccer:
 
         for module in self.qt_modules:
             pkg = Package(f'Qt5{module}')
+            await pkg.initialize()
             self.load_dependency(pkg)
 
         mocs = self.cache.get('mocs', list())
@@ -27,15 +30,13 @@ class _QtMoccer:
             self.objs.append(
                 CXXObject(f'{self.name}.{moc_name}', self, self.build_path / moc_name))
 
-
         await super().initialize(recursive_once=True)
-
 
     async def __call__(self):
 
         mocs = self.cache.get('mocs', list())
 
-        async def do_moc(file : Path):
+        async def do_moc(file: Path):
             moc_name = file.with_suffix('.moc.cpp').name
             moc_file_path = self.build_path / moc_name
             if not moc_file_path.exists() or file.younger_than(moc_file_path):
@@ -60,11 +61,12 @@ class _QtMoccer:
 
 
 class QtExecutable(_QtMoccer, Executable):
-        def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
-            Executable.__init__(self, name, *args, **kwargs)
-            self.qt_modules = qt_modules
+    def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
+        Executable.__init__(self, name, *args, **kwargs)
+        self.qt_modules = qt_modules
+
 
 class QtLibrary(_QtMoccer, Library):
-        def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
-            Library.__init__(self, name, *args, **kwargs)
-            self.qt_modules = qt_modules
+    def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
+        Library.__init__(self, name, *args, **kwargs)
+        self.qt_modules = qt_modules

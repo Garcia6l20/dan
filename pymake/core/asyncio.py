@@ -15,6 +15,10 @@ class OnceLock:
     def done(self):
         return self.__done
 
+    @property
+    def locked(self):
+        return self.__lock.locked()
+
     async def __aenter__(self):
         await self.__lock.acquire()
         return self.__done
@@ -44,6 +48,12 @@ def once_method(fn):
             setattr(self, lock_name, lock)
         else:
             lock = getattr(self, lock_name)
+        # name = self.name if hasattr(self, "name") else self.__class__.__name__
+        # fn_name = fn.__name__
+        # if not lock.done:
+        #     print(f'{name}.{fn_name} {"not " if not lock.locked else ""}locked')
+        # else:
+        #     print(f'{name}.{fn_name} done')
         recursive_once = kwds.pop('recursive_once', False)
         if recursive_once:
             return await inner(self, lock.done, *args, **kwds)

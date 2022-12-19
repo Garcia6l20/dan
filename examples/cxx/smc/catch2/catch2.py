@@ -77,4 +77,4 @@ add_catch2_option('console_width', shutil.get_terminal_size().columns)
 
 # config['CATCH_CONFIG_FALLBACK_STRINGIFIER'] = "fallback ??"
 
-self.export(catch2)
+self.install(catch2)

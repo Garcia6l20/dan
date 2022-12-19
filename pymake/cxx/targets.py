@@ -408,6 +408,8 @@ class Library(CXXObjectsTarget):
         if mode == InstallMode.user and not self.shared:
             return list()
 
+        await self.build()
+
         tasks = list()
 
         if settings.create_pkg_config:
@@ -424,7 +426,8 @@ class Library(CXXObjectsTarget):
             return dest
 
         dest = settings.libraries_destination / self.output.name
-        tasks.append(do_install(self.output, dest))
+        if not self.interface:
+            tasks.append(do_install(self.output, dest))
 
         if mode == InstallMode.dev:
             for dependency in self.library_dependencies:

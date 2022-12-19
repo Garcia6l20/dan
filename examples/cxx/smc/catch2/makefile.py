@@ -1,9 +1,8 @@
-from pymake import self, include
+from pymake import self, requires
 from pymake.cxx import Executable
 
-catch2, = include('catch2')
-
-Executable('test_catch2',
-           sources=['test_catch2.cpp'],
-           private_includes=['.'],
-           dependencies=[catch2])
+example = Executable('pymake-test-catch2',
+                     sources=['test_catch2.cpp'],
+                     private_includes=['.'],
+                     dependencies=requires('catch2'))
+self.install(example)

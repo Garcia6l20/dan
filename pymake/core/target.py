@@ -191,12 +191,14 @@ class Target(Logging):
 
     @asyncio.once_method
     async def preload(self):
+        self.debug('preloading...')
         await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
         await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
 
     @asyncio.once_method
     async def initialize(self):
         await self.preload()
+        self.debug('initializing...')
 
         await asyncio.gather(*[obj.initialize() for obj in self.target_dependencies])
         if self.output and not self.output.is_absolute():
@@ -222,7 +224,7 @@ class Target(Logging):
 
     @property
     def modification_time(self):
-        return self.output.stat().st_mtime if self.output else None
+        return self.output.stat().st_mtime if self.output.exists() else 0.0
 
     @property
     def up_to_date(self):

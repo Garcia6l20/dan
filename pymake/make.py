@@ -7,9 +7,9 @@ import sys
 import tqdm
 
 from pymake.core.cache import Cache
-from pymake.core.include import include_makefile
+from pymake.core.include import MakeFile, include_makefile
 from pymake.core import aiofiles, asyncio
-from pymake.core.settings import InstallMode, Settings
+from pymake.core.settings import InstallMode, InstallSettings, Settings
 from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
@@ -190,14 +190,14 @@ class Make(Logging):
             self.pbar.unit = ' targets'
 
         def __enter__(self):
-            def update():
+            def update(n=1):
                 desc = self.desc + ' ' + \
                     ', '.join([t.name for t in self.targets])                
                 if len(desc) > self.max_desc_width:
                     desc = desc[:self.max_desc_width] + ' ...'
                 self.pbar.set_description_str(desc)
-                self.pbar.update()
-            update()
+                self.pbar.update(n)
+            update(0)
 
             def on_done(t: Target, *args, **kwargs):
                 self.targets.remove(t)
@@ -214,7 +214,7 @@ class Make(Logging):
 
         def __exit__(self, *args):
             self.pbar.set_description_str(self.desc + ' done')
-            self.pbar.update()
+            self.pbar.refresh()
             return
 
     async def build(self):
@@ -229,6 +229,9 @@ class Make(Logging):
         from pymake.core.include import context
 
         self.for_install = True
+        destination = Path(self.settings.install.destination)
+        if not destination.is_absolute():
+            self.settings.install.destination = str(Path.cwd() / destination)
 
         await self.initialize()
         self.active_targets = dict()
