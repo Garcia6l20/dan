@@ -3,7 +3,7 @@ from pymake import pkgconfig
 from pymake.core import asyncio
 from pymake.core.include import MakeFile
 from pymake.core.settings import InstallMode, InstallSettings
-from pymake.core.target import Target
+from pymake.cxx.targets import LibraryType
 
 
 class LocalPackage(pkgconfig.Package):
@@ -30,6 +30,11 @@ class LocalPackage(pkgconfig.Package):
             for target in self.makefile.installed_targets:
                 await target.install(self._settings, InstallMode.dev)
         await super().preload(recursive_once=True)
+
+    @asyncio.once_method
+    async def install(self, settings: InstallSettings, mode: InstallMode):
+        self.library_type = LibraryType.INTERFACE
+        return await super().install(settings, mode, recursive_once=True)
 
     @property
     def up_to_date(self):

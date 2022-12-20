@@ -85,6 +85,11 @@ class Package(Library):
         
         await super().preload(recursive_once=True)
 
+    @asyncio.once_method
+    async def initialize(self):
+        # a package is initialized in preload
+        await self.preload()
+
     @property
     def cxx_flags(self):
         tmp: list[str] = self.data.get('cflags').split()
@@ -102,6 +107,10 @@ class Package(Library):
     @property
     def up_to_date(self):
         return True
+
+    @property
+    def modification_time(self):
+        return self.config_path.modification_time
 
     async def __call__(self):
         pass
