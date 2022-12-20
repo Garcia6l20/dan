@@ -1,0 +1,118 @@
+{
+  "name": "pymake",
+  "displayName": "PyMake",
+  "description": "Python-based build system",
+  "version": "0.0.1",
+  "publisher": "pymake",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onCommand:pymake.scanToolchains",
+    "onCommand:pymake.configure",
+    "onCommand:pymake.build",
+    "onCommand:pymake.clean",
+    "workspaceContains:makefile.py"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "pymake.scanToolchains",
+        "title": "PyMake: Scan toolchains"
+      },
+      {
+        "command": "pymake.configure",
+        "title": "PyMake: Configure"
+      },
+      {
+        "command": "pymake.build",
+        "title": "PyMake: Build"
+      },
+      {
+        "command": "pymake.clean",
+        "title": "PyMake: Clean"
+      }
+    ],
+    "touchBar": [
+      {
+        "command": "pymake.build",
+        "group": "pymake::build"
+      }
+    ]
+  },
+  "configuration": {
+    "title": "PyMake build configuration",
+    "properties": {
+      "pymake.buildFolder": {
+        "type": "string",
+        "default": "build",
+        "description": "Specify in which folder PyMake build configure and build the project."
+      },
+      "pymake.configureOptions": {
+        "type": "array",
+        "default": [
+        ],
+        "description": "Specify the list of configuration options used for PyMake configuration."
+      },
+      "pymake.pythonPath": {
+        "type": "string",
+        "default": "python",
+        "description": "Specify the python executable to use"
+      },
+      "pymake.verbose": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable verbose mode"
+      }
+    },
+    "keybindings": [
+      {
+        "key": "f7",
+        "when": "inPyMakeProject",
+        "command": "pymake.build"
+      },
+      {
+        "key": "f5",
+        "command": "pymake.debug",
+        "when": "!inDebugMode && inPyMakeProject"
+      },
+      {
+        "key": "shift+f5",
+        "command": "pymake.run",
+        "when": "!inDebugMode && inPyMakeProject"
+      }
+    ],
+    "extensionDependencies": ["python"]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/glob": "^8.0.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.1.0",
+    "typescript": "^4.9.3",
+    "ts-loader": "^9.4.1",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.0",
+    "@vscode/test-electron": "^2.2.0"
+  }
+}
