@@ -164,8 +164,7 @@ def list(all: bool, show_type: bool, **kwargs):
 
 @commands.command()
 def list_toolchains(**kwargs):
-    make = Make(**kwargs)
-    for name, _ in make.toolchains['toolchains'].items():
+    for name, _ in Make.toolchains()['toolchains'].items():
         click.echo(name)
 
 

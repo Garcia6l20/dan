@@ -172,8 +172,8 @@ class Make(Logging):
                 raise RuntimeError(f'target not found: {name}')
         return targets
 
-    @property
-    def toolchains(self):
+    @staticmethod
+    def toolchains():
         from pymake.cxx.detect import get_toolchains
         return get_toolchains()
 

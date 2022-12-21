@@ -30,43 +30,45 @@
       },
       {
         "command": "pymake.build",
-        "title": "PyMake: Build"
+        "title": "PyMake: Build",
+        "icon": "./res/icon-build.svg"
       },
       {
         "command": "pymake.clean",
         "title": "PyMake: Clean"
+      },
+      {
+        "command": "pymake.run",
+        "title": "PyMake: Run"
+      },
+      {
+        "command": "pymake.debug",
+        "title": "PyMake: Debug"
       }
     ],
-    "touchBar": [
-      {
-        "command": "pymake.build",
-        "group": "pymake::build"
-      }
-    ]
-  },
-  "configuration": {
-    "title": "PyMake build configuration",
-    "properties": {
-      "pymake.buildFolder": {
-        "type": "string",
-        "default": "build",
-        "description": "Specify in which folder PyMake build configure and build the project."
-      },
-      "pymake.configureOptions": {
-        "type": "array",
-        "default": [
-        ],
-        "description": "Specify the list of configuration options used for PyMake configuration."
-      },
-      "pymake.pythonPath": {
-        "type": "string",
-        "default": "python",
-        "description": "Specify the python executable to use"
-      },
-      "pymake.verbose": {
-        "type": "boolean",
-        "default": false,
-        "description": "Enable verbose mode"
+    "configuration": {
+      "title": "PyMake build configuration",
+      "properties": {
+        "pymake.buildFolder": {
+          "type": "string",
+          "default": "build",
+          "description": "Specify in which folder PyMake build configure and build the project."
+        },
+        "pymake.configureOptions": {
+          "type": "array",
+          "default": [],
+          "description": "Specify the list of configuration options used for PyMake configuration."
+        },
+        "pymake.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Specify the python executable to use"
+        },
+        "pymake.verbose": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose mode"
+        }
       }
     },
     "keybindings": [
@@ -86,7 +88,30 @@
         "when": "!inDebugMode && inPyMakeProject"
       }
     ],
-    "extensionDependencies": ["python"]
+    "menus": {
+      "touchBar": [
+        {
+          "command": "pymake.configure",
+          "when": "inPyMakeProject",
+          "group": "PyMake:build"
+        },
+        {
+          "command": "pymake.build",
+          "when": "inPyMakeProject",
+          "group": "PyMake:build"
+        },
+        {
+          "command": "pymake.run",
+          "when": "inPyMakeProject",
+          "group": "PyMake:run"
+        },
+        {
+          "command": "pymake.debug",
+          "when": "inPyMakeProject",
+          "group": "PyMake:run"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
