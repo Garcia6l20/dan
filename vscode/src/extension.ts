@@ -2,6 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as commands from './pymake/commands';
+import * as debuggerModule from './pymake/debugger';
 import { Target } from './pymake/targets';
 import { StatusBar } from './status';
 
@@ -11,8 +12,8 @@ export class PyMake implements vscode.Disposable {
 	projectRoot: string;
 	toolchains: string[];
 	targets: Target[];
-	activeTarget: string | null = null;
-	activeTargetChanged = new vscode.EventEmitter<string>();
+	activeTarget: Target | null = null;
+	activeTargetChanged = new vscode.EventEmitter<Target>();
 
 	private readonly _statusBar = new StatusBar(this);
 
@@ -71,13 +72,17 @@ export class PyMake implements vscode.Disposable {
 		register('build', async () => { await commands.build(this); });
 		register('clean', async () => { await commands.clean(this); });
 		register('run', async () => { await commands.run(this); });
-		register('debug', async () => { console.log('not implemented'); });
+		register('debug', async () => {
+			if (this.activeTarget) {
+				await debuggerModule.debug(this.activeTarget);
+			}
+		});
 		register('setTarget', async () => {
 			let targets = await commands.getTargets(this);
 			let target = await vscode.window.showQuickPick(targets.map(t => t.name));
 			if (target) {
-				this.activeTarget = target;
-				this.activeTargetChanged.fire(target);
+				this.activeTarget = this.targets.filter(t => t.name === target)[0];
+				this.activeTargetChanged.fire(this.activeTarget);
 			}
 		});
 	}

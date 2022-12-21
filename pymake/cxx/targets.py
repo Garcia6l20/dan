@@ -251,12 +251,15 @@ class CXXObjectsTarget(CXXTarget):
 
 class Executable(CXXObjectsTarget, AsyncRunner):
 
-    @asyncio.once_method
-    async def initialize(self):
-        await self.preload()
+    def __init__(self, name: str, sources: set[str] | Callable = set(), *args, **kwargs):
+        super().__init__(name, sources, *args, **kwargs)
 
         self.output = self.build_path / \
             (self.name if os.name != 'nt' else self.name + '.exe')
+
+    @asyncio.once_method
+    async def initialize(self):
+        await self.preload()
         self.load_dependencies(self.dependencies)
         await super().initialize(recursive_once=True)
 

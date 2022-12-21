@@ -68,7 +68,9 @@ export async function configure(ext: PyMake) {
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
     }
-    return channelExec('configure', args, null, true, ext.projectRoot);
+    args.push('--toolchain');
+    args.push(await vscode.window.showQuickPick(['default', ...ext.toolchains]) ?? 'default');
+    return termExec('configure', args, null, true, ext.projectRoot);
 }
 
 function baseArgs(ext: PyMake): string[] {
@@ -77,7 +79,7 @@ function baseArgs(ext: PyMake): string[] {
         args.push('-v');
     }
     if (ext.activeTarget) {
-        args.push(ext.activeTarget);
+        args.push(ext.activeTarget.fullname);
     }
     return args;
 }
