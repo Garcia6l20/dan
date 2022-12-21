@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { channelExec, streamExec } from "./run";
-import { PyMakeExtension } from "../extension";
+import { channelExec, streamExec, termExec } from "./run";
+import { PyMake } from "../extension";
 import { Target } from "./targets";
 
-export async function scanToolchains(ext: PyMakeExtension) {
+export async function scanToolchains(ext: PyMake) {
     let args = [];
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
@@ -38,7 +38,7 @@ export async function getToolchains(): Promise<string[]> {
     }
 }
 
-export async function getTargets(ext: PyMakeExtension): Promise<Target[]> {
+export async function getTargets(ext: PyMake): Promise<Target[]> {
     let targets: Target[] = [];
     let stream = streamExec(['pymake', 'list', '-qt', ext.buildPath]);
     let errors: string[] = [];
@@ -64,7 +64,7 @@ export async function getTargets(ext: PyMakeExtension): Promise<Target[]> {
     }
 }
 
-export async function configure(ext: PyMakeExtension) {
+export async function configure(ext: PyMake) {
     let args = [ext.buildPath];
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
@@ -72,26 +72,25 @@ export async function configure(ext: PyMakeExtension) {
     return channelExec('configure', args, null, true, ext.projectRoot);
 }
 
-export async function build(ext: PyMakeExtension) {
+function baseArgs(ext: PyMake): string[] {
     let args = [ext.buildPath];
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
     }
-    return channelExec('build', args, null, true, ext.projectRoot);
+    if (ext.activeTarget) {
+        args.push(ext.activeTarget)
+    }
+    return args;
 }
 
-export async function clean(ext: PyMakeExtension) {
-    let args = [ext.buildPath];
-    if (ext.getConfig<boolean>('verbose')) {
-        args.push('-v');
-    }
-    return channelExec('clean', args, null, true, ext.projectRoot);
+export async function build(ext: PyMake) {
+    return termExec('build', baseArgs(ext), null, true, ext.projectRoot);
 }
 
-export async function run(ext: PyMakeExtension) {
-    let args = [ext.buildPath];
-    if (ext.getConfig<boolean>('verbose')) {
-        args.push('-v');
-    }
-    return channelExec('run', args, null, true, ext.projectRoot);
+export async function clean(ext: PyMake) {
+    return termExec('clean', baseArgs(ext), null, true, ext.projectRoot);
+}
+
+export async function run(ext: PyMake) {
+    return termExec('run', baseArgs(ext), null, true, ext.projectRoot);
 }

@@ -6,13 +6,15 @@ import { Target } from './pymake/targets';
 import { StatusBar } from './status';
 
 
-export class PyMakeExtension implements vscode.Disposable {
+export class PyMake implements vscode.Disposable {
 	config: vscode.WorkspaceConfiguration;
 	projectRoot: string;
 	toolchains: string[];
 	targets: Target[];
+	activeTarget: string | null = null;
+	activeTargetChanged = new vscode.EventEmitter<string>();
 
-	private readonly _statusBar = new StatusBar();
+	private readonly _statusBar = new StatusBar(this);
 
 	constructor(public readonly extensionContext: vscode.ExtensionContext) {
 		this.config = vscode.workspace.getConfiguration("pymake");
@@ -37,7 +39,7 @@ export class PyMakeExtension implements vscode.Disposable {
 	 * Create the instance
 	 */
 	static async create(context: vscode.ExtensionContext) {
-		gExtension = new PyMakeExtension(context);
+		gExtension = new PyMake(context);
 
 		await gExtension.registerCommands();
 		await gExtension.onLoaded();
@@ -70,6 +72,14 @@ export class PyMakeExtension implements vscode.Disposable {
 		register('clean', async () => { await commands.clean(this); });
 		register('run', async () => { await commands.run(this); });
 		register('debug', async () => { console.log('not implemented'); });
+		register('setTarget', async () => {
+			let targets = await commands.getTargets(this);
+			let target = await vscode.window.showQuickPick(targets.map(t => t.name));
+			if (target) {
+				this.activeTarget = target;
+				this.activeTargetChanged.fire(target);
+			}
+		});
 	}
 
 	async onLoaded() {
@@ -81,12 +91,12 @@ export class PyMakeExtension implements vscode.Disposable {
 };
 
 
-export let gExtension: PyMakeExtension | null = null;
+export let gExtension: PyMake | null = null;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext) {
-	await PyMakeExtension.create(context);
+	await PyMake.create(context);
 }
 
 // This method is called when your extension is deactivated

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { PyMake } from './extension';
 
 // Button class
 abstract class Button {
@@ -43,6 +44,9 @@ abstract class Button {
     }
 
     private _getText(icon: boolean = false): string {
+        if(this._icon) {
+            return this._icon;
+        }
         return this.getTextNormal();
     }
     dispose(): void { this.button.dispose(); }
@@ -64,11 +68,14 @@ abstract class Button {
 
 
 class BuildButton extends Button {
-    constructor(protected readonly priority: number) {
+    constructor(ext : PyMake, protected readonly priority: number) {
         super(priority);
         this.command = 'pymake.build';
         this.text = 'Build';
         this.tooltip = 'Build the selected target(s) in the terminal window';
+        ext.activeTargetChanged.event((target: string) => {
+            this.target = target;
+        });
     }
 
     private _target: string | null = null;
@@ -88,12 +95,15 @@ class BuildButton extends Button {
 
 class LaunchButton extends Button {
     settingsName = 'launch';
-    constructor(protected readonly priority: number) {
+    constructor(ext: PyMake, protected readonly priority: number) {
         super(priority);
         this.command = 'pymake.run';
         this.icon = 'play';
         this.text = 'Run';
         this.tooltip = 'Launch the selected target in the terminal window';
+        ext.activeTargetChanged.event((target: string) => {
+            this.target = target;
+        });
     }
 
     private _target: string | null = null;
@@ -111,13 +121,27 @@ class LaunchButton extends Button {
     }
 }
 
+class SelectTargetButton extends Button {
+    constructor(ext: PyMake, protected readonly priority: number) {
+        super(priority);
+        this.command = 'pymake.setTarget';
+        this.text = 'Select target';
+        this.tooltip = 'Select build/launch/debug target';
+        ext.activeTargetChanged.event((target: string) => {
+            this.text = target;
+            this.update();
+        });
+    }
+}
+
 export class StatusBar implements vscode.Disposable {
 
   private readonly _buttons: Button[];
-  constructor() {
+  constructor(ext: PyMake) {
     this._buttons = [
-        new LaunchButton(0),
-        new BuildButton(1),
+        new SelectTargetButton(ext, 1),
+        new LaunchButton(ext, 0.2),
+        new BuildButton(ext, 0.1),
     ];
     this.update();
   }

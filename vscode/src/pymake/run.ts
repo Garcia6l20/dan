@@ -62,6 +62,7 @@ export function channelExec(command: string,
                     }
                 } else {
                     channel.appendLine(msg.trim());
+                    channel.show();
                 }
             });
             progress.report({ increment: 100 - oldPercentage, message: 'done' });

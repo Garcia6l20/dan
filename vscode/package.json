@@ -44,6 +44,10 @@
       {
         "command": "pymake.debug",
         "title": "PyMake: Debug"
+      },
+      {
+        "command": "pymake.setTarget",
+        "title": "PyMake: Select active target"
       }
     ],
     "configuration": {
@@ -78,6 +82,11 @@
         "command": "pymake.build"
       },
       {
+        "key": "ctrl+f7",
+        "when": "inPyMakeProject",
+        "command": "pymake.clean"
+      },
+      {
         "key": "f5",
         "command": "pymake.debug",
         "when": "!inDebugMode && inPyMakeProject"
@@ -92,6 +101,11 @@
       "touchBar": [
         {
           "command": "pymake.configure",
+          "when": "inPyMakeProject",
+          "group": "PyMake:build"
+        },
+        {
+          "command": "pymake.setTarget",
           "when": "inPyMakeProject",
           "group": "PyMake:build"
         },
