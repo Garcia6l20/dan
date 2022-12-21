@@ -1,3 +1,8 @@
-export class Target {
-    constructor(public readonly name: string, public readonly type: string) {}
+export interface Target {
+    name: string;
+    fullname: string;
+    output: string;
+    buildPath: string;
+    executable: boolean;
+    type: string;
 };

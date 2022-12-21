@@ -7,6 +7,7 @@ import click
 import logging
 import asyncio
 from pymake.core.cache import Cache
+from pymake.cxx.targets import Executable
 
 
 from pymake.make import InstallMode, Make
@@ -128,9 +129,10 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
         files = [(manifest.parent / mf.strip()).resolve()
                  for mf in f.readlines()]
     to_be_removed = '\n'.join([f" - {f}" for f in files])
-    yes = yes or click.confirm(f'Following files will be removed:\n {to_be_removed}\nProceed ?')
+    yes = yes or click.confirm(
+        f'Following files will be removed:\n {to_be_removed}\nProceed ?')
     if yes:
-        def rm_empty(dir : Path):
+        def rm_empty(dir: Path):
             if dir.is_empty:
                 _logger.debug(f'removing empty directory: {dir}')
                 os.rmdir(dir)
@@ -140,26 +142,41 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
             _logger.debug(f'removing: {f}')
             os.remove(f)
             rm_empty(f.parent)
-        
+
         os.remove(manifest)
         rm_empty(manifest.parent)
 
 
 @commands.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
+@click.option('-j', '--json', 'j', is_flag=True, help='Output in json format')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
-def list(all: bool, show_type: bool, **kwargs):
+def list(all: bool, j: bool, show_type: bool, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
     from pymake.core.include import context
-
+    out = []
     targets = context.all_targets if all else context.default_targets
     for target in targets:
-        s = target.fullname
-        if show_type:
-            s = s + ' - ' + type(target).__name__
-        click.echo(s)
+        if j:
+            out.append({
+                'name': target.name,
+                'fullname': target.fullname,
+                'buildPath': str(target.build_path),
+                'output': str(target.output),
+                'executable': isinstance(target, Executable),
+                'type': type(target).__name__
+            })
+        elif show_type:
+            out.append(target.fullname + ' - ' + type(target).__name__)
+        else:
+            out.append(target.fullname)
+    if not j:
+        click.echo('\n'.join(out))
+    else:
+        import json
+        click.echo(json.dumps(out))
 
 
 @commands.command()
@@ -180,6 +197,7 @@ def run(**kwargs):
     make = Make(**kwargs)
     success = asyncio.run(make.run())
     sys.exit(0 if success else 255)
+
 
 @commands.command()
 @common_opts

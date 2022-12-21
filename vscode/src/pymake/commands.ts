@@ -39,18 +39,12 @@ export async function getToolchains(): Promise<string[]> {
 }
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
-    let targets: Target[] = [];
-    let stream = streamExec(['pymake', 'list', '-qt', ext.buildPath]);
+    let stream = streamExec(['pymake', 'list', '-jq', ext.buildPath]);
     let errors: string[] = [];
+    let data = '';
     stream.onLine((line, isError) => {
         if (!isError) {
-            for (let item of splitLines(line)) {
-                item = item.trim();
-                if (item.length) {
-                    let [name, type] = item.split(' - ');
-                    targets.push(new Target(name.trim(), type.trim()));
-                }
-            }
+            data += line;
         } else {
             errors.push(line.trim());
         }
@@ -60,6 +54,11 @@ export async function getTargets(ext: PyMake): Promise<Target[]> {
         await vscode.window.showErrorMessage('PyMake: Failed to get targets', { detail: errors.join('\n') });
         return [];
     } else {
+        let targets : Target[] = [];
+        let rawTargets = JSON.parse(data);
+        for (let t of rawTargets) {
+            targets.push(t as Target);
+        }
         return targets;
     }
 }
@@ -78,7 +77,7 @@ function baseArgs(ext: PyMake): string[] {
         args.push('-v');
     }
     if (ext.activeTarget) {
-        args.push(ext.activeTarget)
+        args.push(ext.activeTarget);
     }
     return args;
 }
