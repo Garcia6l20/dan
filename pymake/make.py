@@ -264,7 +264,7 @@ class Make(Logging):
 
     async def run(self):
         await self.initialize()
-        await asyncio.gather(*[t.execute() for t in self.executable_targets])
+        await asyncio.gather(*[t.execute(pipe=False) for t in self.executable_targets])
 
     async def test(self):
         await self.initialize()
