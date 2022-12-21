@@ -68,6 +68,11 @@
           "default": "python",
           "description": "Specify the python executable to use"
         },
+        "pymake.debuggerPath": {
+          "type": "string",
+          "default": "gdb",
+          "description": "Specify the debugger executable to use"
+        },
         "pymake.verbose": {
           "type": "boolean",
           "default": false,

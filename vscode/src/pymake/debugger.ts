@@ -121,11 +121,23 @@ function createMsvcDebugConfiguration(target: Target): VSCodeDebugConfiguration 
     };
 }
 
-export async function debug(target: Target) {
+export async function debug(debuggerPath: string, target: Target) {
     if (!target.executable) {
         throw Error(`Cannot debug "${target.name}, not an executable"`);
     }
-    let debugConfig = await createGDBDebugConfiguration('gdb', target);
-    await vscode.debug.startDebugging(undefined, debugConfig);
-    return vscode.debug.activeDebugSession;
+    let debugConfig : VSCodeDebugConfiguration | null = null;
+    if (debuggerPath.includes('gdb')) {
+        debugConfig = await createGDBDebugConfiguration(debuggerPath, target);
+    } else if (debuggerPath.includes('llvm')) {
+        debugConfig = await createLLDBDebugConfiguration(debuggerPath, target);
+    } else if (process.platform === 'win32') {
+        // never tested !!!
+        debugConfig = await createMsvcDebugConfiguration(target);
+    }
+    if (debugConfig) {
+        await vscode.debug.startDebugging(undefined, debugConfig);
+        return vscode.debug.activeDebugSession;
+    } else {
+        throw Error(`Cannot resolve debugger configuration for ${debuggerPath}`);
+    }
 }

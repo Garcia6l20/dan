@@ -28,12 +28,12 @@ export class PyMake implements vscode.Disposable {
 		this.targets = [];
 	}
 
-	getConfig<T>(name: string, defaultValue: T|undefined = undefined) : T|undefined {
-		return this.config.get<T>(name) ?? defaultValue;
+	getConfig<T>(name: string) : T|undefined {
+		return this.config.get<T>(name);
 	}
 
 	get buildPath() : string {
-		return this.projectRoot + '/' + this.getConfig<string>('buildFolder', 'build');
+		return this.projectRoot + '/' + this.getConfig<string>('buildFolder') ?? 'build';
 	}
 
 	/**
@@ -74,12 +74,12 @@ export class PyMake implements vscode.Disposable {
 		register('run', async () => { await commands.run(this); });
 		register('debug', async () => {
 			if (this.activeTarget) {
-				await debuggerModule.debug(this.activeTarget);
+				await debuggerModule.debug(this.getConfig<string>('debuggerPath') ?? 'gdb', this.activeTarget);
 			}
 		});
 		register('setTarget', async () => {
-			let targets = await commands.getTargets(this);
-			let target = await vscode.window.showQuickPick(targets.map(t => t.name));
+			this.targets = await commands.getTargets(this);
+			let target = await vscode.window.showQuickPick(this.targets.map(t => t.name));
 			if (target) {
 				this.activeTarget = this.targets.filter(t => t.name === target)[0];
 				this.activeTargetChanged.fire(this.activeTarget);
