@@ -72,12 +72,13 @@ export function channelExec(command: string,
     );
 }
 
-let _terminal : vscode.Terminal;
 function getTerminal(): vscode.Terminal {
-    if (!_terminal) {
-        _terminal = vscode.window.createTerminal("PyMake");
+    let terminal = vscode.window.terminals.find(t => t.name === 'PyMake') ?? null;
+    if (!terminal) {
+        terminal = vscode.window.createTerminal("PyMake");
     }
-    return _terminal;
+    terminal.show();
+    return terminal;
 }
 
 
