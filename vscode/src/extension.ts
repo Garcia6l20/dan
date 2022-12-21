@@ -60,6 +60,19 @@ export class PyMake implements vscode.Disposable {
 	async cleanup() {
 	}
 
+	async promptTarget(executable: boolean = false) {
+		let targets = this.targets = await commands.getTargets(this);
+		if (executable) {
+			targets = targets.filter(t => t.executable === true);
+		}
+		let target = await vscode.window.showQuickPick(targets.map(t => t.name));
+		if (target) {
+			this.activeTarget = targets.filter(t => t.name === target)[0];
+			this.activeTargetChanged.fire(this.activeTarget);
+		}
+		return this.activeTarget;
+	}
+
 	async registerCommands() {
 		const register = (id: string, callback: (...args: any[]) => any, thisArg?: any) => {
 			this.extensionContext.subscriptions.push(
@@ -67,24 +80,28 @@ export class PyMake implements vscode.Disposable {
 			);
 		};
 
-		register('scanToolchains', async () => { await commands.scanToolchains(this); });
-		register('configure', async () => { await commands.configure(this); });
-		register('build', async () => { await commands.build(this); });
-		register('clean', async () => { await commands.clean(this); });
-		register('run', async () => { await commands.run(this); });
+		register('scanToolchains', async () => commands.scanToolchains(this));
+		register('configure', async () => commands.configure(this));
+		register('build', async () => commands.build(this));
+		register('clean', async () => commands.clean(this));
+		register('run', async () => {
+			if (!this.activeTarget || !this.activeTarget.executable) {
+				await this.promptTarget(true);
+			}
+			if (this.activeTarget && this.activeTarget.executable) {
+				await commands.run(this);
+			}
+		});
 		register('debug', async () => {
-			if (this.activeTarget) {
+			if (!this.activeTarget || !this.activeTarget.executable) {
+				await this.promptTarget(true);
+			}
+			if (this.activeTarget && this.activeTarget.executable) {
+				await commands.build(this);
 				await debuggerModule.debug(this.getConfig<string>('debuggerPath') ?? 'gdb', this.activeTarget);
 			}
 		});
-		register('setTarget', async () => {
-			this.targets = await commands.getTargets(this);
-			let target = await vscode.window.showQuickPick(this.targets.map(t => t.name));
-			if (target) {
-				this.activeTarget = this.targets.filter(t => t.name === target)[0];
-				this.activeTargetChanged.fire(this.activeTarget);
-			}
-		});
+		register('setTarget', async () => this.promptTarget());
 	}
 
 	async onLoaded() {
