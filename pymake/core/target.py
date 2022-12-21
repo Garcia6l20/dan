@@ -8,7 +8,7 @@ import inspect
 from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
 from pymake.core.errors import InvalidConfiguration
-from pymake.core.settings import InstallMode, InstallSettings
+from pymake.core.settings import InstallMode, InstallSettings, safe_load
 from pymake.core.version import Version
 from pymake.logging import Logging
 
@@ -74,24 +74,7 @@ class Option:
 
     @value.setter
     def value(self, value):
-        if self.__value_type and not isinstance(value, self.__value_type):
-            err = f'option {self.fullname} is of type {self.__value_type}'
-            if type(value) == str:
-                if isinstance(self.__value, Enum):
-                    names = [n.lower()
-                             for n in self.__value_type._member_names_]
-                    value = value.lower()
-                    if value in names:
-                        value = self.__value_type(names.index(value))
-                    else:
-                        err = f'option {self.fullname} should be one of {names}'
-                else:
-                    import json
-                    value = json.loads(value)
-                if not isinstance(value, self.__value_type):
-                    raise RuntimeError(err)
-            else:
-                raise RuntimeError(err)
+        value = safe_load(self.fullname, value, self.__value_type)
         if self.__value != value:
             self.__value = value
             setattr(self.__cache, self.fullname, value)

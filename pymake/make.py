@@ -7,9 +7,9 @@ import sys
 import tqdm
 
 from pymake.core.cache import Cache
-from pymake.core.include import MakeFile, include_makefile
+from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
-from pymake.core.settings import InstallMode, InstallSettings, Settings
+from pymake.core.settings import InstallMode, Settings, safe_load
 from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
@@ -83,18 +83,17 @@ class Make(Logging):
         assert (self.source_path !=
                 self.build_path), f'in-source build are not allowed'
 
-    def configure(self, toolchain, build_type):
+    def configure(self, toolchain):
         self.config.source_path = str(self.source_path)
         self.config.build_path = str(self.build_path)
         self.config.toolchain = toolchain
-        self.config.build_type = build_type
 
     @asyncio.once_method
     async def initialize(self):
         assert self.source_path and self.config_path.exists(), 'configure first'
 
         toolchain = self.config.toolchain
-        build_type = self.config.build_type
+        build_type = self.settings.build_type
         init_toolchains(toolchain)
 
         self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
@@ -102,7 +101,7 @@ class Make(Logging):
 
         from pymake.core.include import context
         from pymake.cxx import target_toolchain
-        target_toolchain.set_mode(build_type)
+        target_toolchain.build_type = build_type
         if self.for_install:
             library_dest = Path(self.settings.install.destination) / \
                 self.settings.install.libraries_prefix
@@ -155,6 +154,7 @@ class Make(Logging):
                 setting = getattr(setting, part)
             if not hasattr(setting, parts[-1]):
                 raise RuntimeError(f'no such setting: {name}')
+            value = safe_load(name, value, type(getattr(setting, parts[-1])))
             setattr(setting, parts[-1], value)
 
     @staticmethod

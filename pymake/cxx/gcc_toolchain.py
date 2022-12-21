@@ -1,5 +1,6 @@
 import asyncio
 from functools import cached_property
+from pymake.core.settings import BuildType
 from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner, unique
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
@@ -47,14 +48,16 @@ class GCCToolchain(Toolchain):
     def set_rpath(self, rpath : str):
         self.rpath = rpath
 
-    def set_mode(self, mode: str):
-        if mode == 'debug':
+    @Toolchain.build_type.setter
+    def build_type(self, mode: BuildType):
+        self._build_type = mode
+        if mode == BuildType.debug:
             self.default_cflags.extend(('-g', ))
-        elif mode == 'release':
+        elif mode == BuildType.release:
             self.default_cflags.extend(('-O3', '-DNDEBUG'))
-        elif mode == 'release-min-size':
+        elif mode == BuildType.release_min_size:
             self.default_cflags.extend(('-Os', '-DNDEBUG'))
-        elif mode == 'release-debug-infos':
+        elif mode == BuildType.release_debug_infos:
             self.default_cflags.extend(('-O2', '-g', '-DNDEBUG'))
         else:
             raise InvalidConfiguration(f'unknown build mode: {mode}')

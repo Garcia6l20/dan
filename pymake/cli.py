@@ -7,6 +7,7 @@ import click
 import logging
 import asyncio
 from pymake.core.cache import Cache
+from pymake.core.settings import Settings
 from pymake.cxx.targets import Executable
 
 
@@ -46,7 +47,7 @@ def commands():
 
 def available_toolchains():
     from pymake.cxx.detect import get_toolchains
-    return [name for name in get_toolchains()['toolchains'].keys()]
+    return ['default', *[name for name in get_toolchains()['toolchains'].keys()]]
 
 
 _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
@@ -57,15 +58,11 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
               help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
               type=_toolchain_choice)
-@click.option('--build-type', '-b', help='Build type to use',
-              type=click.Choice(['debug', 'release', 'release-min-size',
-                                'release-debug-infos'], case_sensitive=False),
-              default='release')
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True)
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True)
 @click.argument('BUILD_PATH', type=click.Path(resolve_path=True, path_type=Path))
 @click.argument('SOURCE_PATH', type=click.Path(exists=True, resolve_path=True, path_type=Path), default=Path.cwd())
-def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
+def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     config = Cache(build_path / Make._config_name)
     config.source_path = config.source_path if hasattr(
@@ -75,7 +72,7 @@ def configure(verbose: bool, toolchain: str, build_type: str, settings: tuple[st
     _logger.info(f'build path: {config.build_path}')
     config.toolchain = toolchain or config.get(
         'toolchain') or click.prompt('Toolchain', type=_toolchain_choice)
-    config.build_type = build_type or config.build_type
+    config.settings = Settings()
     asyncio.run(config.save())
 
     if len(settings) or len(options):

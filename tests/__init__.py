@@ -121,13 +121,11 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
             await aiofiles.rmtree(self.build_path)
 
     async def configure(self,
-                        toolchain=None,
-                        build_type='release') -> Make:
+                        toolchain=None) -> Make:
         await self.clean()
         config = Cache(self.build_path / Make._config_name)
         config.source_path = str(self.source_path)
         config.build_path = str(self.build_path)
         config.toolchain = toolchain or get_default_toolchain()
-        config.build_type = build_type
         await config.save()
         del config

@@ -5,8 +5,15 @@ from pymake.core.pathlib import Path
 
 
 class InstallMode(Enum):
-    user = 0,
+    user = 0
     dev = 1
+
+
+class BuildType(Enum):
+    debug = 0
+    release = 1
+    release_min_size = 2
+    release_debug_infos = 2
 
 
 class InstallSettings(SubCache):
@@ -38,4 +45,26 @@ class InstallSettings(SubCache):
 class Settings(SubCache):
 
     def __init__(self):
+        self.build_type = BuildType.debug
         self.install = InstallSettings()
+
+def safe_load(name : str, value,  t:type):
+    if t is not None and not isinstance(value, t):
+        err = f'value {name} should be of type {t}'
+        if type(value) == str:
+            if issubclass(t, Enum):
+                names = [n.lower()
+                            for n in t._member_names_]
+                value = value.lower()
+                if value in names:
+                    value = t(names.index(value))
+                else:
+                    err = f'option {name} should be one of {names}'
+            else:
+                import json
+                value = json.loads(value)
+            if not isinstance(value, t):
+                raise RuntimeError(err)
+        else:
+            raise RuntimeError(err)
+    return value

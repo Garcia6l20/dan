@@ -2,6 +2,7 @@ import asyncio
 from pymake.core.pathlib import Path
 
 import aiofiles
+from pymake.core.settings import BuildType
 
 from pymake.core.target import FileDependency
 import json
@@ -66,6 +67,11 @@ class Toolchain(AsyncRunner, Logging):
         self.cpp_std = 17
         self.env = None
         self.rpath = None
+        self._build_type = BuildType.debug
+
+    @property
+    def build_type(self):
+        return self._build_type
     
     @property
     def compile_commands(self):
