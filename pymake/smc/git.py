@@ -22,11 +22,12 @@ class GitSources(Target, Logging, AsyncRunner):
             if not self.git_dir.exists():
                 await self.run(f'git clone {self.url} {self.output}', pipe=False)
 
+        self.sha1 = (await self.run(f'git rev-parse {self.refspec}', cwd=self.output))[0].strip()
+        current_sha1 = (await self.run(f'git rev-parse HEAD', cwd=self.output))[0].strip()
+        if self.sha1 != current_sha1:
+            await self.run(f'git checkout {self.sha1}', pipe=False, cwd=self.output)
+
         return await super().initialize(recursive_once=True)
 
     async def __call__(self):
-        with chdir(self.output):
-            self.sha1 = (await self.run(f'git rev-parse {self.refspec}'))[0].strip()
-            current_sha1 = (await self.run(f'git rev-parse HEAD'))[0].strip()
-            if self.sha1 != current_sha1:
-                await self.run(f'git checkout {self.sha1}', pipe=False)
+        return

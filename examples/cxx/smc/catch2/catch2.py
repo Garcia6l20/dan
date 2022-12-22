@@ -5,7 +5,7 @@ from pymake.cxx import Library, target_toolchain
 from pymake.smc import GitSources
 from pymake.cmake import ConfigureFile
 
-version = '2.13.10'
+version = '3.2.1'
 description = 'A modern, C++-native, test framework for unit-tests, TDD and BDD'
 
 git = GitSources(
