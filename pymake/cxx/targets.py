@@ -1,5 +1,6 @@
 from collections.abc import Iterable
 from enum import Enum
+from functools import cached_property
 import os
 import re
 from pymake.core.pathlib import Path
@@ -182,7 +183,7 @@ class CXXTarget(Target):
             tmp.extend(dep.libs)
         return unique(tmp)
 
-    @property
+    @cached_property
     def cxx_flags(self):
         flags = self.includes.public
         flags.extend(self.compile_options.public)
@@ -191,7 +192,7 @@ class CXXTarget(Target):
             flags.extend(dep.cxx_flags)
         return unique(flags)
 
-    @property
+    @cached_property
     def private_cxx_flags(self):
         flags = self.includes.private
         flags.extend(self.cxx_flags)

@@ -28,17 +28,19 @@ class Data:
             lines = [l for l in [l.strip().removesuffix('\n')
                                  for l in await f.readlines()] if len(l)]
             for line in lines:
+                pos = line.find(':')
+                if pos > 0:
+                    k = line[:pos].strip().lower()
+                    v = line[pos+1:].strip()
+                    self._items[k] = v
+                    continue
+
                 pos = line.find('=')
                 if pos > 0:
                     k = line[:pos].strip()
                     v = line[pos+1:].strip()
                     self._items[k] = v
-                else:
-                    pos = line.find(':')
-                    if pos > 0:
-                        k = line[:pos].strip().lower()
-                        v = line[pos+1:].strip()
-                        self._items[k] = v
+                    continue
 
     def get(self, name: str, default=None):
         if not name in self._items:
