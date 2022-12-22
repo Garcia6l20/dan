@@ -8,6 +8,7 @@ from pymake.core.cache import Cache
 
 from pymake.core.target import Options, Target
 from pymake.core.test import Test, AsyncExecutable
+from pymake.pkgconfig.package import Package
 
 
 class TargetNotFound(RuntimeError):
@@ -30,6 +31,13 @@ def requires(*names) -> list[Target]:
             if t.name == name:
                 found = t
                 break
+        
+        if not found:
+            for t in Package.all.values():
+                if t.name == name:
+                    found = t
+                    break
+
         if not found:
             # look for recipe
             path = context.current.source_path / f'{name}.py'

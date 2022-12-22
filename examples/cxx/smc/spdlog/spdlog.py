@@ -24,10 +24,12 @@ spdlog = Library('spdlog',
                      spdlog_src / 'spdlog.cpp',
                  ],
                  includes=[spdlog_inc],
-                 compile_definitions=['SPDLOG_COMPILED_LIB'],
+                 compile_definitions=['SPDLOG_COMPILED_LIB', 'SPDLOG_FMT_EXTERNAL'],
                  preload_dependencies=[gitspdlog],
                  dependencies=requires('fmt'),
                  all=False)
+
+spdlog.header_match = r'^(?:(?!bundled).)*\.(h.?)$'
 
 if os.name == 'posix':
     spdlog.link_libraries.add('pthread', public=True)

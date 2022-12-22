@@ -33,7 +33,6 @@ class LocalPackage(pkgconfig.Package):
 
     @asyncio.once_method
     async def install(self, settings: InstallSettings, mode: InstallMode):
-        self.library_type = LibraryType.INTERFACE
         return await super().install(settings, mode, recursive_once=True)
 
     @property

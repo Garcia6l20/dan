@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from enum import Enum
 import os
+import re
 from pymake.core.pathlib import Path
 from typing import Callable
 from pymake.core import aiofiles, cache
@@ -173,8 +174,7 @@ class CXXTarget(Target):
 
     @property
     def libs(self) -> list[str]:
-        tmp = self.toolchain.make_link_options(
-            {lib.output for lib in self.library_dependencies if lib.output and not lib.interface})
+        tmp = list()
         tmp.extend(self.link_libraries.public)
         # TODO move create private_libs()
         tmp.extend(self.link_libraries.private)
@@ -312,6 +312,7 @@ class Library(CXXObjectsTarget):
     def __init__(self, *args, library_type: LibraryType = LibraryType.AUTO, **kwargs):
         super().__init__(*args, **kwargs)
         self.library_type = library_type
+        self.header_match = r'.+'
 
     @property
     def static(self) -> bool:
@@ -324,6 +325,13 @@ class Library(CXXObjectsTarget):
     @property
     def interface(self) -> bool:
         return self.library_type == LibraryType.INTERFACE
+    
+    @property
+    def libs(self) -> list[str]:
+        tmp = super().libs
+        if not self.interface:
+            tmp.extend(self.toolchain.make_link_options([self.output]))
+        return tmp
 
     @property
     def ext(self):
@@ -436,13 +444,15 @@ class Library(CXXObjectsTarget):
             for dependency in self.library_dependencies:
                 tasks.append(dependency.install(settings, mode))
 
+            header_expr = re.compile(self.header_match)
             includes_dest = settings.includes_destination
             for public_include_dir in self.includes.public_raw:
                 headers = public_include_dir.rglob('*.h*')
                 for header in headers:
-                    dest = includes_dest / \
-                        header.relative_to(public_include_dir)
-                    tasks.append(do_install(header, dest))
+                    if header_expr.match(str(header)):
+                        dest = includes_dest / \
+                            header.relative_to(public_include_dir)
+                        tasks.append(do_install(header, dest))
         return await asyncio.gather(*tasks)
 
 

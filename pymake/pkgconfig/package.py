@@ -1,12 +1,13 @@
+from copy import deepcopy
 import jinja2
 from pymake.core import aiofiles, asyncio
 from pymake.core.pathlib import Path
 import re
 
 from pymake.core.find import find_file, library_paths_lookup
-from pymake.core.settings import InstallSettings
+from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.utils import unique
-from pymake.cxx.targets import Library
+from pymake.cxx.targets import CXXTarget, Library, LibraryType
 
 
 class MissingPackage(RuntimeError):
@@ -55,8 +56,8 @@ class Data:
         return value
 
 
-class Package(Library):
-    __all: dict[str, 'Package'] = dict()
+class Package(CXXTarget):
+    all: dict[str, 'Package'] = dict()
 
     def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None) -> None:
         self.output = None
@@ -67,7 +68,7 @@ class Package(Library):
             raise MissingPackage(name)
         self.search_paths.insert(0, self.config_path.parent)
         super().__init__(name, all=False)
-        self.__all[name] = self
+        self.all[name] = self
 
     @asyncio.once_method
     async def preload(self):
@@ -76,12 +77,15 @@ class Package(Library):
         requires = self.data.get('requires')
         if requires:
             for req in requires.split():
-                if req in self.__all:
-                    deps.add(self.__all[req])
+                if req in self.all:
+                    deps.add(self.all[req])
                 else:
                     deps.add(Package(req, self.search_paths))
         self.includes.public.append(self.data.get('includedir'))
         self.dependencies.update(deps)
+        libs : str = self.data.get('libs')
+        if libs.find(f'-l{self.name}') < 0:
+            self.library_type = LibraryType.INTERFACE
         
         await super().preload(recursive_once=True)
 
@@ -98,11 +102,22 @@ class Package(Library):
         return unique(tmp)
 
     @property
+    def package_dependencies(self):
+        return [pkg for pkg in self.dependencies if isinstance(pkg, Package)]
+
+    @property
     def libs(self):
-        tmp = list(self.data.get('libs').split())
-        for dep in self.cxx_dependencies:
-            tmp.extend(dep.libs)
+        tmp = list()
+        for pkg in self.package_dependencies:
+            tmp.extend(pkg.libs)
+        tmp.extend(self.data.get('libs').split())
         return unique(tmp)
+
+    @asyncio.once_method
+    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
+        settings = deepcopy(settings)
+        settings.create_pkg_config = False
+        return await super().install(settings, mode, recursive_once=True)
 
     @property
     def up_to_date(self):
