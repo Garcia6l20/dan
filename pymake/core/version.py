@@ -29,6 +29,12 @@ class Version:
             or self.minor >= other.minor \
             or self.patch >= other.patch \
             or self.build >= other.build
+    
+    def __lt__(self, other: 'Version'):
+        return self.major < other.major \
+            or self.minor < other.minor \
+            or self.patch < other.patch \
+            or self.build < other.build
 
     def __str__(self) -> str:
         res = str(self.major)

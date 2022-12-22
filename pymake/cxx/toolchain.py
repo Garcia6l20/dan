@@ -1,14 +1,12 @@
-import asyncio
 from pymake.core.pathlib import Path
-
-import aiofiles
 from pymake.core.settings import BuildType
-
 from pymake.core.target import FileDependency
+from pymake.core.utils import AsyncRunner
+from pymake.core.version import Version
+from pymake.logging import Logging
+
 import json
 
-from pymake.core.utils import AsyncRunner
-from pymake.logging import Logging
 
 scan = True
 
@@ -61,10 +59,13 @@ class CompileCommands:
 
 
 class Toolchain(AsyncRunner, Logging):
-    def __init__(self) -> None:
+    def __init__(self, data) -> None:
         self._compile_commands: CompileCommands = None
         self.cxx_flags = set()
         self.cpp_std = 17
+        self.type = data['type']
+        self.version = Version(data['version'])
+        Logging.__init__(self, f'{self.type}-{self.version}')
         self.env = None
         self.rpath = None
         self._build_type = BuildType.debug

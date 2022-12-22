@@ -4,15 +4,13 @@ import json
 import aiofiles
 from pymake.core.settings import BuildType
 from pymake.core.utils import unique
-from pymake.logging import Logging
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
 
 
 class MSVCToolchain(Toolchain):
     def __init__(self, data, tools):
-        Toolchain.__init__(self)
-        Logging.__init__(self, 'msvc-toolchain')
+        Toolchain.__init__(self, data)
         self.cc = Path(data['cc'])
         self.lnk = Path(data['link'])
         self.lib = Path(data['lib'])

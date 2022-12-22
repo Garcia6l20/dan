@@ -96,7 +96,7 @@ class Make(Logging):
         build_type = self.settings.build_type
         init_toolchains(toolchain)
 
-        self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
+        self.info(f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
         include_makefile(self.source_path, self.build_path)
 
         from pymake.core.include import context

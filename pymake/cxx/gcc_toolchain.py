@@ -1,7 +1,6 @@
 import asyncio
 from functools import cached_property
 from pymake.core.settings import BuildType
-from pymake.logging import Logging
 from pymake.core.utils import AsyncRunner, unique
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
@@ -10,15 +9,16 @@ from pymake.cxx import auto_fpic
 
 class GCCToolchain(Toolchain):
     def __init__(self, data, tools):
-        Toolchain.__init__(self)
-        Logging.__init__(self, 'gcc-toolchain')
+        Toolchain.__init__(self, data)
         self.cc = data['cc']
-        self.cxx = data['cxx']        
+        self.cxx = data['cxx']
         self.ar = data['ar'] if 'ar' in data else tools['ar']
         self.ranlib = data['ranlib'] if 'ranlib' in data else tools['ranlib']
         self.as_ = data['readelf'] if 'readelf' in data else tools['readelf']
         self.env = data['env'] if 'env' in data else None
-    
+        self.debug(f'cc compiler is {self.type} {self.version} ({self.cc})')
+        self.debug(f'cxx compiler is {self.type} {self.version} ({self.cxx})')
+
     @cached_property
     def default_cflags(self):
         flags = list()
@@ -36,7 +36,7 @@ class GCCToolchain(Toolchain):
             if 'CXXFLAGS' in self.env:
                 flags.extend(self.env["CXXFLAGS"].strip().split(' '))
         return unique(flags)
-    
+
     @cached_property
     def default_ldflags(self):
         flags = list()
@@ -45,7 +45,7 @@ class GCCToolchain(Toolchain):
                 flags.extend(self.env["LDFLAGS"].strip().split(' '))
         return unique(flags)
 
-    def set_rpath(self, rpath : str):
+    def set_rpath(self, rpath: str):
         self.rpath = rpath
 
     @Toolchain.build_type.setter
@@ -89,10 +89,11 @@ class GCCToolchain(Toolchain):
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return unique([f'-D{d}' for d in definitions])
 
-    async def scan_dependencies(self, file: Path, options: list[str], build_path:Path) -> set[FileDependency]:
+    async def scan_dependencies(self, file: Path, options: list[str], build_path: Path) -> set[FileDependency]:
         if not scan:
             return set()
-        args = [self.cxx, '-M', file, *unique(self.default_cflags, self.default_cxxflags, options)]
+        args = [self.cxx, '-M', file, *
+                unique(self.default_cflags, self.default_cxxflags, options)]
         if auto_fpic:
             args.insert(2, '-fPIC')
 
@@ -101,7 +102,7 @@ class GCCToolchain(Toolchain):
         out, _, _ = await self.run('scan', output, args, cwd=build_path)
         if out:
             all = ''.join([dep.replace('\\', ' ')
-                        for dep in out.splitlines()]).split()
+                           for dep in out.splitlines()]).split()
             _obj = all.pop(0)
             _src = all.pop(0)
             return all
@@ -127,7 +128,8 @@ class GCCToolchain(Toolchain):
         return args
 
     async def link(self, objects: set[Path], output: Path, options: list[str], dry_run=False):
-        args = [self.cxx, *objects, '-o', str(output), *unique(self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
+        args = [self.cxx, *objects, '-o', str(output), *unique(
+            self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
         if not dry_run:
             await self.run('link', output, args)
         return args
@@ -140,7 +142,8 @@ class GCCToolchain(Toolchain):
         return args
 
     async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
-        args = [self.cxx, '-shared', *unique(self.default_ldflags, options), *objects, '-o', output]
+        args = [self.cxx, '-shared', *
+                unique(self.default_ldflags, options), *objects, '-o', output]
         if not dry_run:
             await self.run('shared_lib', output, args)
         return args
