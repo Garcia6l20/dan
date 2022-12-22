@@ -32,6 +32,11 @@ class AsyncRunner:
             command = ' '.join([f'"{arg}"' if isinstance(
                 arg, Path) else arg for arg in command])
         self.debug(f'executing: {command}')
+        if env:
+            e = dict(os.environ)
+            for k, v in env.items():
+                e[k] = v
+            env = e
         proc = await asyncio.subprocess.create_subprocess_shell(command,
                                                                 stdout=asyncio.subprocess.PIPE,
                                                                 stderr=asyncio.subprocess.PIPE,
