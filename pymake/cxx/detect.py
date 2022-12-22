@@ -342,8 +342,8 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         'cc': str(compiler.path),
     }
     pos = compiler.path.stem.rfind(compiler.name)
-    if pos > 0:
-        prefix = compiler.path.stem[:pos]
+    if pos >= 0:
+        prefix = None if pos == 0 else compiler.path.stem[:pos]
         base_name = compiler.name
         suffix = compiler.path.stem[pos + len(compiler.name):]
     else:
