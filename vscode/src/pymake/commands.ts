@@ -40,18 +40,13 @@ export async function getToolchains(): Promise<string[]> {
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
     let stream = streamExec(['pymake', 'list', '-jq', ext.buildPath]);
-    let errors: string[] = [];
     let data = '';
     stream.onLine((line, isError) => {
-        if (!isError) {
-            data += line;
-        } else {
-            errors.push(line.trim());
-        }
+        data += line;
     });
-    await stream.finishP();
-    if (errors.length) {
-        await vscode.window.showErrorMessage('PyMake: Failed to get targets', { detail: errors.join('\n') });
+    let rc = await stream.finishP();
+    if (rc !== 0) {
+        await vscode.window.showErrorMessage('PyMake: Failed to get targets', { modal: true, detail: data });
         return [];
     } else {
         let targets : Target[] = [];

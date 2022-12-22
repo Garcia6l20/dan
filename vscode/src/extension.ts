@@ -65,9 +65,10 @@ export class PyMake implements vscode.Disposable {
 		if (executable) {
 			targets = targets.filter(t => t.executable === true);
 		}
-		let target = await vscode.window.showQuickPick(targets.map(t => t.name));
+		targets.sort((l, r) => l.fullname < r.fullname ? -1 : 1);
+		let target = await vscode.window.showQuickPick(targets.map(t => t.fullname));
 		if (target) {
-			this.activeTarget = targets.filter(t => t.name === target)[0];
+			this.activeTarget = targets.filter(t => t.fullname === target)[0];
 			this.activeTargetChanged.fire(this.activeTarget);
 		}
 		return this.activeTarget;
