@@ -12,11 +12,11 @@ class Version:
         it = iter(args)
         self.major = int(next(it))
         tmp = next(it, None)
-        self.minor = int(tmp) if tmp is not None else None
+        self.minor = int(tmp) if tmp is not None else 0
         tmp = next(it, None)
-        self.patch = int(tmp) if tmp is not None else None
+        self.patch = int(tmp) if tmp is not None else 0
         tmp = next(it, None)
-        self.build = int(tmp) if tmp is not None else None
+        self.build = int(tmp) if tmp is not None else 0
 
     def __eq__(self, other: 'Version'):
         return self.major == other.major \
