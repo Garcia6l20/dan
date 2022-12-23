@@ -73,6 +73,7 @@ class BuildButton extends Button {
         super(priority);
         this.command = 'pymake.build';
         this.text = 'Build';
+        this.icon = 'gear';
         this.tooltip = 'Build the selected target(s) in the terminal window';
         ext.activeTargetChanged.event((target: Target) => {
             this.target = target;
@@ -127,8 +128,8 @@ class DebugButton extends Button {
     constructor(ext: PyMake, protected readonly priority: number) {
         super(priority);
         this.command = 'pymake.debug';
-        this.icon = 'debug';
-        this.text = 'Run';
+        this.icon = 'bug';
+        this.text = 'Debug';
         this.tooltip = 'Debug the selected target in the terminal window';
         ext.activeTargetChanged.event((target: Target) => {
             this.target = target;
