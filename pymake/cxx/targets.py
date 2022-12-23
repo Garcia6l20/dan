@@ -298,7 +298,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
 
     async def execute(self, *args, **kwargs):
         await self.build()
-        return await self.run(f'{self.output} {" ".join(args)}', **kwargs)
+        return await self.run(f'{self.output} {" ".join(args)}', **kwargs, env=self.toolchain.env)
 
 
 class LibraryType(Enum):
