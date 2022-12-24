@@ -75,7 +75,7 @@ class BuildButton extends Button {
         this.text = 'Build';
         this.icon = 'gear';
         this.tooltip = 'Build the selected target(s) in the terminal window';
-        ext.activeTargetChanged.event((target: Target) => {
+        ext.launchTargetChanged.event((target: Target) => {
             this.target = target;
         });
     }
@@ -103,7 +103,7 @@ class LaunchButton extends Button {
         this.icon = 'play';
         this.text = 'Run';
         this.tooltip = 'Launch the selected target in the terminal window';
-        ext.activeTargetChanged.event((target: Target) => {
+        ext.launchTargetChanged.event((target: Target) => {
             this.target = target;
         });
     }
@@ -131,7 +131,7 @@ class DebugButton extends Button {
         this.icon = 'bug';
         this.text = 'Debug';
         this.tooltip = 'Debug the selected target in the terminal window';
-        ext.activeTargetChanged.event((target: Target) => {
+        ext.launchTargetChanged.event((target: Target) => {
             this.target = target;
         });
     }
@@ -151,14 +151,33 @@ class DebugButton extends Button {
     }
 }
 
-class SelectTargetButton extends Button {
+class SelectLaunchTargetButton extends Button {
     constructor(ext: PyMake, protected readonly priority: number) {
         super(priority);
-        this.command = 'pymake.setTarget';
+        this.command = 'pymake.selectLaunchTarget';
         this.text = 'Select target';
-        this.tooltip = 'Select build/launch/debug target';
-        ext.activeTargetChanged.event((target: Target) => {
+        this.tooltip = 'Select run/debug target';
+        ext.launchTargetChanged.event((target: Target) => {
             this.text = target.name;
+            this.update();
+        });
+    }
+}
+
+class SelectBuildTargetsButton extends Button {
+    constructor(ext: PyMake, protected readonly priority: number) {
+        super(priority);
+        this.command = 'pymake.selectBuildTargets';
+        this.text = 'all';
+        this.tooltip = 'Select run/debug target';
+        ext.buildTargetsChanged.event((targets: Target[]) => {
+            if (targets.length === 0) {
+                this.text = 'all';
+            } else if(targets.length === 1) {
+                this.text = targets[0].name;
+            } else {
+                this.text = 'multiple';
+            }
             this.update();
         });
     }
@@ -169,9 +188,10 @@ export class StatusBar implements vscode.Disposable {
   private readonly _buttons: Button[];
   constructor(ext: PyMake) {
     this._buttons = [
-        new SelectTargetButton(ext, 1),
-        new DebugButton(ext, 0.3),
-        new LaunchButton(ext, 0.2),
+        new SelectLaunchTargetButton(ext, 1),
+        new DebugButton(ext, 0.9),
+        new LaunchButton(ext, 0.8),
+        new SelectBuildTargetsButton(ext, 0.2),
         new BuildButton(ext, 0.1),
     ];
     this.update();

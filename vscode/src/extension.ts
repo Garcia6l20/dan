@@ -7,13 +7,22 @@ import { Target } from './pymake/targets';
 import { StatusBar } from './status';
 
 
+class TargetPickItem {
+	label: string;
+	constructor(public readonly target: Target) {
+		this.label = target.fullname;
+	}
+};
+
 export class PyMake implements vscode.Disposable {
 	config: vscode.WorkspaceConfiguration;
 	projectRoot: string;
 	toolchains: string[];
 	targets: Target[];
-	activeTarget: Target | null = null;
-	activeTargetChanged = new vscode.EventEmitter<Target>();
+	launchTarget: Target | null = null;
+	launchTargetChanged = new vscode.EventEmitter<Target>();
+	buildTargets: Target[] = [];
+	buildTargetsChanged = new vscode.EventEmitter<Target[]>();
 
 	private readonly _statusBar = new StatusBar(this);
 
@@ -28,11 +37,11 @@ export class PyMake implements vscode.Disposable {
 		this.targets = [];
 	}
 
-	getConfig<T>(name: string) : T|undefined {
+	getConfig<T>(name: string): T | undefined {
 		return this.config.get<T>(name);
 	}
 
-	get buildPath() : string {
+	get buildPath(): string {
 		return this.projectRoot + '/' + this.getConfig<string>('buildFolder') ?? 'build';
 	}
 
@@ -60,18 +69,38 @@ export class PyMake implements vscode.Disposable {
 	async cleanup() {
 	}
 
-	async promptTarget(executable: boolean = false) {
+	async promptLaunchTarget() {
 		let targets = this.targets = await commands.getTargets(this);
-		if (executable) {
-			targets = targets.filter(t => t.executable === true);
-		}
+		targets = targets.filter(t => t.executable === true);
 		targets.sort((l, r) => l.fullname < r.fullname ? -1 : 1);
 		let target = await vscode.window.showQuickPick(targets.map(t => t.fullname));
 		if (target) {
-			this.activeTarget = targets.filter(t => t.fullname === target)[0];
-			this.activeTargetChanged.fire(this.activeTarget);
+			this.launchTarget = targets.filter(t => t.fullname === target)[0];
+			this.launchTargetChanged.fire(this.launchTarget);
 		}
-		return this.activeTarget;
+		return this.launchTarget;
+	}
+
+	async promptBuildTargets() {
+		let targets = this.targets = await commands.getTargets(this);
+		targets.sort((l, r) => l.fullname < r.fullname ? -1 : 1);
+		let pick = vscode.window.createQuickPick<TargetPickItem>();
+		pick.canSelectMany = true;
+		pick.items = targets.map(t => new TargetPickItem(t));
+		let promise = new Promise<Target[]>((res, rej) => {
+			pick.show();
+			pick.onDidAccept(() => {
+				pick.hide();
+			});
+			pick.onDidHide(() => {
+				res(pick.selectedItems.map(pt => pt.target));
+			});
+		});
+		targets = await promise;
+		pick.dispose();
+		this.buildTargets = targets;
+		this.buildTargetsChanged.fire(this.buildTargets);
+		return this.buildTargets;
 	}
 
 	async registerCommands() {
@@ -86,23 +115,24 @@ export class PyMake implements vscode.Disposable {
 		register('build', async () => commands.build(this));
 		register('clean', async () => commands.clean(this));
 		register('run', async () => {
-			if (!this.activeTarget || !this.activeTarget.executable) {
-				await this.promptTarget(true);
+			if (!this.launchTarget || !this.launchTarget.executable) {
+				await this.promptLaunchTarget();
 			}
-			if (this.activeTarget && this.activeTarget.executable) {
+			if (this.launchTarget && this.launchTarget.executable) {
 				await commands.run(this);
 			}
 		});
 		register('debug', async () => {
-			if (!this.activeTarget || !this.activeTarget.executable) {
-				await this.promptTarget(true);
+			if (!this.launchTarget || !this.launchTarget.executable) {
+				await this.promptLaunchTarget();
 			}
-			if (this.activeTarget && this.activeTarget.executable) {
+			if (this.launchTarget && this.launchTarget.executable) {
 				await commands.build(this);
-				await debuggerModule.debug(this.getConfig<string>('debuggerPath') ?? 'gdb', this.activeTarget);
+				await debuggerModule.debug(this.getConfig<string>('debuggerPath') ?? 'gdb', this.launchTarget);
 			}
 		});
-		register('setTarget', async () => this.promptTarget());
+		register('selectLaunchTarget', async () => this.promptLaunchTarget());
+		register('selectBuildTargets', async () => this.promptBuildTargets());
 	}
 
 	async onLoaded() {

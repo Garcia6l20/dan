@@ -73,20 +73,21 @@ function baseArgs(ext: PyMake): string[] {
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
     }
-    if (ext.activeTarget) {
-        args.push(ext.activeTarget.fullname);
-    }
     return args;
 }
 
 export async function build(ext: PyMake) {
-    return termExec('build', baseArgs(ext), null, true, ext.projectRoot);
+    return termExec('build', [...baseArgs(ext), ...ext.buildTargets.map(t => t.fullname)], null, true, ext.projectRoot);
 }
 
 export async function clean(ext: PyMake) {
-    return termExec('clean', baseArgs(ext), null, true, ext.projectRoot);
+    return termExec('clean', [...baseArgs(ext), ...ext.buildTargets.map(t => t.fullname)], null, true, ext.projectRoot);
 }
 
 export async function run(ext: PyMake) {
-    return termExec('run', baseArgs(ext), null, true, ext.projectRoot);
+    let args = baseArgs(ext);
+    if (ext.launchTarget) {
+        args.push(ext.launchTarget.fullname);
+    }
+    return termExec('run', args, null, true, ext.projectRoot);
 }
