@@ -97,7 +97,7 @@ class MakeFile(sys.__class__):
         return self.__installs
 
     def add_test(self, executable: AsyncExecutable, *args):
-        self.__tests.append(Test(executable, *args))
+        self.__tests.append(Test(self, executable, *args))
 
     @property
     def tests(self):
@@ -193,7 +193,6 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
     if not build_path:
         assert context.current
         build_path = build_path or context.current.build_path / name
-        name = f'{context.current.name}.{name}'
     build_path.mkdir(parents=True, exist_ok=True)
 
     module.__class__ = MakeFile

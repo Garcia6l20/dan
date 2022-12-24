@@ -6,8 +6,9 @@ class AsyncExecutable(Logging):
 
 
 class Test:
-    def __init__(self, executable: AsyncExecutable, name: str = None, *args) -> None:
+    def __init__(self, makefile, executable: AsyncExecutable, name: str = None, *args) -> None:
         self.name = name or executable.name
+        self.fullname = f'{makefile.fullname}.{self.name}'
         self.executable = executable
         self.args = list(args)
 

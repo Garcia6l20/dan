@@ -164,7 +164,7 @@ class Target(Logging):
 
     @cached_property
     def fullname(self) -> str:
-        return f'{self.makefile.name}.{self._name}'
+        return f'{self.makefile.fullname}.{self._name}'
 
     @property
     def cache(self) -> SubCache:
