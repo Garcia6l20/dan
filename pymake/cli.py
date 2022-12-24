@@ -177,6 +177,16 @@ def list(all: bool, j: bool, show_type: bool, **kwargs):
 
 
 @commands.command()
+@common_opts
+def list_tests(**kwargs):
+    make = Make(**kwargs)
+    asyncio.run(make.initialize())
+    from pymake.core.include import context
+    for mf in context.all_makefiles:
+        for test in mf.tests:
+            click.echo(test.fullname)
+
+@commands.command()
 def list_toolchains(**kwargs):
     for name, _ in Make.toolchains()['toolchains'].items():
         click.echo(name)
