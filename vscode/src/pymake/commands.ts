@@ -49,12 +49,34 @@ export async function getTargets(ext: PyMake): Promise<Target[]> {
         await vscode.window.showErrorMessage('PyMake: Failed to get targets', { modal: true, detail: data });
         return [];
     } else {
-        let targets : Target[] = [];
+        let targets: Target[] = [];
         let rawTargets = JSON.parse(data);
         for (let t of rawTargets) {
             targets.push(t as Target);
         }
         return targets;
+    }
+}
+
+
+export async function getTests(ext: PyMake): Promise<string[]> {
+    let stream = streamExec(['pymake', 'list-tests', '-q', ext.buildPath]);
+    let data = '';
+    stream.onLine((line, isError) => {
+        data += line;
+    });
+    let rc = await stream.finishP();
+    if (rc !== 0) {
+        await vscode.window.showErrorMessage('PyMake: Failed to get tests', { modal: true, detail: data });
+        return [];
+    } else {
+        let tests: string[] = [];
+        for (let t of splitLines(data)) {
+            if (t.length > 0) {
+                tests.push(t);
+            }
+        }
+        return tests;
     }
 }
 
@@ -90,4 +112,10 @@ export async function run(ext: PyMake) {
         args.push(ext.launchTarget.fullname);
     }
     return termExec('run', args, null, true, ext.projectRoot);
+}
+
+export async function test(ext: PyMake) {
+    let args = baseArgs(ext);
+    args.push(...ext.tests);
+    return termExec('test', args, null, true, ext.projectRoot);
 }

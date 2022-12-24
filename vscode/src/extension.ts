@@ -23,6 +23,8 @@ export class PyMake implements vscode.Disposable {
 	launchTargetChanged = new vscode.EventEmitter<Target>();
 	buildTargets: Target[] = [];
 	buildTargetsChanged = new vscode.EventEmitter<Target[]>();
+	tests: string[] = [];
+	testsChanged = new vscode.EventEmitter<string[]>();
 
 	private readonly _statusBar = new StatusBar(this);
 
@@ -103,6 +105,30 @@ export class PyMake implements vscode.Disposable {
 		return this.buildTargets;
 	}
 
+	async promptTests() {
+		let tests = this.tests = await commands.getTests(this);
+		class TestPick {
+			constructor(public label : string) {}
+		};
+		let pick = vscode.window.createQuickPick<TestPick>();
+		pick.canSelectMany = true;
+		pick.items = tests.map(t => new TestPick(t));
+		let promise = new Promise<string[]>((res, rej) => {
+			pick.show();
+			pick.onDidAccept(() => {
+				pick.hide();
+			});
+			pick.onDidHide(() => {
+				res(pick.selectedItems.map(pt => pt.label));
+			});
+		});
+		tests = await promise;
+		pick.dispose();
+		this.tests = tests;
+		this.testsChanged.fire(this.tests);
+		return this.tests;
+	}
+
 	async registerCommands() {
 		const register = (id: string, callback: (...args: any[]) => any, thisArg?: any) => {
 			this.extensionContext.subscriptions.push(
@@ -131,8 +157,10 @@ export class PyMake implements vscode.Disposable {
 				await debuggerModule.debug(this.getConfig<string>('debuggerPath') ?? 'gdb', this.launchTarget);
 			}
 		});
+		register('test', async () => commands.test(this));
 		register('selectLaunchTarget', async () => this.promptLaunchTarget());
 		register('selectBuildTargets', async () => this.promptBuildTargets());
+		register('selectTestTargets', async () => this.promptTests());
 	}
 
 	async onLoaded() {

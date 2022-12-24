@@ -46,12 +46,20 @@
         "title": "PyMake: Debug"
       },
       {
+        "command": "pymake.test",
+        "title": "PyMake: Test"
+      },
+      {
         "command": "pymake.selectLaunchTarget",
         "title": "PyMake: Select run/debug target"
       },
       {
         "command": "pymake.selectBuildTargets",
         "title": "PyMake: Select build targets"
+      },
+      {
+        "command": "pymake.selectTestTargets",
+        "title": "PyMake: Select test targets"
       }
     ],
     "configuration": {
