@@ -12,6 +12,7 @@
                 {"label": "Build", "value": "build"},
                 {"label": "Clean", "value": "clean"},
                 {"label": "Run", "value": "run"},
+                {"label": "Test", "value": "test"},
                 {"label": "Configure", "value": "configure"},
             ]
         },

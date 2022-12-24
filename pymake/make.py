@@ -272,7 +272,8 @@ class Make(Logging):
         from pymake.core.include import context
         for makefile in context.all_makefiles:
             for test in makefile.tests:
-                tests.append(test)
+                if len(self.required_targets) == 0 or test.fullname in self.required_targets:
+                    tests.append(test)
         with self.progress('testing', tests, lambda t: t.__call__()) as tasks:
             results = await asyncio.gather(*tasks)
             if all(results):
