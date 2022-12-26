@@ -5,6 +5,9 @@ import * as commands from './pymake/commands';
 import * as debuggerModule from './pymake/debugger';
 import { Target } from './pymake/targets';
 import { StatusBar } from './status';
+import {PyMakeTestAdapter} from './pymake/testAdapter';
+import { TestHub, testExplorerExtensionId } from 'vscode-test-adapter-api';
+import { Log, TestAdapterRegistrar } from 'vscode-test-adapter-util';
 
 
 class TargetPickItem {
@@ -16,6 +19,7 @@ class TargetPickItem {
 
 export class PyMake implements vscode.Disposable {
 	config: vscode.WorkspaceConfiguration;
+	workspaceFolder: vscode.WorkspaceFolder;
 	projectRoot: string;
 	toolchains: string[];
 	targets: Target[];
@@ -31,12 +35,14 @@ export class PyMake implements vscode.Disposable {
 	constructor(public readonly extensionContext: vscode.ExtensionContext) {
 		this.config = vscode.workspace.getConfiguration("pymake");
 		if (vscode.workspace.workspaceFolders) {
-			this.projectRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
+			this.workspaceFolder = vscode.workspace.workspaceFolders[0];
+			this.projectRoot = this.workspaceFolder.uri.fsPath;
 		} else {
 			throw new Error('Cannot resolve project root');
 		}
 		this.toolchains = [];
 		this.targets = [];
+
 	}
 
 	getConfig<T>(name: string): T | undefined {
@@ -108,7 +114,7 @@ export class PyMake implements vscode.Disposable {
 	async promptTests() {
 		let tests = this.tests = await commands.getTests(this);
 		class TestPick {
-			constructor(public label : string) {}
+			constructor(public label: string) { }
 		};
 		let pick = vscode.window.createQuickPick<TestPick>();
 		pick.canSelectMany = true;
@@ -168,6 +174,26 @@ export class PyMake implements vscode.Disposable {
 		this.targets = await commands.getTargets(this);
 
 		vscode.commands.executeCommand("setContext", "inPyMakeProject", true);
+
+		// get the Test Explorer extension
+		const testExplorerExtension = vscode.extensions.getExtension<TestHub>(
+			testExplorerExtensionId
+		);
+
+		if (testExplorerExtension) {
+			const testHub = testExplorerExtension.exports;
+			const log = new Log('PyMakeTestExplorer', this.workspaceFolder, 'PyMake Explorer Log');
+			this.extensionContext.subscriptions.push(log);
+		
+			// this will register a CmakeAdapter for each WorkspaceFolder
+			this.extensionContext.subscriptions.push(
+			  new TestAdapterRegistrar(
+				testHub,
+				(workspaceFolder) => new PyMakeTestAdapter(this, log),
+				log
+			  )
+			);
+		  }
 	}
 };
 

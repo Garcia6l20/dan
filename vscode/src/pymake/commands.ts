@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { channelExec, streamExec, termExec } from "./run";
 import { PyMake } from "../extension";
 import { Target } from "./targets";
+import { TestSuiteInfo } from "vscode-test-adapter-api";
 
 export async function scanToolchains(ext: PyMake) {
     let args = [];
@@ -39,7 +40,7 @@ export async function getToolchains(): Promise<string[]> {
 }
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
-    let stream = streamExec(['pymake', 'list', '-jq', ext.buildPath]);
+    let stream = streamExec(['pymake', 'list-targets', '-jq', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -77,6 +78,20 @@ export async function getTests(ext: PyMake): Promise<string[]> {
             }
         }
         return tests;
+    }
+}
+
+export async function getTestSuites(ext: PyMake): Promise<TestSuiteInfo> {
+    let stream = streamExec(['pymake', 'list-tests', '-jq', ext.buildPath]);
+    let data = '';
+    stream.onLine((line, isError) => {
+        data += line;
+    });
+    let rc = await stream.finishP();
+    if (rc !== 0) {
+        throw Error(`PyMake: Failed to get tests: ${data}`);
+    } else {
+        return JSON.parse(data) as TestSuiteInfo;
     }
 }
 

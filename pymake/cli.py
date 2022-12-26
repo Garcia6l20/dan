@@ -149,7 +149,7 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
 @click.option('-j', '--json', 'j', is_flag=True, help='Output in json format')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
-def list(all: bool, j: bool, show_type: bool, **kwargs):
+def list_targets(all: bool, j: bool, show_type: bool, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
     from pymake.core.include import context
@@ -177,14 +177,43 @@ def list(all: bool, j: bool, show_type: bool, **kwargs):
 
 
 @commands.command()
+@click.option('-j', '--json', 'j', is_flag=True, help='Output in json format')
 @common_opts
-def list_tests(**kwargs):
+def list_tests(j, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
     from pymake.core.include import context
-    for mf in context.all_makefiles:
-        for test in mf.tests:
-            click.echo(test.fullname)
+    if j:
+        data = {
+            'type': 'suite',
+            'id': 'root',
+            'label': context.root.name,
+            'children': list()
+        }
+        for mf in context.all_makefiles:
+            if len(mf.tests) == 0:
+                continue
+            suite = {
+                'type': 'suite',
+                'id': mf.fullname,
+                'label': mf.name,
+                'children': list()
+            }
+            for test in mf.tests:
+                info = {
+                    'type': 'test',
+                    'id': test.fullname,
+                    'label': test.name,
+                    'debuggable': isinstance(test.executable, Executable)
+                }
+                suite['children'].append(info)
+            data['children'].append(suite)
+        import json
+        click.echo(json.dumps(data))
+    else:
+        for mf in context.all_makefiles:
+            for test in mf.tests:
+                click.echo(test.fullname)
 
 @commands.command()
 def list_toolchains(**kwargs):
