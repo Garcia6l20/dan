@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as commands from "./commands";
+import * as run from "./run";
 import {
     RetireEvent,
     TestAdapter,
@@ -14,6 +15,7 @@ import {
 } from "vscode-test-adapter-api";
 import { Log } from "vscode-test-adapter-util";
 import { PyMake } from "../extension";
+import { Target } from "./targets";
 
 
 export class PyMakeTestAdapter implements TestAdapter {
@@ -64,8 +66,41 @@ export class PyMakeTestAdapter implements TestAdapter {
             });
         }
     }
-    run(tests: string[]): Promise<void> {
-        throw new Error("Method not implemented.");
+    async run(tests: string[]): Promise<void> {
+
+
+        this.log.info(`Running example tests ${JSON.stringify(tests)}`);
+
+        this.testStatesEmitter.fire(<TestRunStartedEvent>{ type: 'started', tests });
+
+        // in a "real" TestAdapter this would start a test run in a child process
+        //await runFakeTests(tests, this.testStatesEmitter);
+        let allTargets: Target[] = await commands.getTargets(this.ext);
+        let targets: Target[] = [];
+        for (const id of tests) {
+            for (const t of allTargets) {
+                if (t.fullname === id) {
+                    targets.push(t);
+                    break;
+                }
+            }
+        }
+        for (const t of targets) {
+            this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: t.fullname, state: "running" });
+            const stream = await run.streamExec(['python', '-m', 'pymake', 'run', this.ext.buildPath, t.fullname], { cwd: t.buildPath });
+            let out: string = '';
+            stream.onLine((line, isError) => {
+                out += line;
+            });
+            const res = await stream.finishP();
+            if (res !== 0) {
+                this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: t.fullname, state: "failed" });
+            } else {
+                this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: t.fullname, state: "passed" });
+            }
+            this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished', testRunId: t.fullname });
+        }
+        this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
     }
     debug?(tests: string[]): Promise<void> {
         throw new Error("Method not implemented.");

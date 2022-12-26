@@ -20,7 +20,6 @@ export function streamExec(
             });
         }
     };
-
 }
 
 let _channel: vscode.OutputChannel;
