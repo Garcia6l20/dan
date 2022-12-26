@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as commands from "./commands";
 import * as run from "./run";
+import * as debuggerModule from './debugger';
 import {
     RetireEvent,
     TestAdapter,
@@ -66,15 +67,8 @@ export class PyMakeTestAdapter implements TestAdapter {
             });
         }
     }
-    async run(tests: string[]): Promise<void> {
 
-
-        this.log.info(`Running example tests ${JSON.stringify(tests)}`);
-
-        this.testStatesEmitter.fire(<TestRunStartedEvent>{ type: 'started', tests });
-
-        // in a "real" TestAdapter this would start a test run in a child process
-        //await runFakeTests(tests, this.testStatesEmitter);
+    async getTargets(tests: string[]): Promise<Target[]> {
         let allTargets: Target[] = await commands.getTargets(this.ext);
         let targets: Target[] = [];
         for (const id of tests) {
@@ -85,7 +79,19 @@ export class PyMakeTestAdapter implements TestAdapter {
                 }
             }
         }
-        for (const t of targets) {
+        return targets;
+    }
+
+    async run(tests: string[]): Promise<void> {
+
+
+        this.log.info(`Running example tests ${JSON.stringify(tests)}`);
+
+        this.testStatesEmitter.fire(<TestRunStartedEvent>{ type: 'started', tests });
+
+        // in a "real" TestAdapter this would start a test run in a child process
+        //await runFakeTests(tests, this.testStatesEmitter);
+        for (const t of await this.getTargets(tests)) {
             this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: t.fullname, state: "running" });
             const stream = await run.streamExec(['python', '-m', 'pymake', 'run', this.ext.buildPath, t.fullname], { cwd: t.buildPath });
             let out: string = '';
@@ -102,8 +108,11 @@ export class PyMakeTestAdapter implements TestAdapter {
         }
         this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
     }
-    debug?(tests: string[]): Promise<void> {
-        throw new Error("Method not implemented.");
+    async debug(tests: string[]): Promise<void> {
+        await commands.build(this.ext);
+        for (const t of await this.getTargets(tests)) {
+            await debuggerModule.debug(this.ext.getConfig<string>('debuggerPath') ?? 'gdb', t);
+        }
     }
     cancel(): void {
         throw new Error("Method not implemented.");
