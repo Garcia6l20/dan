@@ -326,7 +326,7 @@ class Library(CXXObjectsTarget):
     @property
     def interface(self) -> bool:
         return self.library_type == LibraryType.INTERFACE
-    
+
     @property
     def libs(self) -> list[str]:
         tmp = super().libs
@@ -427,7 +427,7 @@ class Library(CXXObjectsTarget):
         if settings.create_pkg_config:
             from pymake.pkgconfig.package import create_pkg_config
             tasks.append(create_pkg_config(self, settings))
-        
+
         async def do_install(src: Path, dest: Path):
             if dest.exists() and dest.younger_than(src):
                 self.info(f'{dest} is up-to-date')

@@ -231,8 +231,8 @@ def clean(**kwargs):
 @common_opts
 def run(**kwargs):
     make = Make(**kwargs)
-    success = asyncio.run(make.run())
-    sys.exit(0 if success else 255)
+    rc = asyncio.run(make.run())
+    sys.exit(rc)
 
 
 @commands.command()

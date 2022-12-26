@@ -44,10 +44,12 @@ class AsyncRunner:
                                                                 cwd=cwd)
         if not pipe:
             create_task = asyncio.create_task
-            return await asyncio.wait([create_task(log_stream(proc.stdout)),
+            await asyncio.wait([create_task(log_stream(proc.stdout)),
                                        create_task(log_stream(proc.stderr, file=sys.stderr)),
                                        create_task(proc.wait())],
                                       return_when=asyncio.FIRST_COMPLETED)
+            await proc.communicate()
+            return None, None, proc.returncode
         else:
             out, err = await proc.communicate()
             if proc.returncode != 0 and not no_raise:
