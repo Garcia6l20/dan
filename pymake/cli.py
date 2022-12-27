@@ -204,8 +204,27 @@ def list_tests(j, **kwargs):
                     'type': 'test',
                     'id': test.fullname,
                     'label': test.name,
-                    'debuggable': isinstance(test.executable, Executable)
+                    'debuggable': False,
+                    'target': test.executable.fullname,
                 }
+                if isinstance(test.executable, Executable):
+                    info['debuggable'] = True
+                    if test.file:
+                        info['file'] = str(test.file)
+                    else:
+                        info['file'] = str(test.executable.source_path / test.executable.sources[0])
+                    
+                    if test.lineno:
+                        info['line'] = test.lineno
+                    
+                    if test.workingDir:
+                        info['workingDirectory'] = str(test.workingDir)
+                    else:
+                        info['workingDirectory'] = str(test.executable.build_path)
+
+                    if len(test.args) > 0:
+                        info['args'] = test.args
+
                 suite['children'].append(info)
             data['children'].append(suite)
         import json

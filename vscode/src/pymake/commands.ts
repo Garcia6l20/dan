@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { channelExec, streamExec, termExec } from "./run";
 import { PyMake } from "../extension";
 import { Target } from "./targets";
-import { TestSuiteInfo } from "vscode-test-adapter-api";
+import { TestSuiteInfo, TestInfo } from "./testAdapter";
 
 export async function scanToolchains(ext: PyMake) {
     let args = [];

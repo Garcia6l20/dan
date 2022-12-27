@@ -31,7 +31,7 @@ def requires(*names) -> list[Target]:
             if t.name == name:
                 found = t
                 break
-        
+
         if not found:
             for t in Package.all.values():
                 if t.name == name:
@@ -96,8 +96,9 @@ class MakeFile(sys.__class__):
     def installed_targets(self):
         return self.__installs
 
-    def add_test(self, executable: AsyncExecutable, *args):
-        self.__tests.append(Test(self, executable, *args))
+    def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path = None, lineno: int = None):
+        self.__tests.append(
+            Test(self, executable, name=name, args=args, file=file, lineno=lineno))
 
     @property
     def tests(self):

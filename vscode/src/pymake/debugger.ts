@@ -121,7 +121,7 @@ function createMsvcDebugConfiguration(target: Target): VSCodeDebugConfiguration 
     };
 }
 
-export async function debug(debuggerPath: string, target: Target) {
+export async function debug(debuggerPath: string, target: Target, args: string[] = []) {
     if (!target.executable) {
         throw Error(`Cannot debug "${target.name}, not an executable"`);
     }
@@ -135,6 +135,9 @@ export async function debug(debuggerPath: string, target: Target) {
         debugConfig = await createMsvcDebugConfiguration(target);
     }
     if (debugConfig) {
+        if (args.length > 0) {
+            debugConfig.args = args;
+        }
         await vscode.debug.startDebugging(undefined, debugConfig);
         return vscode.debug.activeDebugSession;
     } else {
