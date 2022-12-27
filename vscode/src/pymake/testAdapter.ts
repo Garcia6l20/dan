@@ -108,7 +108,7 @@ export class PyMakeTestAdapter implements TestAdapter {
         return undefined;
     }
 
-    async runTest(test : TestInfo) {
+    async runTest(test : TestInfo): Promise<void> {
         this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: test.id, state: "running" });
         const stream = await run.streamExec(['python', '-m', 'pymake', 'test', this.ext.buildPath, test.id], { cwd: test.workingDirectory });
         let out: string = '';
@@ -124,32 +124,35 @@ export class PyMakeTestAdapter implements TestAdapter {
         this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished', testRunId: test.id });
     }
 
-    async runSuite(suite : TestSuiteInfo) {
+    async runSuite(suite : TestSuiteInfo): Promise<void> {
+        let promises: Promise<void>[] = [];
         for (const test of suite.children) {
             if (test.type === 'test') {
-                await this.runTest(test);
+                promises.push(this.runTest(test));
             } else {
-                await this.runSuite(test);
+                promises.push(this.runSuite(test));
             }
         }
+        await Promise.all(promises);
     }
 
     async run(tests: string[]): Promise<void> {
         this.log.info(`Running tests ${JSON.stringify(tests)}`);
 
         this.testStatesEmitter.fire(<TestRunStartedEvent>{ type: 'started', tests });
-
+        let promises: Promise<void>[] = [];
         for (const test of tests) {
             const info = this.getInfo(test);
             if (info === undefined) {
                 throw Error(`Cannot find infos of test ${test}`);
             }
             if (info.type === 'test') {
-                await this.runTest(info);
+                promises.push(this.runTest(info));
             } else {
-                await this.runSuite(info);
+                promises.push(this.runSuite(info));
             }
         }
+        await Promise.all(promises);
         this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
     }
     async debug(tests: string[]): Promise<void> {
