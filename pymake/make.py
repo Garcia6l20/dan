@@ -282,10 +282,10 @@ class Make(Logging):
             results = await asyncio.gather(*tasks)
             if all(results):
                 self.info('Success !')
-                return False
+                return 0
             else:
                 self.error('Failed !')
-                return True
+                return 255
 
     async def clean(self, target: str = None):
         await self.initialize()

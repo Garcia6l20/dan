@@ -258,7 +258,8 @@ def run(**kwargs):
 @common_opts
 def test(**kwargs):
     make = Make(**kwargs)
-    asyncio.run(make.test())
+    rc = asyncio.run(make.test())
+    sys.exit(rc)
 
 
 @commands.command()

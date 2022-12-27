@@ -29,8 +29,7 @@ async def log_stream(stream, file=sys.stdout):
 class AsyncRunner:
     async def run(self, command, pipe=True, no_raise=False, env=None, cwd=None):
         if not isinstance(command, str):
-            command = ' '.join([f'"{arg}"' if isinstance(
-                arg, Path) else arg for arg in command])
+            command = ' '.join([f'"{arg}"' for arg in command])
         self.debug(f'executing: {command}')
         if env:
             e = dict(os.environ)
