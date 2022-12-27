@@ -153,7 +153,6 @@ export class PyMakeTestAdapter implements TestAdapter {
         this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
     }
     async debug(tests: string[]): Promise<void> {
-        await commands.build(this.ext);
         for (const test of tests) {
             const info = this.getInfo(test);
             if (info === undefined) {
@@ -171,6 +170,7 @@ export class PyMakeTestAdapter implements TestAdapter {
             if (target === undefined) {
                 throw Error(`Cannot find target ${info.target}`);
             }
+            await commands.build(this.ext, target);
             await debuggerModule.debug(this.ext.getConfig<string>('debuggerPath') ?? 'gdb', target, info.args);
         }
     }

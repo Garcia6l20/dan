@@ -113,8 +113,12 @@ function baseArgs(ext: PyMake): string[] {
     return args;
 }
 
-export async function build(ext: PyMake) {
-    return termExec('build', [...baseArgs(ext), ...ext.buildTargets.map(t => t.fullname)], null, true, ext.projectRoot);
+export async function build(ext: PyMake, target: Target|undefined = undefined) {
+    let args = baseArgs(ext);
+    if (target !== undefined) {
+        args.push(target.fullname);
+    }
+    return termExec('build', args, null, true, ext.projectRoot);
 }
 
 export async function clean(ext: PyMake) {
