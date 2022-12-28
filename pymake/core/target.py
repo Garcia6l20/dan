@@ -2,7 +2,7 @@ from enum import Enum
 from functools import cached_property
 from pymake.core.pathlib import Path
 import time
-from typing import Union, TypeAlias
+from typing import Callable, Union, TypeAlias
 import inspect
 
 from pymake.core import asyncio, aiofiles, utils
@@ -146,6 +146,7 @@ class Target(Logging):
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
         self.preload_dependencies: Dependencies[Target] = Dependencies()
+        self._utils: list[Callable] = list()
         self.output: Path = None
 
         if self.fullname in context.all_targets:
@@ -265,7 +266,24 @@ class Target(Logging):
 
     @asyncio.once_method
     async def install(self, settings: InstallSettings, mode: InstallMode):
-        return
+        installed_files = list()
+        if mode == InstallMode.dev:
+            if len(self._utils) > 0:
+                lines = list()
+                for fn in self._utils:
+                    tmp = inspect.getsourcelines(fn)[0]
+                    tmp[0] = f'\n\n@self.utility\n'
+                    lines.extend(tmp)
+                filepath = settings.libraries_destination / 'pymake' / f'{self.name}.py'
+                filepath.parent.mkdir(exist_ok=True, parents=True)
+                async with aiofiles.open(filepath, 'w') as f:
+                    await f.writelines(lines)
+                    installed_files.append(filepath)
+        return installed_files
 
     def __call__(self):
         ...
+
+    def utility(self, fn: Callable):
+        self._utils.append(fn)
+        setattr(self, fn.__name__, fn)

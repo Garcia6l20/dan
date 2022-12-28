@@ -454,8 +454,7 @@ class Library(CXXObjectsTarget):
                         dest = includes_dest / \
                             header.relative_to(public_include_dir)
                         tasks.append(do_install(header, dest))
-        return await asyncio.gather(*tasks)
-
+        return await asyncio.gather(super().install(settings, mode, recursive_once=True), *tasks)
 
 class Module(CXXObjectsTarget):
     def __init__(self, sources: str, *args, **kwargs):

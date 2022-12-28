@@ -26,8 +26,8 @@ class Test:
         out, err, rc = await self.executable.execute(*self.args, pipe=True, no_raise=True)
         if rc != 0:
             self.executable.error(
-                f'Test failed !\nstdout: {out}\nstderr: {err}')
+                f'Test \'{self.name}\' failed !\nstdout: {out}\nstderr: {err}')
             return False
         else:
-            self.executable.info(f'Test succeed !')
+            self.executable.info(f'Test \'{self.name}\' succeed !')
             return True

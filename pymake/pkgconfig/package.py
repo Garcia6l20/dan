@@ -3,6 +3,7 @@ import jinja2
 from pymake.core import aiofiles, asyncio
 from pymake.core.pathlib import Path
 import re
+import importlib.util
 
 from pymake.core.find import find_file, library_paths_lookup
 from pymake.core.settings import InstallMode, InstallSettings
@@ -71,6 +72,14 @@ class Package(CXXTarget):
         self.search_paths.insert(0, self.config_path.parent)
         super().__init__(name, all=False)
         self.all[name] = self
+
+        pymake_plugin = self.config_path.parent.parent / 'pymake' / f'{self.name}.py'
+        if pymake_plugin.exists():
+            spec = importlib.util.spec_from_file_location(
+                f'{self.name}_plugin', pymake_plugin)
+            module = importlib.util.module_from_spec(spec)
+            setattr(module, 'self', self)
+            spec.loader.exec_module(module)
 
     @asyncio.once_method
     async def preload(self):
