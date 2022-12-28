@@ -11,13 +11,13 @@ class Test:
                  executable: AsyncExecutable,
                  name: str = None,
                  args:list[str] = list(),
-                 file: Path = None,
+                 file: Path | str = None,
                  lineno: int = None,
                  workingDir: Path = None):
         self.name = name or executable.name
         self.fullname = f'{makefile.fullname}.{self.name}'
         self.executable = executable
-        self.file = file
+        self.file = Path(file) if file else None
         self.lineno = lineno
         self.workingDir = workingDir
         self.args = args

@@ -96,7 +96,7 @@ class MakeFile(sys.__class__):
     def installed_targets(self):
         return self.__installs
 
-    def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path = None, lineno: int = None):
+    def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path | str = None, lineno: int = None):
         self.__tests.append(
             Test(self, executable, name=name, args=args, file=file, lineno=lineno))
 
