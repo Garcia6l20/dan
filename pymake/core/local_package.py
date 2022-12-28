@@ -17,6 +17,11 @@ class LocalPackage(pkgconfig.Package):
                          'pkgconfig' / f'{name}.pc')
         self.makefile = makefile
         self.output = self.config_path
+        for target in self.makefile.installed_targets:
+            if target.name == self.name:
+                for fn in target._utils:
+                    self.utility(fn)
+                break
 
     @asyncio.once_method
     async def preload(self):

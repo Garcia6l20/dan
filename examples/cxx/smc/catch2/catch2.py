@@ -95,7 +95,7 @@ def discover_tests(exe):
         with open(filepath, 'r') as f:
             content = f.read()
             prev_pos = 0
-            lineno = 1
+            lineno = 0
             for m in expr.finditer(content):
                 title = m.group(2)
                 pos = m.span()[0]
