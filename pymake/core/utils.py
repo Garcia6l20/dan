@@ -29,7 +29,7 @@ async def log_stream(stream, file=sys.stdout):
 class AsyncRunner:
     async def run(self, command, pipe=True, no_raise=False, env=None, cwd=None):
         if not isinstance(command, str):
-            command = ' '.join([f'"{arg}"' for arg in command])
+            command = subprocess.list2cmdline(command)
         self.debug(f'executing: {command}')
         if env:
             e = dict(os.environ)
@@ -60,7 +60,8 @@ class AsyncRunner:
 
 class SyncRunner:
     def run(self, command, pipe=True, no_raise=False, shell=True, env=None):
-        # self.debug(f'executing: {command}')
+        if not isinstance(command, str):
+            command = subprocess.list2cmdline(command)
         if pipe:
             stdout = subprocess.PIPE
         else:
