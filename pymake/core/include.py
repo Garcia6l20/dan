@@ -1,10 +1,11 @@
 from functools import cached_property
 import importlib.util
 import sys
-from pymake.core import asyncio
+from pymake.core import aiofiles, asyncio
 
 from pymake.core.pathlib import Path
 from pymake.core.cache import Cache
+from pymake.core.settings import InstallMode, InstallSettings
 
 from pymake.core.target import Options, Target
 from pymake.core.test import Test, AsyncExecutable
@@ -16,14 +17,29 @@ class TargetNotFound(RuntimeError):
         super().__init__(f'package {name} not found')
 
 
+class LoadRequest(Exception):
+    def __init__(self, recipes: list[str]) -> None:
+        super().__init__(f'Unloaded recipes: {", ".join(recipes)}')
+        self.recipes = recipes
+        self.makefile = context.current
+
+
+def load(*recipes: str):
+    packages_root = context.root.build_path / 'pkgs-build'
+    missing_recipes = list()
+    for recipe in recipes:
+        if not (packages_root / recipe / 'done').exists():
+            missing_recipes.append(recipe)
+    if len(missing_recipes) > 0:
+        raise LoadRequest(missing_recipes)
+
+
 def requires(*names) -> list[Target]:
     ''' Requirement lookup
     1 - Search for existing-exported target
-    2 - Look a recipe to build
-    3 - Look for pkg-config library
+    2 - Look for pkg-config library
     '''
     global context
-    from pymake.core.local_package import LocalPackage
     res = list()
     for name in names:
         found = None
@@ -37,13 +53,11 @@ def requires(*names) -> list[Target]:
                 if t.name == name:
                     found = t
                     break
+            try:
+                found = Package(name, search_paths=[context.root.build_path / 'pkgs'])
+            except:
+                pass
 
-        if not found:
-            # look for recipe
-            path = context.current.source_path / f'{name}.py'
-            if path.exists():
-                found = LocalPackage(load_makefile(
-                    path, context.root.build_path / 'pkgs-build' / name))
 
         if not found:
             raise TargetNotFound(name)
@@ -117,6 +131,39 @@ class Context:
         self.__all_targets: set[Target] = set()
         self.__default_targets: set[Target] = set()
         self.__exported_targets: set[Target] = set()
+        self.missing : list[LoadRequest] = list()
+
+    async def _install_pkg(self, module_path, build_path):
+        settings = InstallSettings()
+        settings.destination = self.root.build_path / 'pkgs'
+        pkgs_data = self.root.build_path / 'pkgs-build'
+        while True:
+            try:
+                mf : MakeFile = load_makefile(module_path, build_path)
+                tasks = list()
+                for t in mf.installed_targets:
+                    async def install():
+                        await t.install(settings, InstallMode.dev)
+                        async with aiofiles.open(build_path / 'done', 'w') as f:
+                            await f.write('OK')
+                    tasks.append(install())
+                await asyncio.gather(*tasks)
+                break
+            except LoadRequest as missing:
+                await self.install_missing([missing])
+
+
+    async def install_missing(self, missing = None):
+        tasks = list()
+        settings = InstallSettings()
+        settings.destination = context.root.build_path / 'pkgs'
+        pkgs_data = context.root.build_path / 'pkgs-build'
+        for req in (missing or self.missing):
+            for recipe in req.recipes:
+                module_path = req.makefile.source_path / f'{recipe}.py'
+                build_path = pkgs_data / recipe
+                tasks.append(self._install_pkg(module_path, build_path))
+        await asyncio.gather(*tasks)
 
     @property
     def root(self):
@@ -234,8 +281,12 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             f'{context.current.name}.{name}', module_path)
     module = importlib.util.module_from_spec(spec)
     _init_makefile(module, name, build_path)
-    spec.loader.exec_module(module)
-    exports = context.current._exported_targets
+    exports = list()
+    try:
+        spec.loader.exec_module(module)
+        exports = context.current._exported_targets
+    except LoadRequest as missing:
+        context.missing.append(missing)
     context.up()
     return exports
 

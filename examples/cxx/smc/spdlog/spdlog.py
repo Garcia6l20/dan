@@ -1,7 +1,9 @@
 import os
-from pymake import self, requires
+from pymake import self, requires, load
 from pymake.cxx import Library
 from pymake.smc import GitSources
+
+load('fmt')
 
 version = '1.11.0'
 description = 'Fast C++ logging library'

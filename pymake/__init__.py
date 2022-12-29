@@ -1,6 +1,6 @@
 import sys
 import pymake.core.include
-from pymake.core.include import include, requires
+from pymake.core.include import include, requires, load
 from pymake.core.generator import generator
 from pymake.pkgconfig.package import find_package
 

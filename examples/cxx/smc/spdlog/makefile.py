@@ -1,5 +1,7 @@
-from pymake import self, requires
+from pymake import self, requires, load
 from pymake.cxx import Executable
+
+load('spdlog')
 
 exe = Executable('test_spdlog',
                  sources=['test_spdlog.cpp'],

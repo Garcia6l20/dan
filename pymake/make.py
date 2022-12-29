@@ -94,10 +94,25 @@ class Make(Logging):
 
         toolchain = self.config.toolchain
         build_type = self.settings.build_type
-        init_toolchains(toolchain)
 
         self.info(f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
-        include_makefile(self.source_path, self.build_path)
+
+        from pymake.core.include import context_reset
+        import gc
+        while True:
+            context_reset()
+            gc.collect()
+            
+            init_toolchains(toolchain)
+
+            include_makefile(self.source_path, self.build_path)
+            
+            from pymake.core.include import context
+            if len(context.missing) > 0:
+                await context.install_missing()
+            else:
+                break
+
 
         from pymake.core.include import context
         from pymake.cxx import target_toolchain

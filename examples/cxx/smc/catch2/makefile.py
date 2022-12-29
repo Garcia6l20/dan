@@ -1,5 +1,7 @@
-from pymake import self, requires
+from pymake import self, requires, load
 from pymake.cxx import Executable
+
+load('catch2')
 
 catch2 = requires('catch2')[0]
 

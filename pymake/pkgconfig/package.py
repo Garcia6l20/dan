@@ -73,7 +73,8 @@ class Package(CXXTarget):
         super().__init__(name, all=False)
         self.all[name] = self
 
-        pymake_plugin = self.config_path.parent.parent / 'pymake' / f'{self.name}.py'
+        pymake_plugin = self.config_path.parent.parent / \
+            'pymake' / f'{self.name}.py'
         if pymake_plugin.exists():
             spec = importlib.util.spec_from_file_location(
                 f'{self.name}_plugin', pymake_plugin)
@@ -94,10 +95,10 @@ class Package(CXXTarget):
                     deps.add(Package(req, self.search_paths))
         self.includes.public.append(self.data.get('includedir'))
         self.dependencies.update(deps)
-        libs : str = self.data.get('libs')
+        libs: str = self.data.get('libs')
         if libs.find(f'-l{self.name}') < 0:
             self.library_type = LibraryType.INTERFACE
-        
+
         await super().preload(recursive_once=True)
 
     @asyncio.once_method
@@ -167,9 +168,15 @@ def _get_jinja_env():
 async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
+    requires = [dep for dep in lib.dependencies if isinstance(dep, Package)]
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\
-        .render({'lib': lib, 'settings': settings, 'prefix': Path(settings.destination).absolute()})
+        .render({
+            'lib': lib,
+            'settings': settings,
+            'prefix': Path(settings.destination).absolute(),
+            'requires': requires
+        })
     dest.parent.mkdir(parents=True, exist_ok=True)
     async with aiofiles.open(dest, 'w') as f:
         await f.write(data)
