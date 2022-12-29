@@ -59,6 +59,10 @@ class SubCache(object):
         if default is not None:
             setattr(self, name, default)
             return default
+    
+    def reset(self, name):
+        if hasattr(self, name):
+            delattr(self, name)
 
 
 class Cache(SubCache):

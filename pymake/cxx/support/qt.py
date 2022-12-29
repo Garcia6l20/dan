@@ -27,10 +27,17 @@ class _QtMoccer:
 
         mocs = self.cache.get('mocs', list())
         for moc_name in mocs:
+            moc_path = self.build_path / moc_name
             self.objs.append(
-                CXXObject(f'{self.name}.{moc_name}', self, self.build_path / moc_name))
+                CXXObject(f'{self.name}.{moc_name}', self, moc_path))
+            self.other_generated_files.add(moc_path)
 
         await super().initialize(recursive_once=True)
+
+    @asyncio.once_method
+    async def clean(self):
+        await super().clean(recursive_once=True)
+        self.cache.reset('mocs')
 
     async def __call__(self):
 
@@ -42,7 +49,7 @@ class _QtMoccer:
             if not moc_file_path.exists() or file.younger_than(moc_file_path):
                 if moc_file_path.exists():
                     self.info(f'updating {moc_file_path}')
-                elif moc_file_path.exists():
+                else:
                     self.info(f'generating {moc_file_path}')
                 out, err, rc = await self.run([self.moc, *self.includes.private, *self.compile_definitions.private, file])
                 if rc == 0 and len(out):
