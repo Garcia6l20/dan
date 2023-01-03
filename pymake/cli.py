@@ -182,17 +182,41 @@ def list_targets(all: bool, j: bool, show_type: bool, **kwargs):
 def list_tests(j, **kwargs):
     make = Make(**kwargs)
     asyncio.run(make.initialize())
-    from pymake.core.include import context
+    from pymake.core.include import context, MakeFile
+    from pymake.core.test import Test
     if j:
-        data = {
-            'type': 'suite',
-            'id': 'root',
-            'label': context.root.name,
-            'children': list()
-        }
-        for mf in context.all_makefiles:
-            if len(mf.tests) == 0:
-                continue
+        def make_test_info(test: Test):
+            info = {
+                'type': 'test',
+                'id': test.fullname,
+                'label': test.name,
+                'debuggable': False,
+                'target': test.executable.fullname,
+            }
+            if isinstance(test.executable, Executable):
+                info['debuggable'] = True
+                if test.file:
+                    info['file'] = str(test.file)
+                else:
+                    info['file'] = str(test.executable.source_path / test.executable.sources[0])
+                
+                if test.lineno:
+                    info['line'] = test.lineno
+                
+                if test.workingDir:
+                    info['workingDirectory'] = str(test.workingDir)
+                else:
+                    info['workingDirectory'] = str(test.executable.build_path)
+
+                if len(test.args) > 0:
+                    info['args'] = test.args
+
+            return info
+
+        def make_suite_info(mf: MakeFile):
+            if len(mf.tests) == 0 and mf.children == 0:
+                return None
+
             suite = {
                 'type': 'suite',
                 'id': mf.fullname,
@@ -200,35 +224,18 @@ def list_tests(j, **kwargs):
                 'children': list()
             }
             for test in mf.tests:
-                info = {
-                    'type': 'test',
-                    'id': test.fullname,
-                    'label': test.name,
-                    'debuggable': False,
-                    'target': test.executable.fullname,
-                }
-                if isinstance(test.executable, Executable):
-                    info['debuggable'] = True
-                    if test.file:
-                        info['file'] = str(test.file)
-                    else:
-                        info['file'] = str(test.executable.source_path / test.executable.sources[0])
-                    
-                    if test.lineno:
-                        info['line'] = test.lineno
-                    
-                    if test.workingDir:
-                        info['workingDirectory'] = str(test.workingDir)
-                    else:
-                        info['workingDirectory'] = str(test.executable.build_path)
+                suite['children'].append(make_test_info(test))
 
-                    if len(test.args) > 0:
-                        info['args'] = test.args
+            for child in mf.children:
+                child_suite = make_suite_info(child)
+                if child_suite is not None:
+                    suite['children'].append(child_suite)
 
-                suite['children'].append(info)
-            data['children'].append(suite)
+            if len(suite['children']) > 0:
+                return suite
+
         import json
-        click.echo(json.dumps(data))
+        click.echo(json.dumps(make_suite_info(context.root)))
     else:
         for mf in context.all_makefiles:
             for test in mf.tests:

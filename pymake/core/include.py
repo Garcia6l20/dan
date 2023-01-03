@@ -83,9 +83,9 @@ class MakeFile(sys.__class__):
         self.__installs: list[Target] = list()
         self.__cache: Cache = None
         self.__tests: list[Test] = list()
+        self.children: list[MakeFile] = list()
         if self.parent:
-            for target in self.parent.targets:
-                setattr(self, target.name, target)
+            self.parent.children.append(self)
         self.options = Options(self)
 
     @cached_property
