@@ -4,58 +4,10 @@ from pymake.core.target import FileDependency
 from pymake.core.utils import AsyncRunner
 from pymake.core.version import Version
 from pymake.logging import Logging
-
-import json
+from pymake.cxx.compile_commands import CompileCommands
 
 
 scan = True
-
-
-class CompileCommands:
-    def __init__(self) -> None:
-        from pymake.core.include import context
-        self.cc_path: Path = context.root.build_path / 'compile_commands.json'
-        if self.cc_path.exists():
-            with open(self.cc_path, 'r') as cc_f:
-                try:
-                    self.data = json.load(cc_f)
-                except json.JSONDecodeError:
-                    self.data = list()
-        else:
-            self.data = list()
-            self.cc_path.parent.mkdir(parents=True, exist_ok=True)
-
-    def clear(self):
-        with open(self.cc_path, 'w'):
-            pass
-
-    def update(self):
-        with open(self.cc_path, 'w') as cc_f:
-            json.dump(self.data, cc_f)
-
-    def get(self, file: Path):
-        fname = file.name
-        for entry in self.data:
-            if entry['file'] == fname:
-                return entry
-        return None
-
-    def insert(self, file: Path, build_path: Path, content: list[str] | str):
-        entry = self.get(file)
-        if isinstance(content, str):
-            key = 'command'
-        else:
-            assert isinstance(content, list)
-            content = [str(item) for item in content]
-            key = 'args'
-        if entry:
-            entry[key] = content
-        else:
-            self.data.append({
-                'file': str(file),
-                'directory': str(build_path),
-                key: content
-            })
 
 
 class Toolchain(AsyncRunner, Logging):
@@ -73,7 +25,7 @@ class Toolchain(AsyncRunner, Logging):
     @property
     def build_type(self):
         return self._build_type
-    
+
     @property
     def compile_commands(self):
         if not self._compile_commands:
