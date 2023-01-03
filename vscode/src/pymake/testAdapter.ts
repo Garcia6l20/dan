@@ -108,23 +108,31 @@ export class PyMakeTestAdapter implements TestAdapter {
         return undefined;
     }
 
-    async runTest(test : TestInfo): Promise<void> {
+    async runTest(test: TestInfo): Promise<void> {
         this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: test.id, state: "running" });
-        const stream = await run.streamExec(['python', '-m', 'pymake', 'test', this.ext.buildPath, test.id], { cwd: test.workingDirectory });
+        const stream = await run.streamExec(['python', '-m', 'pymake', 'test', '-q', this.ext.buildPath, test.id], { cwd: test.workingDirectory });
         let out: string = '';
         stream.onLine((line, isError) => {
             out += line;
         });
         const res = await stream.finishP();
+        let event = <TestEvent>{
+            type: "test",
+            test: test.id,
+            file: test.file,
+            line: test.line,
+            message: out,
+        };
         if (res !== 0) {
-            this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: test.id, state: "failed" });
+            event.state = 'failed';
         } else {
-            this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: test.id, state: "passed" });
+            event.state = "passed";
         }
+        this.testStatesEmitter.fire(event);
         this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished', testRunId: test.id });
     }
 
-    async runSuite(suite : TestSuiteInfo): Promise<void> {
+    async runSuite(suite: TestSuiteInfo): Promise<void> {
         let promises: Promise<void>[] = [];
         for (const test of suite.children) {
             if (test.type === 'test') {
