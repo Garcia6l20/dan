@@ -287,6 +287,9 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         exports = context.current._exported_targets
     except LoadRequest as missing:
         context.missing.append(missing)
+    except TargetNotFound as err:
+        if len(context.missing) == 0:
+            raise err
     context.up()
     return exports
 
