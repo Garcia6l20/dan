@@ -33,6 +33,11 @@ export interface TestInfo extends APITestInfo {
 
     /** Arguments for the test */
     args?: string[];
+
+    /** stdout file */
+    out: string;
+    /** stderr file */
+    err: string;
 };
 
 
@@ -119,8 +124,8 @@ export class PyMakeTestAdapter implements TestAdapter {
         });
         const res = await stream.finishP();
         let log: string = '';
-        log += await fsPromises.readFile(path.join(test.workingDirectory, test.label + '.stdout'), 'utf-8');
-        log += await fsPromises.readFile(path.join(test.workingDirectory, test.label + '.stderr'), 'utf-8');
+        log += await fsPromises.readFile(path.join(test.out), 'utf-8');
+        log += await fsPromises.readFile(path.join(test.err), 'utf-8');
 
         let event = <TestEvent>{
             type: "test",
@@ -187,7 +192,7 @@ export class PyMakeTestAdapter implements TestAdapter {
             if (target === undefined) {
                 throw Error(`Cannot find target ${info.target}`);
             }
-            await commands.build(this.ext, target);
+            await commands.build(this.ext, [target]);
             await debuggerModule.debug(this.ext.getConfig<string>('debuggerPath') ?? 'gdb', target, info.args);
         }
     }

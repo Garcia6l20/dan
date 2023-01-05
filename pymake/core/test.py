@@ -1,4 +1,5 @@
 import asyncio
+import re
 from pymake.core import aiofiles
 from pymake.core.pathlib import Path
 from pymake.logging import Logging
@@ -22,12 +23,15 @@ class Test:
         self.file = Path(file) if file else None
         self.lineno = lineno
         self.workingDir = workingDir or makefile.build_path
+        log_basename = re.sub(r'[^\w_. -]', '_', self.name)
+        self.out = self.workingDir / f'{log_basename}.stdout'
+        self.err = self.workingDir / f'{log_basename}.stderr'
         self.args = args
 
     async def __call__(self):
         out, err, rc = await self.executable.execute(*self.args, no_raise=True)
-        async with aiofiles.open(self.workingDir / f'{self.name}.stdout', 'w') as outlog, \
-              aiofiles.open(self.workingDir / f'{self.name}.stderr', 'w') as errlog:
+        async with aiofiles.open(self.out, 'w') as outlog, \
+              aiofiles.open(self.err, 'w') as errlog:
               await asyncio.gather(outlog.write(out), errlog.write(err))
         if rc != 0:
             self.executable.error(

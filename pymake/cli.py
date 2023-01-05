@@ -192,6 +192,8 @@ def list_tests(j, **kwargs):
                 'label': test.name,
                 'debuggable': False,
                 'target': test.executable.fullname,
+                'out': str(test.out),
+                'err': str(test.err),
             }
             if isinstance(test.executable, Executable):
                 info['debuggable'] = True
