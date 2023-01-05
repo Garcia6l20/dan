@@ -99,7 +99,7 @@ class GCCToolchain(Toolchain):
 
         build_path.mkdir(parents=True, exist_ok=True)
         output = build_path / file.name
-        out, _, _ = await self.run('scan', output, args, cwd=build_path)
+        out, _, _ = await self.run('scan', output, args, log=False, cwd=build_path)
         if out:
             all = ''.join([dep.replace('\\', ' ')
                            for dep in out.splitlines()]).split()

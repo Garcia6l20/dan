@@ -72,8 +72,13 @@ def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tupl
     _logger.info(f'build path: {config.build_path}')
     config.toolchain = toolchain or config.get(
         'toolchain') or click.prompt('Toolchain', type=_toolchain_choice)
-    config.settings = Settings()
+    if not hasattr(config, 'settings'):
+        config.settings = Settings()
     asyncio.run(config.save())
+    from pymake.core.include import context
+    caches = context.get('_caches')
+    caches.remove(config)
+    del config
 
     if len(settings) or len(options):
         make = Make(build_path, None, verbose, False)
@@ -84,6 +89,9 @@ def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tupl
 
         if len(settings):
             make.apply_settings(*settings)
+
+        asyncio.run(make.config.save())
+
 
 
 @commands.command()
