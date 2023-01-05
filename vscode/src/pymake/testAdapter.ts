@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from 'path';
 import * as commands from "./commands";
 import * as run from "./run";
 import * as debuggerModule from './debugger';
@@ -14,6 +15,7 @@ import {
     TestSuiteInfo as APITestSuiteInfo,
     TestInfo as APITestInfo,
 } from "vscode-test-adapter-api";
+import { promises as fsPromises } from 'fs';
 import { Log } from "vscode-test-adapter-util";
 import { PyMake } from "../extension";
 import { Target } from "./targets";
@@ -116,12 +118,16 @@ export class PyMakeTestAdapter implements TestAdapter {
             out += line;
         });
         const res = await stream.finishP();
+        let log: string = '';
+        log += await fsPromises.readFile(path.join(test.workingDirectory, test.label + '.stdout'), 'utf-8');
+        log += await fsPromises.readFile(path.join(test.workingDirectory, test.label + '.stderr'), 'utf-8');
+
         let event = <TestEvent>{
             type: "test",
             test: test.id,
             file: test.file,
             line: test.line,
-            message: out,
+            message: log,
         };
         if (res !== 0) {
             event.state = 'failed';

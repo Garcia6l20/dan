@@ -1,9 +1,11 @@
+import asyncio
+from pymake.core import aiofiles
 from pymake.core.pathlib import Path
 from pymake.logging import Logging
 
 
 class AsyncExecutable(Logging):
-    async def execute(self, *args): ...
+    async def execute(self, *args, **kwargs): ...
 
 
 class Test:
@@ -19,11 +21,14 @@ class Test:
         self.executable = executable
         self.file = Path(file) if file else None
         self.lineno = lineno
-        self.workingDir = workingDir
+        self.workingDir = workingDir or makefile.build_path
         self.args = args
 
     async def __call__(self):
-        out, err, rc = await self.executable.execute(*self.args, pipe=True, no_raise=True)
+        out, err, rc = await self.executable.execute(*self.args, no_raise=True)
+        async with aiofiles.open(self.workingDir / f'{self.name}.stdout', 'w') as outlog, \
+              aiofiles.open(self.workingDir / f'{self.name}.stderr', 'w') as errlog:
+              await asyncio.gather(outlog.write(out), errlog.write(err))
         if rc != 0:
             self.executable.error(
                 f'Test \'{self.name}\' failed !\nstdout: {out}\nstderr: {err}')

@@ -42,7 +42,7 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["configure", "-v", "-t", "gcc-12.2.0", "./build"],
+            "args": ["configure", "-v", "-t", "default", "./build"],
             "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"

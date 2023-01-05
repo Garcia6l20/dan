@@ -55,7 +55,7 @@ class CXXSimpleTest(PyMakeBaseTest):
             self.assertTrue(target.output.younger_than(self.modified_at),
                             "an option change should trigger a re-build")
             self.modified_at = target.output.modification_time
-            out, err, rc = await target.execute(pipe=True)
+            out, err, rc = await target.execute()
             self.assertEqual(rc, 0)
             self.assertEqual(out, f'{expected_output} !\n')
 

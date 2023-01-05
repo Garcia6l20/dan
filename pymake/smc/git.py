@@ -20,12 +20,12 @@ class GitSources(Target, Logging, AsyncRunner):
 
         if not self.clean_request:
             if not self.git_dir.exists():
-                await self.run(f'git clone {self.url} {self.output}', pipe=False)
+                await self.run(f'git clone {self.url} {self.output}')
 
         self.sha1 = (await self.run(f'git rev-parse {self.refspec}', cwd=self.output))[0].strip()
         current_sha1 = (await self.run(f'git rev-parse HEAD', cwd=self.output))[0].strip()
         if self.sha1 != current_sha1:
-            await self.run(f'git checkout {self.sha1}', pipe=False, cwd=self.output)
+            await self.run(f'git checkout {self.sha1}', cwd=self.output)
 
         return await super().initialize(recursive_once=True)
 

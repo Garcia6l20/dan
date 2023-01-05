@@ -1,3 +1,4 @@
+import io
 import logging
 import sys
 import tqdm
@@ -19,15 +20,19 @@ class CommandError(RuntimeError):
 _encoding = 'cp1252' if os.name == 'nt' else 'utf-8'
 
 
-async def log_stream(stream, file=sys.stdout):
+async def log_stream(stream, *files):
     while not stream.at_eof():
         data = await stream.readline()
         line = data.decode(_encoding)
-        tqdm.tqdm.write(line, end='', file=file)
+        for file in files:
+            if file in [sys.stdout, sys.stderr]:
+                tqdm.tqdm.write(line, end='', file=file)
+            else:
+                file.write(line)
 
 
 class AsyncRunner:
-    async def run(self, command, pipe=True, no_raise=False, env=None, cwd=None):
+    async def run(self, command, log=True, no_raise=False, env=None, cwd=None):
         if not isinstance(command, str):
             command = subprocess.list2cmdline(command)
         self.debug(f'executing: {command}')
@@ -41,22 +46,27 @@ class AsyncRunner:
                                                                 stderr=asyncio.subprocess.PIPE,
                                                                 env=env,
                                                                 cwd=cwd)
-        if not pipe:
-            create_task = asyncio.create_task
-            await asyncio.wait([create_task(log_stream(proc.stdout)),
-                                       create_task(log_stream(proc.stderr, file=sys.stderr)),
-                                       create_task(proc.wait())],
-                                      return_when=asyncio.FIRST_COMPLETED)
-            await proc.communicate()
-            return None, None, proc.returncode
-        else:
-            out, err = await proc.communicate()
-            if proc.returncode != 0 and not no_raise:
-                message = f'command returned {proc.returncode}: {command}\n{out.decode(_encoding) if out and len(out) else ""}\n{err.decode(_encoding) if err and len(err) else ""}'
-                self.error(message)
-                raise CommandError(message, proc.returncode, out, err)
-            return out.decode(_encoding) if out else None, err.decode(_encoding) if err else None, proc.returncode
+        
+        out = io.StringIO()
+        err = io.StringIO()
+        outs = [out]
+        errs = [err]
+        if log:
+            outs.append(sys.stdout)
+            errs.append(sys.stderr)
 
+        await asyncio.wait([asyncio.create_task(log_stream(proc.stdout, *outs)),
+                            asyncio.create_task(log_stream(proc.stderr, *errs)),
+                            asyncio.create_task(proc.wait())],
+                            return_when=asyncio.FIRST_COMPLETED)
+        await proc.communicate()
+        out = out.getvalue()
+        err = err.getvalue()
+        if proc.returncode != 0 and not no_raise:
+            message = f'command returned {proc.returncode}: {command}\n{out}\n{err}'
+            self.error(message)
+            raise CommandError(message, proc.returncode, out, err)
+        return out, err, proc.returncode
 
 class SyncRunner:
     def run(self, command, pipe=True, no_raise=False, shell=True, env=None):
