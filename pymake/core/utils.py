@@ -55,10 +55,11 @@ class AsyncRunner:
             outs.append(sys.stdout)
             errs.append(sys.stderr)
 
-        await asyncio.wait([asyncio.create_task(log_stream(proc.stdout, *outs)),
-                            asyncio.create_task(log_stream(proc.stderr, *errs)),
-                            asyncio.create_task(proc.wait())],
-                            return_when=asyncio.FIRST_COMPLETED)
+        await asyncio.gather(
+            log_stream(proc.stdout, *outs),
+            log_stream(proc.stderr, *errs),
+            proc.wait())
+        # make sure return code is available
         await proc.communicate()
         out = out.getvalue()
         err = err.getvalue()
