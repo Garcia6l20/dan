@@ -15,6 +15,7 @@ class GCCToolchain(Toolchain):
         self.ar = data['ar'] if 'ar' in data else tools['ar']
         self.ranlib = data['ranlib'] if 'ranlib' in data else tools['ranlib']
         self.as_ = data['readelf'] if 'readelf' in data else tools['readelf']
+        self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
         self.env = data['env'] if 'env' in data else None
         self.debug(f'cc compiler is {self.type} {self.version} ({self.cc})')
         self.debug(f'cxx compiler is {self.type} {self.version} ({self.cxx})')
@@ -132,6 +133,8 @@ class GCCToolchain(Toolchain):
             self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
         if not dry_run:
             await self.run('link', output, args)
+            if self._build_type in [BuildType.release, BuildType.release_min_size]:
+                await AsyncRunner.run(self, [self.strip, output])
         return args
 
     async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
@@ -146,4 +149,6 @@ class GCCToolchain(Toolchain):
                 unique(self.default_ldflags, options), *objects, '-o', output]
         if not dry_run:
             await self.run('shared_lib', output, args)
+            if self._build_type in [BuildType.release, BuildType.release_min_size]:
+                await AsyncRunner.run(self, [self.strip, output])
         return args

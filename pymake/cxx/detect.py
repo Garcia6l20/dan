@@ -328,7 +328,7 @@ def get_compilers(logger: logging.Logger):
 
 if os.name != 'nt':
     _required_tools = [
-        'nm', 'ranlib', 'strip', 'readelf', 'ar', 'strip', 'ranlib'
+        'nm', 'ranlib', 'strip', 'readelf', 'ar', 'ranlib'
     ]
 else:
     _required_tools = list()
