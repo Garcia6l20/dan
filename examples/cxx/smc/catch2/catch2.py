@@ -87,27 +87,42 @@ def discover_tests(exe):
         import re
         test_macros = [
             'TEST_CASE',
-            'SCENARIO'
+            'SCENARIO',
+            'TEMPLATE_TEST_CASE'
         ]
         expr = re.compile(
-            fr"({'|'.join(test_macros)})\(\s?\"([\w\s]+)\"[\s,]{{0,}}(?:\"(.+)\")?\)")  # (,.+)?\)"
+            fr"({'|'.join(test_macros)})\(\s?\"(.*?)\"[\s,]{{0,}}(?:\"(.*?)\")?")
         tests = dict()
         with open(filepath, 'r') as f:
             content = f.read()
             prev_pos = 0
             lineno = 0
             for m in expr.finditer(content):
+                macro = m.group(1)                
                 title = m.group(2)
+                if macro == 'SCENARIO':
+                    title = 'Scenario: ' + title
                 pos = m.span()[0]
                 lineno = content.count('\n', prev_pos, pos) + lineno
                 prev_pos = pos
-                tests[title] = {
-                    'filepath': str(filepath),
-                    'lineno': lineno,
-                }
                 tags = m.group(3)
-                if tags:
-                    tests[title]['tags'] = tags
+                if macro == 'TEMPLATE_TEST_CASE':
+                    targs_start = m.span()[1] + 1
+                    targs_end = content.find(')', targs_start)
+                    targs = content[targs_start:targs_end]
+                    targs = [a.strip() for a in targs.split(',')]
+                    for targ in targs:
+                        tests[f'{title} - {targ}'] = {
+                            'filepath': str(filepath),
+                            'lineno': lineno,
+                        }
+                else:
+                    tests[title] = {
+                        'filepath': str(filepath),
+                        'lineno': lineno,
+                    }
+                    if tags:
+                        tests[title]['tags'] = tags
 
         with open(output, 'w') as f:
             f.write(yaml.dump(tests))
@@ -117,5 +132,6 @@ def discover_tests(exe):
         for title, data in tests.items():
             makefile.add_test(exe, name=title, args=[
                               title], file=data['filepath'], lineno=data['lineno'])
+
 
 self.install(catch2)
