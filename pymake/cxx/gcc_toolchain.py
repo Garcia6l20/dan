@@ -135,7 +135,7 @@ class GCCToolchain(Toolchain):
         return args
 
     async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
-        args = [self.ar, 'qc', output, *objects]
+        args = [self.ar, 'cr', output, *objects]
         if not dry_run:
             await self.run('static_lib', output, args)
             await AsyncRunner.run(self, [self.ranlib, output])
