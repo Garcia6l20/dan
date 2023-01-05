@@ -181,7 +181,7 @@ class CXXTarget(Target):
         tmp.extend(self.link_libraries.private)
         for dep in self.cxx_dependencies:
             tmp.extend(dep.libs)
-        return unique(tmp)
+        return unique(reversed(tmp))
 
     @cached_property
     def cxx_flags(self):
