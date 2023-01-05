@@ -117,7 +117,7 @@ class GCCToolchain(Toolchain):
         return ['-std=c++20', '-fmodules-ts']
 
     async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False):
-        args = [*unique(self.default_cflags, self.default_cxxflags, options), '-MD', '-MT',
+        args = [*unique(self.default_cflags, self.default_cxxflags, self.compile_options, options), '-MD', '-MT',
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         if auto_fpic:
             args.insert(0, '-fPIC')
@@ -129,7 +129,7 @@ class GCCToolchain(Toolchain):
 
     async def link(self, objects: set[Path], output: Path, options: list[str], dry_run=False):
         args = [self.cxx, *objects, '-o', str(output), *unique(
-            self.default_ldflags, self.default_cflags, self.default_cxxflags, options)]
+            self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
         if not dry_run:
             await self.run('link', output, args)
         return args
