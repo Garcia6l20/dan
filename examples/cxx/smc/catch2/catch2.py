@@ -9,7 +9,10 @@ version = '3.2.1'
 description = 'A modern, C++-native, test framework for unit-tests, TDD and BDD'
 
 git = GitSources(
-    'git-catch2', 'https://github.com/catchorg/Catch2.git', f'v{version}')
+    'git-catch2',
+    url='https://github.com/catchorg/Catch2.git',
+    refspec=f'v{version}',
+    patches=['patches/0001-fix-add-missing-cstdint-includes.patch'])
 
 src = git.output / 'src'
 

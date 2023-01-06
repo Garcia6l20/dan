@@ -1,0 +1,50 @@
+From 52517eb2fe7b79c52e537af056054e0ee82f7865 Mon Sep 17 00:00:00 2001
+From: Sylvain Garcia <garcia.6l20@gmail.com>
+Date: Thu, 5 Jan 2023 15:03:18 +0100
+Subject: [PATCH] [fix] add missing <cstdint> includes
+
+---
+ src/catch2/catch_test_case_info.hpp        | 1 +
+ src/catch2/internal/catch_string_manip.hpp | 1 +
+ src/catch2/internal/catch_xmlwriter.cpp    | 1 +
+ 3 files changed, 3 insertions(+)
+
+diff --git a/src/catch2/catch_test_case_info.hpp b/src/catch2/catch_test_case_info.hpp
+index ab5ae8b9..899214cf 100644
+--- a/src/catch2/catch_test_case_info.hpp
++++ b/src/catch2/catch_test_case_info.hpp
+@@ -17,6 +17,7 @@
+ 
+ #include <string>
+ #include <vector>
++#include <cstdint>
+ 
+ #ifdef __clang__
+ #pragma clang diagnostic push
+diff --git a/src/catch2/internal/catch_string_manip.hpp b/src/catch2/internal/catch_string_manip.hpp
+index 8630b56a..7d3a0fd4 100644
+--- a/src/catch2/internal/catch_string_manip.hpp
++++ b/src/catch2/internal/catch_string_manip.hpp
+@@ -13,6 +13,7 @@
+ #include <string>
+ #include <iosfwd>
+ #include <vector>
++#include <cstdint>
+ 
+ namespace Catch {
+ 
+diff --git a/src/catch2/internal/catch_xmlwriter.cpp b/src/catch2/internal/catch_xmlwriter.cpp
+index d3bc6303..44fe65d6 100644
+--- a/src/catch2/internal/catch_xmlwriter.cpp
++++ b/src/catch2/internal/catch_xmlwriter.cpp
+@@ -13,6 +13,7 @@
+ 
+ #include <iomanip>
+ #include <type_traits>
++#include <cstdint>
+ 
+ namespace Catch {
+ 
+-- 
+2.30.2
+
