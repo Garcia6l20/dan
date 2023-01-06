@@ -40,7 +40,7 @@ export async function getToolchains(): Promise<string[]> {
 }
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
-    let stream = streamExec(['pymake', 'list-targets', '-jq', ext.buildPath]);
+    let stream = streamExec(['pymake', 'list-targets', '-js', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -82,7 +82,7 @@ export async function getTests(ext: PyMake): Promise<string[]> {
 }
 
 export async function getTestSuites(ext: PyMake): Promise<TestSuiteInfo> {
-    let stream = streamExec(['pymake', 'list-tests', '-jq', ext.buildPath]);
+    let stream = streamExec(['pymake', 'list-tests', '-js', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -109,6 +109,10 @@ function baseArgs(ext: PyMake): string[] {
     let args = [ext.buildPath];
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
+    }
+    const jobs = ext.getConfig<number>('jobs');
+    if (jobs !== undefined) {
+        args.push('-j', jobs.toString());
     }
     return args;
 }

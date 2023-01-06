@@ -89,6 +89,10 @@
           "type": "boolean",
           "default": false,
           "description": "Enable verbose mode"
+        },
+        "pymake.jobs": {
+          "type": "integer",
+          "description": "Max parallel jobs"
         }
       }
     },

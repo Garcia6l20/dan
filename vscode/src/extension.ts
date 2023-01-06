@@ -42,7 +42,9 @@ export class PyMake implements vscode.Disposable {
 		}
 		this.toolchains = [];
 		this.targets = [];
-
+		vscode.workspace.onDidChangeConfiguration((e: vscode.ConfigurationChangeEvent) => {
+			this.config = vscode.workspace.getConfiguration("pymake");
+		});
 	}
 
 	getConfig<T>(name: string): T | undefined {

@@ -80,6 +80,7 @@ class Make(Logging):
 
         self.debug(f'source path: {self.source_path}')
         self.debug(f'build path: {self.build_path}')
+        self.debug(f'jobs: {jobs}')
 
         assert (self.source_path /
                 'makefile.py').exists(), f'no makefile in {self.source_path}'
