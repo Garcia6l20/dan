@@ -93,16 +93,29 @@ def discover_tests(exe):
         expr = re.compile(
             fr"({'|'.join(test_macros)})\(\s?\"(.*?)\"[\s,]{{0,}}(?:\"(.*?)\")?")
         tests = dict()
+
+        def is_commented(pos: int, content: str):
+            linestart = content.rfind('\n', 0, pos)
+            if linestart != -1 and content.find('//', linestart + 1, pos) != -1:
+                    return True
+            blockstart = content.rfind('/*', 0, pos)
+            if blockstart != -1 and content.find('*/', blockstart + 2, pos) == -1:
+                return True
+            return False
+
         with open(filepath, 'r') as f:
             content = f.read()
             prev_pos = 0
             lineno = 0
             for m in expr.finditer(content):
+                pos = m.span()[0]
+                if is_commented(pos, content):
+                    continue
+
                 macro = m.group(1)                
                 title = m.group(2)
                 if macro == 'SCENARIO':
                     title = 'Scenario: ' + title
-                pos = m.span()[0]
                 lineno = content.count('\n', prev_pos, pos) + lineno
                 prev_pos = pos
                 tags = m.group(3)
