@@ -51,7 +51,7 @@ class _QtMoccer:
                     self.info(f'updating {moc_file_path}')
                 else:
                     self.info(f'generating {moc_file_path}')
-                out, err, rc = await self.run([self.moc, *self.includes.private, *self.compile_definitions.private, file])
+                out, err, rc = await self.run([self.moc, *self.includes.private, *self.compile_definitions.private, file], log=False)
                 if rc == 0 and len(out):
                     async with aiofiles.open(moc_file_path, 'w') as f:
                         await f.write(out)
