@@ -155,10 +155,50 @@ export class PyMakeTestAdapter implements TestAdapter {
         await Promise.all(promises);
     }
 
+    getSuiteTargets(suite: TestSuiteInfo) {
+        let targets: string[] = [];
+        for (const info of suite.children) {
+            if (info === undefined) {
+                throw Error(`Cannot find infos of test ${test}`);
+            }
+
+            if (info.type === 'test') {
+                targets.push(info.target);
+            } else {
+                for (const child of info.children) {
+                    if (child.type === 'test') {
+                        targets.push(child.target);
+                    } else {
+                        targets.push(...this.getSuiteTargets(child));
+                    }
+                }
+            }
+        }
+        return targets;
+    }
+
+    getTargets(tests: string[]) {
+        let targets: string[] = [];
+        for (const test of tests) {
+            const info = this.getInfo(test);
+            if (info === undefined) {
+                throw Error(`Cannot find infos of test ${test}`);
+            }
+
+            if (info.type === 'test') {
+                targets.push(info.target);
+            } else {
+                targets.push(...this.getSuiteTargets(info));
+            }
+        }
+        return targets;
+    }
+
     async run(tests: string[]): Promise<void> {
         this.log.info(`Running tests ${JSON.stringify(tests)}`);
 
         this.testStatesEmitter.fire(<TestRunStartedEvent>{ type: 'started', tests });
+        await commands.build(this.ext, this.getTargets(tests), false);
         let promises: Promise<void>[] = [];
         for (const test of tests) {
             const info = this.getInfo(test);

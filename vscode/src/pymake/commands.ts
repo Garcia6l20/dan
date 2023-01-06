@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { channelExec, streamExec, termExec } from "./run";
 import { PyMake } from "../extension";
-import { Target } from "./targets";
+import { isTarget, Target } from "./targets";
 import { TestSuiteInfo, TestInfo } from "./testAdapter";
 
 export async function scanToolchains(ext: PyMake) {
@@ -117,12 +117,22 @@ function baseArgs(ext: PyMake): string[] {
     return args;
 }
 
-export async function build(ext: PyMake, targets: Target[] = []) {
+export async function build(ext: PyMake, targets: Target[] | string[] = [], terminal=true) {
     let args = baseArgs(ext);
     if (targets.length !== 0) {
-        args.push(...targets.map(t => t.fullname));
+        args.push(...targets.map((t) => {
+            if (isTarget(t)) {
+                return t.fullname;
+            } else {
+                return t;
+            }
+        }));
     }
-    return termExec('build', args, null, true, ext.projectRoot);
+    if (terminal) {
+        termExec('build', args, null, true, ext.projectRoot);
+    } else {
+        await channelExec('build', args, null, true, ext.projectRoot);
+    }
 }
 
 export async function clean(ext: PyMake) {
