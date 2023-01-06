@@ -39,7 +39,7 @@ class SubCache(object):
                 vh = Cache.__dict_hash(v.__getstate__())
             else:
                 vh = hash(v)
-            h ^= hash(k) ^ vh
+            h ^= hash(k) | vh
         return h
 
     def __hash__(self) -> int:
