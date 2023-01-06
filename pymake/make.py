@@ -10,7 +10,7 @@ from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
 from pymake.core.settings import InstallMode, Settings, safe_load
-from pymake.core.utils import unique
+from pymake.core.utils import AsyncRunner, unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 from pymake.core.target import Option, Target
@@ -34,10 +34,13 @@ class Make(Logging):
     _config_name = 'pymake.config.yaml'
     _cache_name = 'pymake.cache.yaml'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False):
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None):
 
         from pymake.core.include import context_reset
         context_reset()
+
+        jobs = jobs or os.cpu_count()
+        AsyncRunner.max_jobs(jobs)
 
         if quiet:
             assert not verbose, "'quiet' cannot be combined with 'verbose'"

@@ -32,42 +32,59 @@ async def log_stream(stream, *files):
 
 
 class AsyncRunner:
-    async def run(self, command, log=True, no_raise=False, env=None, cwd=None):
-        if not isinstance(command, str):
-            command = subprocess.list2cmdline(command)
-        self.debug(f'executing: {command}')
-        if env:
-            e = dict(os.environ)
-            for k, v in env.items():
-                e[k] = v
-            env = e
-        proc = await asyncio.subprocess.create_subprocess_shell(command,
-                                                                stdout=asyncio.subprocess.PIPE,
-                                                                stderr=asyncio.subprocess.PIPE,
-                                                                env=env,
-                                                                cwd=cwd)
-        
-        out = io.StringIO()
-        err = io.StringIO()
-        outs = [out]
-        errs = [err]
-        if log:
-            outs.append(sys.stdout)
-            errs.append(sys.stderr)
 
-        await asyncio.gather(
-            log_stream(proc.stdout, *outs),
-            log_stream(proc.stderr, *errs),
-            proc.wait())
-        # make sure return code is available
-        await proc.communicate()
-        out = out.getvalue()
-        err = err.getvalue()
-        if proc.returncode != 0 and not no_raise:
-            message = f'command returned {proc.returncode}: {command}\n{out}\n{err}'
-            self.error(message)
-            raise CommandError(message, proc.returncode, out, err)
-        return out, err, proc.returncode
+    __jobs_sem: asyncio.Semaphore = None
+
+    @staticmethod
+    def max_jobs(count = 1):
+        if count > 0:
+            AsyncRunner.__jobs_sem = asyncio.Semaphore(count)
+        else:
+            AsyncRunner.__jobs_sem = None
+
+    async def run(self, command, log=True, no_raise=False, env=None, cwd=None):
+        if self.__jobs_sem is not None:
+            await self.__jobs_sem.acquire()
+        try:
+            if not isinstance(command, str):
+                command = subprocess.list2cmdline(command)
+            self.debug(f'executing: {command}')
+            if env:
+                e = dict(os.environ)
+                for k, v in env.items():
+                    e[k] = v
+                env = e
+            proc = await asyncio.subprocess.create_subprocess_shell(command,
+                                                                    stdout=asyncio.subprocess.PIPE,
+                                                                    stderr=asyncio.subprocess.PIPE,
+                                                                    env=env,
+                                                                    cwd=cwd)
+
+            out = io.StringIO()
+            err = io.StringIO()
+            outs = [out]
+            errs = [err]
+            if log:
+                outs.append(sys.stdout)
+                errs.append(sys.stderr)
+
+            await asyncio.gather(
+                log_stream(proc.stdout, *outs),
+                log_stream(proc.stderr, *errs),
+                proc.wait())
+            # make sure return code is available
+            await proc.communicate()
+            out = out.getvalue()
+            err = err.getvalue()
+            if proc.returncode != 0 and not no_raise:
+                message = f'command returned {proc.returncode}: {command}\n{out}\n{err}'
+                self.error(message)
+                raise CommandError(message, proc.returncode, out, err)
+            return out, err, proc.returncode
+        finally:
+            if self.__jobs_sem is not None:
+                self.__jobs_sem.release()
+
 
 class SyncRunner:
     def run(self, command, pipe=True, no_raise=False, shell=True, env=None):

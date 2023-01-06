@@ -20,6 +20,8 @@ _common_opts = [
                  help='Dont print informations (errors only)'),
     click.option('--verbose', '-v', is_flag=True,
                  help='Pring debug informations'),
+    click.option('--jobs', '-j',
+                 help='Maximum jobs', default=None, type=int),
     click.argument('PATH'),
     click.argument('TARGETS', nargs=-1),
 ]
@@ -154,7 +156,7 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
 
 @commands.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
-@click.option('-j', '--json', 'j', is_flag=True, help='Output in json format')
+@click.option('-js', '--json', 'j', is_flag=True, help='Output in json format')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
 def list_targets(all: bool, j: bool, show_type: bool, **kwargs):
@@ -185,7 +187,7 @@ def list_targets(all: bool, j: bool, show_type: bool, **kwargs):
 
 
 @commands.command()
-@click.option('-j', '--json', 'j', is_flag=True, help='Output in json format')
+@click.option('-js', '--json', 'j', is_flag=True, help='Output in json format')
 @common_opts
 def list_tests(j, **kwargs):
     make = Make(**kwargs)
