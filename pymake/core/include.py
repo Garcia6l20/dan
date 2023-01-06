@@ -9,6 +9,7 @@ from pymake.core.settings import InstallMode, InstallSettings
 
 from pymake.core.target import Options, Target
 from pymake.core.test import Test, AsyncExecutable
+from pymake.logging import Logging
 from pymake.pkgconfig.package import Package
 
 
@@ -54,10 +55,10 @@ def requires(*names) -> list[Target]:
                     found = t
                     break
             try:
-                found = Package(name, search_paths=[context.root.build_path / 'pkgs'])
+                found = Package(name, search_paths=[
+                                context.root.build_path / 'pkgs'])
             except:
                 pass
-
 
         if not found:
             raise TargetNotFound(name)
@@ -123,7 +124,7 @@ class MakeFile(sys.__class__):
         return self.__exports
 
 
-class Context:
+class Context(Logging):
     def __init__(self) -> None:
         self.__root: MakeFile = None
         self.__current: MakeFile = None
@@ -131,29 +132,38 @@ class Context:
         self.__all_targets: set[Target] = set()
         self.__default_targets: set[Target] = set()
         self.__exported_targets: set[Target] = set()
-        self.missing : list[LoadRequest] = list()
+        self.missing: list[LoadRequest] = list()
+        self.__pkg_installs: dict[str, asyncio.Event] = dict()
+        super().__init__('context')
 
     async def _install_pkg(self, module_path, build_path):
+        name = module_path.stem
         settings = InstallSettings()
         settings.destination = self.root.build_path / 'pkgs'
         pkgs_data = self.root.build_path / 'pkgs-build'
         while True:
             try:
-                mf : MakeFile = load_makefile(module_path, build_path)
+                mf: MakeFile = load_makefile(module_path, build_path)
                 tasks = list()
-                for t in mf.installed_targets:
-                    async def install():
-                        await t.install(settings, InstallMode.dev)
-                        async with aiofiles.open(build_path / 'done', 'w') as f:
-                            await f.write('OK')
-                    tasks.append(install())
+                if name not in self.__pkg_installs:
+                    self.__pkg_installs[name] = asyncio.Event()
+                    self.info(f'installing {name}')
+                    for t in mf.installed_targets:
+                        async def install():
+                            await t.install(settings, InstallMode.dev)
+                            async with aiofiles.open(build_path / 'done', 'w') as f:
+                                await f.write('OK')
+                        tasks.append(install())
+                else:
+                    # wait for install completion
+                    tasks.append(self.__pkg_installs[name].wait())
                 await asyncio.gather(*tasks)
+                self.__pkg_installs[name].set()
                 break
             except LoadRequest as missing:
                 await self.install_missing([missing])
 
-
-    async def install_missing(self, missing = None):
+    async def install_missing(self, missing=None):
         tasks = list()
         settings = InstallSettings()
         settings.destination = context.root.build_path / 'pkgs'
