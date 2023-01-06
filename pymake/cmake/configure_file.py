@@ -35,9 +35,9 @@ class ConfigureFile(Target):
     def __setitem__(self, key, value):
         self.__variables[key] = value
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
-        await super().initialize(recursive_once=True)
+        await super().initialize()
         if self.up_to_date:
             return
 

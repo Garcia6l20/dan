@@ -7,7 +7,7 @@ from pymake.pkgconfig.package import Package
 
 
 class _QtMoccer:
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         qt_core = Package('Qt5Core')
         await qt_core.initialize()
@@ -32,11 +32,11 @@ class _QtMoccer:
                 CXXObject(f'{self.name}.{moc_name}', self, moc_path))
             self.other_generated_files.add(moc_path)
 
-        await super().initialize(recursive_once=True)
+        await super().initialize()
 
-    @asyncio.once_method
+    @asyncio.cached
     async def clean(self):
-        await super().clean(recursive_once=True)
+        await super().clean()
         self.cache.reset('mocs')
 
     async def __call__(self):

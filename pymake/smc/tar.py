@@ -24,7 +24,7 @@ class TarSources(Target, Logging, AsyncRunner):
         self.archive_name = url.split("/")[-1]
         self.output: Path = self.build_path / 'sources'
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
 
@@ -36,7 +36,7 @@ class TarSources(Target, Logging, AsyncRunner):
                     self.info(f'extracting {self.archive_name}')
                     f.extractall(self.output)
 
-        return await super().initialize(recursive_once=True)
+        return await super().initialize()
 
     async def __call__(self):
         pass

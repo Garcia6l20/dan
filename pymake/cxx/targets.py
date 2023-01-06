@@ -27,7 +27,7 @@ class CXXObject(Target):
     def private_cxx_flags(self):
         return self.parent.private_cxx_flags
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.parent.preload()
         await self.preload()
@@ -47,7 +47,7 @@ class CXXObject(Target):
                 deps = self.cache.deps
             self.load_dependencies(deps)
             self.load_dependency(self.source)
-        await super().initialize(recursive_once=True)
+        await super().initialize()
 
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
@@ -78,13 +78,9 @@ class OptionSet:
                  transform: Callable = None) -> None:
         self._parent = parent
         self._name = name
-        self._transform = transform or OptionSet._no_transform
+        self._transform = transform or (lambda x: x)
         self._public = list(public)
         self._private = list(private)
-
-    @staticmethod
-    def _no_transform(items):
-        return items
 
     @property
     def private(self) -> list:
@@ -234,14 +230,14 @@ class CXXObjectsTarget(CXXTarget):
     def headers(self):
         return [f for f in self.file_dependencies if f.suffix.startswith('.h')]
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
 
         self._init_sources()
 
         self.load_dependencies(self.objs)
-        await super().initialize(recursive_once=True)
+        await super().initialize()
 
     async def __call__(self):
         # compile objects
@@ -258,11 +254,11 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         self.output = self.build_path / \
             (self.name if os.name != 'nt' else self.name + '.exe')
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
         self.load_dependencies(self.dependencies)
-        await super().initialize(recursive_once=True)
+        await super().initialize()
 
         previous_args = self.cache.get('link_args')
         self.__dirty = False
@@ -285,7 +281,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
         self.cache.link_args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs)
         self.debug(f'done')
 
-    @asyncio.once_method
+    @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
         dest = settings.runtime_destination / self.output.name
         if dest.exists() and dest.younger_than(self.output):
@@ -343,7 +339,7 @@ class Library(CXXObjectsTarget):
         else:
             raise RuntimeError(f'Unknwon os name: {os.name}')
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
 
@@ -364,7 +360,7 @@ class Library(CXXObjectsTarget):
             self.output = self.build_path / f"lib{self.name}.{self.ext}"
         else:
             self.output = self.build_path / f"lib{self.name}.stamp"
-        await super().initialize(recursive_once=True)
+        await super().initialize()
 
         previous_args = self.cache.get('generate_args')
         if self.static:
@@ -415,7 +411,7 @@ class Library(CXXObjectsTarget):
 
         self.debug(f'done')
 
-    @asyncio.once_method
+    @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
         if mode == InstallMode.user and not self.shared:
             return list()
@@ -454,7 +450,7 @@ class Library(CXXObjectsTarget):
                         dest = includes_dest / \
                             header.relative_to(public_include_dir)
                         tasks.append(do_install(header, dest))
-        return await asyncio.gather(super().install(settings, mode, recursive_once=True), *tasks)
+        return await asyncio.gather(super().install(settings, mode), *tasks)
 
 class Module(CXXObjectsTarget):
     def __init__(self, sources: str, *args, **kwargs):

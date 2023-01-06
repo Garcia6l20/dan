@@ -82,7 +82,7 @@ class Package(CXXTarget):
             setattr(module, 'self', self)
             spec.loader.exec_module(module)
 
-    @asyncio.once_method
+    @asyncio.cached
     async def preload(self):
         await self.data.load(self.config_path)
         deps = set()
@@ -99,9 +99,9 @@ class Package(CXXTarget):
         if libs.find(f'-l{self.name}') < 0:
             self.library_type = LibraryType.INTERFACE
 
-        await super().preload(recursive_once=True)
+        await super().preload()
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         # a package is initialized in preload
         await self.preload()
@@ -125,11 +125,11 @@ class Package(CXXTarget):
         tmp.extend(self.data.get('libs').split())
         return unique(tmp)
 
-    @asyncio.once_method
+    @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
         settings = deepcopy(settings)
         settings.create_pkg_config = False
-        return await super().install(settings, mode, recursive_once=True)
+        return await super().install(settings, mode)
 
     @property
     def up_to_date(self):

@@ -88,7 +88,7 @@ class Make(Logging):
         self.config.build_path = str(self.build_path)
         self.config.toolchain = toolchain
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         assert self.source_path and self.config_path.exists(), 'configure first'
 

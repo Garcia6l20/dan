@@ -173,14 +173,14 @@ class Target(Logging):
             self.__cache = self.makefile.cache.subcache(self.fullname)
         return self.__cache
 
-    @asyncio.once_method
+    @asyncio.cached
     async def preload(self):
         self.debug('preloading...')
         await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
         await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
         await asyncio.gather(*[obj.build() for obj in self.preload_dependencies])
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
         self.debug('initializing...')
@@ -223,7 +223,7 @@ class Target(Logging):
             return False
         return True
 
-    @asyncio.once_method
+    @asyncio.cached
     async def build(self):
         await self.initialize()
 
@@ -246,7 +246,7 @@ class Target(Logging):
     def file_dependencies(self):
         return [t for t in self.dependencies if isinstance(t, FileDependency)]
 
-    @asyncio.once_method
+    @asyncio.cached
     async def clean(self):
         await self.initialize()
 
@@ -264,7 +264,7 @@ class Target(Logging):
         except FileNotFoundError as err:
             self.warning(f'file not found: {err.filename}')
 
-    @asyncio.once_method
+    @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode):
         installed_files = list()
         if mode == InstallMode.dev:

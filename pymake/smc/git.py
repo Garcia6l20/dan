@@ -15,7 +15,7 @@ class GitSources(Target, Logging, AsyncRunner):
         self.git_dir: Path = self.output / '.git'
         self.patches = patches
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
 
@@ -32,7 +32,7 @@ class GitSources(Target, Logging, AsyncRunner):
                 for patch in self.patches:
                     await self.run(f'git am {self.source_path / patch}', cwd=self.output)
 
-        return await super().initialize(recursive_once=True)
+        return await super().initialize()
 
     async def __call__(self):
         return
