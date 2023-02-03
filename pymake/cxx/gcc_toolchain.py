@@ -105,7 +105,7 @@ class GCCToolchain(Toolchain):
             all = ''.join([dep.replace('\\', ' ')
                            for dep in out.splitlines()]).split()
             _obj = all.pop(0)
-            _src = all.pop(0)
+            _src = all.pop(0)   
             return all
         else:
             return set()

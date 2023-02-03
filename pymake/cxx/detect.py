@@ -4,6 +4,7 @@ from pymake.core.pathlib import Path
 import subprocess
 import sys
 import tempfile
+import functools
 
 import yaml
 from pymake.core.find import find_executable
@@ -147,7 +148,7 @@ def _parse_compiler_version(defines):
 def detect_compiler_id(executable, env=None):
     # use a temporary file, as /dev/null might not be available on all platforms
     runner = SyncRunner()
-    tmpdir = tempfile.mkdtemp()
+    tmpdir = tempfile.mkdtemp(prefix='pymake-dci-')
     tmpname = os.path.join(tmpdir, "temp.c")
     with open(tmpname, "wb") as f:
         f.write(b"\n")
@@ -161,9 +162,9 @@ def detect_compiler_id(executable, env=None):
         # "-E" run only preprocessor
         # "-x c" compiler as C code
         # the output is of lines in form of "#define name value"
-        "-dM -E -x c",
-        "--driver-mode=g++ -dM -E -x c",  # clang-cl
-        "-c -xdumpmacros",  # SunCC,
+        # "-dM -E -x c",
+        # "--driver-mode=g++ -dM -E -x c",  # clang-cl
+        # "-c -xdumpmacros",  # SunCC,
         # cl (Visual Studio, MSVC)
         # "/nologo" Suppress Startup Banner
         # "/E" Preprocess to stdout
@@ -177,7 +178,7 @@ def detect_compiler_id(executable, env=None):
     try:
         for detector in detectors:
             output, _, rc = runner.run(
-                ' '.join([f'"{executable}"', *detector.split(' '), tmpname]), no_raise=True, env=env)
+                ' '.join([f'"{executable}"', *detector.split(' '), tmpname]), no_raise=True, env=env, cwd=tmpdir)
             if 0 == rc:
                 defines = dict()
                 for line in output.splitlines():
@@ -288,8 +289,9 @@ def get_environment_from_batch_command(env_cmd, initial=None):
         if pos > 0:
             name = line[:pos].strip()
             value = line[pos + 1:].strip()
-            if os.getenv(name) != value:
-                result[name] = value
+            # if os.getenv(name) != value:
+            #    result[name] = value
+            result[name] = value
     return result
 
 
@@ -390,9 +392,11 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         name = f'{name}{suffix}'
     return name, data
 
+_home_var = 'USERPROFILE' if os.name == 'nt' else 'HOME'
 
+@functools.cache
 def get_pymake_path():
-    path = Path(os.getenv('PYMAKE_DATA', os.getenv('HOME'))) / '.pymake'
+    path = Path(os.getenv('PYMAKE_DATA', os.getenv(_home_var))) / '.pymake'
     path.mkdir(exist_ok=True, parents=False)
     return path
 

@@ -78,7 +78,7 @@ class AsyncRunner:
             err = err.getvalue()
             if proc.returncode != 0 and not no_raise:
                 message = f'command returned {proc.returncode}: {command}\n{out}\n{err}'
-                self.error(message)
+                self.error(message) 
                 raise CommandError(message, proc.returncode, out, err)
             return out, err, proc.returncode
         finally:
@@ -87,18 +87,19 @@ class AsyncRunner:
 
 
 class SyncRunner:
-    def run(self, command, pipe=True, no_raise=False, shell=True, env=None):
+    def run(self, command, pipe=True, no_raise=False, shell=True, env=None, cwd=None):
         if not isinstance(command, str):
             command = subprocess.list2cmdline(command)
         if pipe:
             stdout = subprocess.PIPE
         else:
-            stdout = None
+            stdout = None   
         proc = subprocess.Popen(command,
                                 stdout=stdout,
                                 stderr=stdout,
                                 shell=shell,
                                 env=env,
+                                cwd=cwd,
                                 universal_newlines=True)
         out, err = proc.communicate()
         if proc.returncode != 0 and not no_raise:

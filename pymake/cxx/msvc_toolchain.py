@@ -17,7 +17,6 @@ class MSVCToolchain(Toolchain):
         self.env = data['env']
         self.default_cflags = ['/nologo', '/EHsc', '/GA', '/MT']
         self.default_cxxflags = [f'/std:c++{self.cpp_std}']
-        self.set_mode('release')
 
     @Toolchain.build_type.setter
     def build_type(self, mode: BuildType):
@@ -35,22 +34,21 @@ class MSVCToolchain(Toolchain):
 
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = asyncio.run(
-            self.run(f'{self.cxx} {" ".join(opts)}', no_raise=True))
+            self.run([self.cxx, *opts], no_raise=True))
         return err.splitlines()[0].find('no input files') >= 0
 
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
-        return [f'/I"{p}"' for p in include_paths]
+        return [f'/I{p}' for p in include_paths]
 
     def make_link_options(self, libraries: set[Path | str]) -> list[str]:
         opts = list()
         for lib in libraries:
             if isinstance(lib, Path):
-                opts.add(f'/LIBPATH:"{lib.parent}"')
-                # opts.add(f'-Wl,-rpath,{lib.parent}')
-                opts.add(f'{lib.stem}.lib')
+                opts.append(f'/LIBPATH:{lib.parent}')
+                opts.append(f'{lib.stem}.lib')
             else:
                 assert isinstance(lib, str)
-                opts.add(f'{lib}.lib')
+                opts.append(f'{lib}.lib')
         return opts
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
@@ -62,9 +60,10 @@ class MSVCToolchain(Toolchain):
 
         build_path.mkdir(parents=True, exist_ok=True)
         desc = build_path / file.with_suffix(".json").name
-        args = [f'"{self.cc}"', *unique(self.default_cflags, self.default_cxxflags, options), '/scanDependencies', f'"{desc}"', f'"{file}"']
+        args = [self.cc,
+            *unique(self.default_cflags, self.default_cxxflags, options),
+            '/scanDependencies', desc, file]
         await self.run('scan', desc, args,
-                       env=self.env,
                        cwd=build_path)
         deps = set()
         async with aiofiles.open(desc, 'r') as f:
@@ -76,7 +75,7 @@ class MSVCToolchain(Toolchain):
         return deps
 
     def compile_generated_files(self, output: Path) -> set[Path]:
-        return {output.with_suffix(output.suffix + '.d')}
+        return {}
 
     @property
     def cxxmodules_flags(self) -> list[str]:
@@ -84,17 +83,17 @@ class MSVCToolchain(Toolchain):
 
     async def compile(self, sourcefile: Path, output: Path, options: list[str]):
         args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options), 
-                f'/Fo"{str(output)}"', '/c', f'"{str(sourcefile)}"']
-        await self.run('cc', output, args, env=self.env)
+                f'/Fo{str(output)}', '/c', str(sourcefile)]
+        await self.run('cc', output, args)
 
     async def link(self, objects: set[Path], output: Path, options: list[str]):
         args = [self.lnk, '/nologo', *options, *objects, f'/OUT:{str(output)}']
-        await self.run('link', output, args, env=self.env)
+        await self.run('link', output, args)
 
     async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
-        args = [self.lib, '/nologo', *objects, f'/OUT:"{output}"']
-        await self.run('static_lib', output, args, env=self.env)
+        args = [self.lib, '/nologo', *objects, f'/OUT:{output}']
+        await self.run('static_lib', output, args)
 
     async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
-        args = [self.lnk, '/nologo', f'/IMPLIB:"{output.with_suffix(".lib")}"', '/DLL', *options, *objects, f'/OUT:"{output.with_suffix(".dll")}"']
-        await self.run('shared_lib', output, args, env=self.env)
+        args = [self.lnk, '/nologo', f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objects, f'/OUT:{output.with_suffix(".dll")}']
+        await self.run('shared_lib', output, args)
