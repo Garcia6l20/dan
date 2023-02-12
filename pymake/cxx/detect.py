@@ -162,9 +162,9 @@ def detect_compiler_id(executable, env=None):
         # "-E" run only preprocessor
         # "-x c" compiler as C code
         # the output is of lines in form of "#define name value"
-        # "-dM -E -x c",
-        # "--driver-mode=g++ -dM -E -x c",  # clang-cl
-        # "-c -xdumpmacros",  # SunCC,
+        "-dM -E -x c",
+        "--driver-mode=g++ -dM -E -x c",  # clang-cl
+        "-c -xdumpmacros",  # SunCC,
         # cl (Visual Studio, MSVC)
         # "/nologo" Suppress Startup Banner
         # "/E" Preprocess to stdout
