@@ -116,13 +116,14 @@ class GCCToolchain(Toolchain):
     def cxxmodules_flags(self) -> list[str]:
         return ['-std=c++20', '-fmodules-ts']
 
-    async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False):
+    async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False, compile_commands=True, **kwargs):
         args = [*unique(self.default_cflags, self.default_cxxflags, self.compile_options, options), '-MD', '-MT',
                 str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
         if auto_fpic:
             args.insert(0, '-fPIC')
         args.insert(0, self.cxx)
-        self.compile_commands.insert(sourcefile, output.parent, args)
+        if compile_commands:
+            self.compile_commands.insert(sourcefile, output.parent, args)
         if not dry_run:
             await self.run('cc', output, args, **kwargs)
         return args
