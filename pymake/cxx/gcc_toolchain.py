@@ -1,10 +1,10 @@
-import asyncio
 from functools import cached_property
 from pymake.core.settings import BuildType
-from pymake.core.utils import AsyncRunner, unique
+from pymake.core.utils import unique
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
 from pymake.cxx import auto_fpic
+from pymake.core.runners import sync_run, async_run
 
 
 class GCCToolchain(Toolchain):
@@ -64,8 +64,7 @@ class GCCToolchain(Toolchain):
             raise InvalidConfiguration(f'unknown build mode: {mode}')
 
     def has_cxx_compile_options(self, *opts) -> bool:
-        _, err, _ = asyncio.run(
-            self.run(f'{self.cxx} {" ".join(opts)}', no_raise=True))
+        _, err, _ = sync_run([self.cxx, *opts], no_raise=True)
         return err.splitlines()[0].find('no input files') >= 0
 
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
@@ -105,7 +104,7 @@ class GCCToolchain(Toolchain):
             all = ''.join([dep.replace('\\', ' ')
                            for dep in out.splitlines()]).split()
             _obj = all.pop(0)
-            _src = all.pop(0)   
+            _src = all.pop(0)
             return all
         else:
             return set()
@@ -125,7 +124,7 @@ class GCCToolchain(Toolchain):
         args.insert(0, self.cxx)
         self.compile_commands.insert(sourcefile, output.parent, args)
         if not dry_run:
-            await self.run('cc', output, args)
+            await self.run('cc', output, args, **kwargs)
         return args
 
     async def link(self, objects: set[Path], output: Path, options: list[str], dry_run=False):
@@ -134,14 +133,14 @@ class GCCToolchain(Toolchain):
         if not dry_run:
             await self.run('link', output, args)
             if self._build_type in [BuildType.release, BuildType.release_min_size]:
-                await AsyncRunner.run(self, [self.strip, output])
+                await async_run([self.strip, output])
         return args
 
     async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
         args = [self.ar, 'cr', output, *objects]
         if not dry_run:
             await self.run('static_lib', output, args)
-            await AsyncRunner.run(self, [self.ranlib, output])
+            await async_run([self.ranlib, output])
         return args
 
     async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
@@ -150,5 +149,5 @@ class GCCToolchain(Toolchain):
         if not dry_run:
             await self.run('shared_lib', output, args)
             if self._build_type in [BuildType.release, BuildType.release_min_size]:
-                await AsyncRunner.run(self, [self.strip, output])
+                await async_run([self.strip, output])
         return args

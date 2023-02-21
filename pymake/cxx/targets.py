@@ -8,7 +8,8 @@ from typing import Callable
 from pymake.core import aiofiles, cache
 from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.target import Dependencies, Target, TargetDependencyLike
-from pymake.core.utils import AsyncRunner, unique
+from pymake.core.utils import unique
+from pymake.core.runners import async_run
 from pymake.core import asyncio
 
 
@@ -246,7 +247,7 @@ class CXXObjectsTarget(CXXTarget):
         await asyncio.gather(*builds)
 
 
-class Executable(CXXObjectsTarget, AsyncRunner):
+class Executable(CXXObjectsTarget):
 
     def __init__(self, name: str, sources: set[str] | Callable = set(), *args, **kwargs):
         super().__init__(name, sources, *args, **kwargs)
@@ -294,7 +295,7 @@ class Executable(CXXObjectsTarget, AsyncRunner):
 
     async def execute(self, *args, **kwargs):
         await self.build()
-        return await self.run([self.output, *args], **kwargs, env=self.toolchain.env)
+        return await async_run([self.output, *args], logger=self, env=self.toolchain.env, **kwargs)
 
 
 class LibraryType(Enum):
@@ -451,6 +452,7 @@ class Library(CXXObjectsTarget):
                             header.relative_to(public_include_dir)
                         tasks.append(do_install(header, dest))
         return await asyncio.gather(super().install(settings, mode), *tasks)
+
 
 class Module(CXXObjectsTarget):
     def __init__(self, sources: str, *args, **kwargs):
