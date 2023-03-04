@@ -6,6 +6,9 @@ from pymake.core.errors import InvalidConfiguration
 from pymake.cxx import auto_fpic
 from pymake.core.runners import sync_run, async_run
 
+cxx_extensions = ['.cpp', '.cxx', '.C']
+c_extensions = ['.c']
+
 
 class GCCToolchain(Toolchain):
     def __init__(self, data, tools):
@@ -52,16 +55,17 @@ class GCCToolchain(Toolchain):
     @Toolchain.build_type.setter
     def build_type(self, mode: BuildType):
         self._build_type = mode
-        if mode == BuildType.debug:
-            self.default_cflags.extend(('-g', ))
-        elif mode == BuildType.release:
-            self.default_cflags.extend(('-O3', '-DNDEBUG'))
-        elif mode == BuildType.release_min_size:
-            self.default_cflags.extend(('-Os', '-DNDEBUG'))
-        elif mode == BuildType.release_debug_infos:
-            self.default_cflags.extend(('-O2', '-g', '-DNDEBUG'))
-        else:
-            raise InvalidConfiguration(f'unknown build mode: {mode}')
+        match mode:
+            case BuildType.debug:
+                self.default_cflags.extend(('-g', ))
+            case BuildType.release:
+                self.default_cflags.extend(('-O3', '-DNDEBUG'))
+            case BuildType.release_min_size:
+                self.default_cflags.extend(('-Os', '-DNDEBUG'))
+            case BuildType.release_debug_infos:
+                self.default_cflags.extend(('-O2', '-g', '-DNDEBUG'))
+            case _:
+                raise InvalidConfiguration(f'unknown build mode: {mode}')
 
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = sync_run([self.cxx, *opts], no_raise=True)
@@ -89,16 +93,27 @@ class GCCToolchain(Toolchain):
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return unique([f'-D{d}' for d in definitions])
 
-    async def scan_dependencies(self, file: Path, options: list[str], build_path: Path) -> set[FileDependency]:
+    def get_base_compile_args(self, sourcefile: Path) -> list[str]:
+        match sourcefile.suffix:
+            case _ if sourcefile.suffix in cxx_extensions:
+                return [self.cxx, *self.default_cxxflags]
+            case _ if sourcefile.suffix in c_extensions:
+                return [self.cc, *self.default_cflags]
+            case _:
+                raise RuntimeError(
+                    f'Unhandled source file extention: {sourcefile.suffix}')
+
+    async def scan_dependencies(self, sourcefile: Path, options: list[str], build_path: Path) -> set[FileDependency]:
         if not scan:
             return set()
-        args = [self.cxx, '-M', file, *
-                unique(self.default_cflags, self.default_cxxflags, options)]
+        args = self.get_base_compile_args(sourcefile)
+        args.extend(['-M', str(sourcefile), *options])
+
         if auto_fpic:
-            args.insert(2, '-fPIC')
+            args.insert(1, '-fPIC')
 
         build_path.mkdir(parents=True, exist_ok=True)
-        output = build_path / file.name
+        output = build_path / sourcefile.name
         out, _, _ = await self.run('scan', output, args, log=False, cwd=build_path)
         if out:
             all = ''.join([dep.replace('\\', ' ')
@@ -117,11 +132,11 @@ class GCCToolchain(Toolchain):
         return ['-std=c++20', '-fmodules-ts']
 
     async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False, compile_commands=True, **kwargs):
-        args = [*unique(self.default_cflags, self.default_cxxflags, self.compile_options, options), '-MD', '-MT',
-                str(output), '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)]
+        args = self.get_base_compile_args(sourcefile)
+        args.extend([*self.compile_options, *options, '-MD', '-MT', str(output),
+                    '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)])
         if auto_fpic:
-            args.insert(0, '-fPIC')
-        args.insert(0, self.cxx)
+            args.insert(1, '-fPIC')
         if compile_commands:
             self.compile_commands.insert(sourcefile, output.parent, args)
         if not dry_run:
