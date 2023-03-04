@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: MIT */
+#ifndef LIBURING_COMPAT_H
+#define LIBURING_COMPAT_H
+
+{% if not has_kernel_rwf_t -%}
+typedef int __kernel_rwf_t;
+{%- endif %}
+
+{% if not has_kernel_timespec -%}
+#include <stdint.h>
+
+struct __kernel_timespec {
+	int64_t		tv_sec;
+	long long	tv_nsec;
+};
+{% else %}
+#include <linux/time_types.h>
+{%- endif %}
+
+{% if not has_open_how -%}
+#include <inttypes.h>
+
+struct open_how {
+	uint64_t	flags;
+	uint64_t	mode;
+	uint64_t	resolve;
+};
+{%- endif %}
+
+#endif // LIBURING_COMPAT_H
