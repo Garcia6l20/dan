@@ -237,8 +237,9 @@ class CXXObjectsTarget(CXXTarget):
 
         self._init_sources()
 
-        self.load_dependencies(self.objs)
         await super().initialize()
+
+        await asyncio.gather(*[obj.initialize() for obj in self.objs])
 
     async def __call__(self):
         # compile objects
@@ -258,7 +259,6 @@ class Executable(CXXObjectsTarget):
     @asyncio.cached
     async def initialize(self):
         await self.preload()
-        self.load_dependencies(self.dependencies)
         await super().initialize()
 
         previous_args = self.cache.get('link_args')
