@@ -1,10 +1,10 @@
 from click import Path
 from pymake.core import asyncio, aiofiles
 from pymake.core.target import Target
-from pymake.core.utils import AsyncRunner, chdir
 from pymake.logging import Logging
 import aiohttp
 import tarfile
+
 
 async def fetch_file(url, dest):
     async with aiohttp.ClientSession() as session:
@@ -16,8 +16,9 @@ async def fetch_file(url, dest):
         dest, "wb"
     ) as outfile:
         await outfile.write(data)
-        
-class TarSources(Target, Logging, AsyncRunner):
+
+
+class TarSources(Target, Logging):
     def __init__(self, name: str, url: str, version: str = None) -> None:
         super().__init__(name, version=version, all=False)
         self.url = url

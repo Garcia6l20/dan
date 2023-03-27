@@ -3,7 +3,7 @@ from pymake import self, requires, load
 from pymake.cxx import Library
 from pymake.smc import GitSources
 
-load('fmt')
+requires('fmt')
 
 version = '1.11.0'
 description = 'Fast C++ logging library'
@@ -26,9 +26,10 @@ spdlog = Library('spdlog',
                      spdlog_src / 'spdlog.cpp',
                  ],
                  includes=[spdlog_inc],
-                 compile_definitions=['SPDLOG_COMPILED_LIB', 'SPDLOG_FMT_EXTERNAL'],
+                 compile_definitions=[
+                     'SPDLOG_COMPILED_LIB', 'SPDLOG_FMT_EXTERNAL'],
                  preload_dependencies=[gitspdlog],
-                 dependencies=requires('fmt'),
+                 dependencies=['fmt'],
                  all=False)
 
 spdlog.header_match = r'^(?:(?!bundled).)*\.(h.?)$'

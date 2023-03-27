@@ -1,5 +1,6 @@
 from asyncio import *
 import functools
+import threading
 
 
 class _CacheCtx:
@@ -31,3 +32,26 @@ def cached(fn):
         return ctx.results[key].result
 
     return wrapper
+
+
+class _SyncWaitThread(threading.Thread):
+    def __init__(self, coro):
+        self.coro = coro
+        self.result = None
+        self.err = None
+        super().__init__()
+
+    def run(self):
+        try:
+            self.result = run(self.coro)
+        except Exception as err:
+            self.err = err
+
+
+def sync_wait(coro):
+    thread = _SyncWaitThread(coro)
+    thread.start()
+    thread.join()
+    if thread.err:
+        raise thread.err
+    return thread.result

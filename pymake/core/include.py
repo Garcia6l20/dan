@@ -37,11 +37,20 @@ def load(*recipes: str):
 
 def requires(*names) -> list[Target]:
     ''' Requirement lookup
-    1 - Search for existing-exported target
-    2 - Look for pkg-config library
+
+    1. Searches for a target exported by a previously included makefile
+    2. Searches for pkg-config library
+    3. Raises LoadRequest exception, that should trig a package lookup/installation,
+        then reload the makefile requiring the package
+        (that should be resolved by its locally installed pkg-config)
+
+    :param names: One (or more) requirement(s).
+    :return: The list of found targets.
+    :raises LoadRequest: Unfound requirements to resolve.
     '''
     global context
     res = list()
+    missing_packages = list()
     for name in names:
         found = None
         for t in context.exported_targets:
@@ -61,8 +70,12 @@ def requires(*names) -> list[Target]:
                 pass
 
         if not found:
-            raise TargetNotFound(name)
+            missing_packages.append(name)
         res.append(found)
+
+    if len(missing_packages) > 0:
+        raise LoadRequest(missing_packages)
+
     return res
 
 
@@ -305,6 +318,11 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
 
 
 def include(*names: str | Path) -> list[Target]:
+    """Include one (or more) subdirectory (or named makefile).
+
+    :param names: One (or more) subdirectory or makefile to include.
+    :return: The list of targets exported by the included targets.
+    """
     result = list()
     for name in names:
         result.extend(include_makefile(name))

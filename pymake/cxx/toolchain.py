@@ -1,16 +1,19 @@
+from pymake.core.asyncio import sync_wait
 from pymake.core.pathlib import Path
 from pymake.core.settings import BuildType
 from pymake.core.target import FileDependency
-from pymake.core.utils import AsyncRunner
+from pymake.core.runners import async_run, CommandError
 from pymake.core.version import Version
 from pymake.logging import Logging
 from pymake.cxx.compile_commands import CompileCommands
+
+import tempfile
 
 
 scan = True
 
 
-class Toolchain(AsyncRunner, Logging):
+class Toolchain(Logging):
     def __init__(self, data) -> None:
         self._compile_commands: CompileCommands = None
         self.cxx_flags = set()
@@ -21,8 +24,8 @@ class Toolchain(AsyncRunner, Logging):
         self.env = None
         self.rpath = None
         self._build_type = BuildType.debug
-        self.compile_options : list[str] = list()
-        self.link_options : list[str] = list()
+        self.compile_options: list[str] = list()
+        self.link_options: list[str] = list()
 
     @property
     def build_type(self):
@@ -55,7 +58,7 @@ class Toolchain(AsyncRunner, Logging):
     def compile_generated_files(self, output: Path) -> set[Path]:
         return set()
 
-    async def compile(self, sourcefile: Path, output: Path, options: set[str], dry_run=False):
+    async def compile(self, sourcefile: Path, output: Path, options: set[str], dry_run=False, compile_commands=True, **kwargs):
         ...
 
     async def link(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
@@ -67,9 +70,35 @@ class Toolchain(AsyncRunner, Logging):
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
         ...
 
-    async def run(self, name: str, output: Path, args, **kwargs):
-        return await super().run(args, env=self.env, **kwargs)
+    async def run(self, name: str, output: Path, args, quiet=False, **kwargs):
+        return await async_run(args, env=self.env, logger=self if not quiet else None, ** kwargs)
 
     @property
     def cxxmodules_flags(self) -> list[str]:
         ...
+
+    def can_compile(self, source: str, options: set[str] = set(), extension='.cpp'):
+        with tempfile.NamedTemporaryFile('w', suffix=extension) as f:
+            f.write(source)
+            f.flush()
+            try:
+                sync_wait(
+                    self.compile(Path(f.name), Path(f.name).with_suffix('.o'), options,
+                                 compile_commands=False,
+                                 log=False,
+                                 quiet=True,
+                                 ))
+                return True
+            except CommandError as err:
+                print(err)
+                return False
+
+    def has_include(self, *includes, options: set[str] = set(), extension='.cpp'):
+        source = '\n'.join([f'#include {inc}' for inc in includes])
+        return self.can_compile(source, options, extension)
+
+    def has_definition(self, *definitions, options: set[str] = set(), extension='.cpp'):
+        source = '\n'.join([f'''#ifndef {d}
+        #error "{d} is not defined"
+        #endif''' for d in definitions])
+        return self.can_compile(source, options, extension)

@@ -2,7 +2,7 @@ import json
 import os
 from shutil import which
 import subprocess
-from pymake.core.utils import SyncRunner
+from pymake.core.runners import sync_run
 
 
 def _system_registry_key(key, subkey, query):
@@ -19,6 +19,7 @@ def _system_registry_key(key, subkey, query):
             return None
         finally:
             winreg.CloseKey(hkey)
+
 
 def is_win64():
     import winreg  # @UnresolvedImport
@@ -38,7 +39,7 @@ def vswhere(all_=False, prerelease=False, products=None, requires=None, version=
 
     if legacy and (products or requires):
         raise RuntimeError("The 'legacy' parameter cannot be specified with either the "
-                             "'products' or 'requires' parameter")
+                           "'products' or 'requires' parameter")
 
     installer_path = None
     program_files = os.getenv("ProgramFiles(x86)") or os.getenv("ProgramFiles")
@@ -51,7 +52,7 @@ def vswhere(all_=False, prerelease=False, products=None, requires=None, version=
 
     if not vswhere_path:
         raise RuntimeError("Cannot locate vswhere in 'Program Files'/'Program Files (x86)' "
-                             "directory nor in PATH")
+                           "directory nor in PATH")
 
     arguments = list()
     arguments.append(vswhere_path)
@@ -92,7 +93,7 @@ def vswhere(all_=False, prerelease=False, products=None, requires=None, version=
         arguments.append("-nologo")
 
     try:
-        output, err, rc = SyncRunner().run(arguments, no_raise=True)
+        output, err, rc = sync_run(arguments, no_raise=True)
         if rc != 0:
             raise RuntimeError(err.strip())
         output = output.strip()
@@ -105,4 +106,3 @@ def vswhere(all_=False, prerelease=False, products=None, requires=None, version=
         raise RuntimeError("vswhere error: %s" % str(e))
 
     return json.loads(output)
-

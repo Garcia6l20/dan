@@ -123,7 +123,7 @@ class Target(Logging):
         from pymake.core.include import context
         self._name = name
         self.description = description
-        self.version = Version(version) if version else None        
+        self.version = Version(version) if version else None
         self.parent = parent
         self.__cache: SubCache = None
         if parent is None:
@@ -176,6 +176,9 @@ class Target(Logging):
     @asyncio.cached
     async def preload(self):
         self.debug('preloading...')
+        deps = self.dependencies
+        self.dependencies = Dependencies()
+        self.load_dependencies(deps)
         await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
         await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
         await asyncio.gather(*[obj.build() for obj in self.preload_dependencies])
@@ -199,6 +202,12 @@ class Target(Logging):
         elif isinstance(dependency, FileDependency):
             self.dependencies.add(dependency)
         elif isinstance(dependency, str):
+            from pymake.pkgconfig.package import Package
+            for pkg in Package.all.values():
+                if pkg.name == dependency:
+                    self.load_dependency(pkg)
+                    return
+
             self.load_dependency(Path(dependency))
         elif isinstance(dependency, Path):
             dependency = FileDependency(self.source_path / dependency)
@@ -274,7 +283,8 @@ class Target(Logging):
                     tmp = inspect.getsourcelines(fn)[0]
                     tmp[0] = f'\n\n@self.utility\n'
                     lines.extend(tmp)
-                filepath = settings.libraries_destination / 'pymake' / f'{self.name}.py'
+                filepath = settings.libraries_destination / \
+                    'pymake' / f'{self.name}.py'
                 filepath.parent.mkdir(exist_ok=True, parents=True)
                 async with aiofiles.open(filepath, 'w') as f:
                     await f.writelines(lines)

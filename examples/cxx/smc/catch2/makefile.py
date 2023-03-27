@@ -1,9 +1,7 @@
-from pymake import self, requires, load
+from pymake import self, requires
 from pymake.cxx import Executable
 
-load('catch2')
-
-catch2 = requires('catch2')[0]
+catch2, = requires('catch2')
 
 example = Executable('pymake-test-catch2',
                      sources=['test_catch2.cpp'],

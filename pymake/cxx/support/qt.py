@@ -2,6 +2,7 @@
 from pymake.core import aiofiles, asyncio
 from pymake.core.find import find_executable
 from pymake.core.pathlib import Path
+from pymake.core.runners import async_run
 from pymake.cxx.targets import CXXObject, Executable, Library
 from pymake.pkgconfig.package import Package
 
@@ -51,7 +52,7 @@ class _QtMoccer:
                     self.info(f'updating {moc_file_path}')
                 else:
                     self.info(f'generating {moc_file_path}')
-                out, err, rc = await self.run([self.moc, *self.includes.private, *self.compile_definitions.private, file], log=False)
+                out, err, rc = await async_run([self.moc, *self.includes.private, *self.compile_definitions.private, file], logger=self, log=False)
                 if rc == 0 and len(out):
                     async with aiofiles.open(moc_file_path, 'w') as f:
                         await f.write(out)

@@ -10,11 +10,12 @@ from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
 from pymake.core.settings import InstallMode, Settings, safe_load
-from pymake.core.utils import AsyncRunner, unique
+from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
 from pymake.core.target import Option, Target
 from pymake.cxx.targets import Executable
+from pymake.core.runners import max_jobs
 from collections.abc import Iterable
 
 
@@ -40,7 +41,7 @@ class Make(Logging):
         context_reset()
 
         jobs = jobs or os.cpu_count()
-        AsyncRunner.max_jobs(jobs)
+        max_jobs(jobs)
 
         if quiet:
             assert not verbose, "'quiet' cannot be combined with 'verbose'"
@@ -99,24 +100,24 @@ class Make(Logging):
         toolchain = self.config.toolchain
         build_type = self.settings.build_type
 
-        self.info(f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
+        self.info(
+            f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
 
         from pymake.core.include import context_reset
         import gc
         while True:
             context_reset()
             gc.collect()
-            
+
             init_toolchains(toolchain)
 
             include_makefile(self.source_path, self.build_path)
-            
+
             from pymake.core.include import context
             if len(context.missing) > 0:
                 await context.install_missing()
             else:
                 break
-
 
         from pymake.core.include import context
         from pymake.cxx import target_toolchain
@@ -197,7 +198,7 @@ class Make(Logging):
         return get_toolchains()
 
     class progress:
-        
+
         def __init__(self, desc, targets, task_builder) -> None:
             self.desc = desc
             self.targets = targets
@@ -211,7 +212,7 @@ class Make(Logging):
         def __enter__(self):
             def update(n=1):
                 desc = self.desc + ' ' + \
-                    ', '.join([t.name for t in self.targets])                
+                    ', '.join([t.name for t in self.targets])
                 if len(desc) > self.max_desc_width:
                     desc = desc[:self.max_desc_width] + ' ...'
                 self.pbar.set_description_str(desc)
