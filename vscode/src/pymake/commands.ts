@@ -16,7 +16,7 @@ const splitLines = (str: string) => str.split(/\r?\n/);
 
 export async function getToolchains(): Promise<string[]> {
     let toolchains: string[] = [];
-    let stream = streamExec(['pymake', 'list-toolchains']);
+    let stream = streamExec(['python', '-m', 'pymake', 'list-toolchains']);
     let errors: string[] = [];
     stream.onLine((line, isError) => {
         if (!isError) {
@@ -40,7 +40,7 @@ export async function getToolchains(): Promise<string[]> {
 }
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
-    let stream = streamExec(['pymake', 'list-targets', '-js', '-q', ext.buildPath]);
+    let stream = streamExec(['python', '-m', 'pymake', 'list-targets', '-js', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -61,7 +61,7 @@ export async function getTargets(ext: PyMake): Promise<Target[]> {
 
 
 export async function getTests(ext: PyMake): Promise<string[]> {
-    let stream = streamExec(['pymake', 'list-tests', '-q', ext.buildPath]);
+    let stream = streamExec(['python', '-m', 'pymake', 'list-tests', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -82,7 +82,7 @@ export async function getTests(ext: PyMake): Promise<string[]> {
 }
 
 export async function getTestSuites(ext: PyMake): Promise<TestSuiteInfo> {
-    let stream = streamExec(['pymake', 'list-tests', '-js', '-q', ext.buildPath]);
+    let stream = streamExec(['python', '-m', 'pymake', 'list-tests', '-js', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -117,7 +117,7 @@ function baseArgs(ext: PyMake): string[] {
     return args;
 }
 
-export async function build(ext: PyMake, targets: Target[] | string[] = [], terminal=true) {
+export async function build(ext: PyMake, targets: Target[] | string[] = [], terminal = true) {
     let args = baseArgs(ext);
     if (targets.length !== 0) {
         args.push(...targets.map((t) => {
