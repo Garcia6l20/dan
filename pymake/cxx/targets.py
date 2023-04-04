@@ -399,9 +399,9 @@ class Library(CXXObjectsTarget):
                 objs.update(dep.objs)
 
         if self.static:
-            await self.toolchain.static_lib([str(obj.output) for obj in self.objs], self.output, self.libs)
+            await self.toolchain.static_lib([obj.output for obj in self.objs], self.output, self.libs)
         elif self.shared:
-            await self.toolchain.shared_lib([str(obj.output) for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
+            await self.toolchain.shared_lib([obj.output for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
             from .msvc_toolchain import MSVCToolchain
             if isinstance(self.toolchain, MSVCToolchain):
                 self.compile_definitions.add(

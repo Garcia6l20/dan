@@ -54,15 +54,15 @@ class MSVCToolchain(Toolchain):
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return [f'/D{d}' for d in definitions]
 
-    async def scan_dependencies(self, file: Path, options: list[str], build_path:Path) -> set[FileDependency]:
+    async def scan_dependencies(self, file: Path, options: list[str], build_path: Path) -> set[FileDependency]:
         if not scan:
             return set()
 
         build_path.mkdir(parents=True, exist_ok=True)
         desc = build_path / file.with_suffix(".json").name
         args = [self.cc,
-            *unique(self.default_cflags, self.default_cxxflags, options),
-            '/scanDependencies', desc, file]
+                *unique(self.default_cflags, self.default_cxxflags, options),
+                '/scanDependencies', desc, file]
         await self.run('scan', desc, args,
                        cwd=build_path)
         deps = set()
@@ -79,10 +79,10 @@ class MSVCToolchain(Toolchain):
 
     @property
     def cxxmodules_flags(self) -> list[str]:
-        return list() # {'/std=latest'}
+        return list()
 
     async def compile(self, sourcefile: Path, output: Path, options: list[str]):
-        args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options), 
+        args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options),
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
         await self.run('cc', output, args)
 
@@ -91,9 +91,22 @@ class MSVCToolchain(Toolchain):
         await self.run('link', output, args)
 
     async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
-        args = [self.lib, '/nologo', *objects, f'/OUT:{output}']
-        await self.run('static_lib', output, args)
+        objects = list(objects)
+        cwd = objects[0].parent
+        objs = [objects[0].name]
+        for obj in objects[1:]:
+            assert obj.parent == cwd
+            objs.append(obj.name)
+        args = [self.lib, '/nologo', *objs, f'/OUT:{output}']
+        await self.run('static_lib', output, args, cwd=cwd)
 
     async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
-        args = [self.lnk, '/nologo', f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objects, f'/OUT:{output.with_suffix(".dll")}']
+        objects = list(objects)
+        cwd = objects[0].parent
+        objs = [objects[0].name]
+        for obj in objects[1:]:
+            assert obj.parent == cwd
+            objs.append(obj.name)
+        args = [self.lnk, '/nologo',
+                f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']
         await self.run('shared_lib', output, args)
