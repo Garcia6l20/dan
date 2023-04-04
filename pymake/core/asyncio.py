@@ -1,37 +1,36 @@
 from asyncio import *
-import functools
 import threading
 
-
-class _CacheCtx:
-    class Result:
-        def __init__(self) -> None:
-            self.event = Event()
-            self.result = None
-
-    def __init__(self) -> None:
-        self.results: dict[int, self.Result] = dict()
+from pymake.core.functools import BaseDecorator
 
 
-def cached(fn):
-    setattr(fn, '_aio_cache_ctx', _CacheCtx())
+class cached(BaseDecorator):
 
-    @functools.wraps(fn)
-    async def wrapper(*args, **kwargs):
-        ctx: _CacheCtx = getattr(fn, '_aio_cache_ctx')
-        key = hash((args, frozenset(kwargs)))
-        if key not in ctx.results:
-            # print(f'calling {fn} ({key})')
-            result = _CacheCtx.Result()
-            ctx.results[key] = result
-            result.result = await fn(*args, **kwargs)
-            result.event.set()
+    def __init__(self, fn):
+        self.__fn = fn
+        self.__cache: dict[int, Future] = dict()
+
+    async def __call__(self, *args, **kwds):
+        if self.is_method:
+            # drop self since it is not handled in the cache key
+            key = hash((args[1:], frozenset(kwds)))
         else:
-            await ctx.results[key].event.wait()
+            key = hash((args, frozenset(kwds)))
+        if key not in self.__cache:
+            self.__cache[key] = Future()
+            self.__cache[key].set_result(await self.__fn(*args, **kwds))
+        elif not self.__cache[key].done():
+            await self.__cache[key]
 
-        return ctx.results[key].result
+        return self.__cache[key].result()
 
-    return wrapper
+    def clear(self, *args, **kwds):
+        key = hash((args, frozenset(kwds)))
+        if key in self.__cache:
+            del self.__cache[key]
+
+    def clear_all(self):
+        self.__cache = dict()
 
 
 class _SyncWaitThread(threading.Thread):
