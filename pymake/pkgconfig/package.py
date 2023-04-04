@@ -24,24 +24,18 @@ class Data:
     def __init__(self) -> None:
         self._items = dict()
 
+    __split_expr = re.compile(r'(.+?)[:=](.+)')
+
     async def load(self, config):
         async with aiofiles.open(config) as f:
             lines = [l for l in [l.strip().removesuffix('\n')
                                  for l in await f.readlines()] if len(l)]
             for line in lines:
-                pos = line.find(':')
-                if pos > 0:
-                    k = line[:pos].strip().lower()
-                    v = line[pos+1:].strip()
+                m = Data.__split_expr.match(line)
+                if m:
+                    k = m.group(1).lower()
+                    v = m.group(2)
                     self._items[k] = v
-                    continue
-
-                pos = line.find('=')
-                if pos > 0:
-                    k = line[:pos].strip()
-                    v = line[pos+1:].strip()
-                    self._items[k] = v
-                    continue
 
     def get(self, name: str, default=None):
         if not name in self._items:
