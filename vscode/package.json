@@ -60,6 +60,10 @@
       {
         "command": "pymake.selectTestTargets",
         "title": "PyMake: Select test targets"
+      },
+      {
+        "command": "pymake.debugBuild",
+        "title": "PyMake: Build (debug)"
       }
     ],
     "configuration": {
@@ -93,6 +97,11 @@
         "pymake.jobs": {
           "type": "integer",
           "description": "Max parallel jobs"
+        },
+        "pymake.pythonDebugJustMyCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use 'JustMyCode' option when debugging build scripts"
         }
       }
     },
@@ -101,6 +110,11 @@
         "key": "f7",
         "when": "inPyMakeProject",
         "command": "pymake.build"
+      },
+      {
+        "key": "ctrl+shift+f7",
+        "when": "inPyMakeProject",
+        "command": "pymake.debugBuild"
       },
       {
         "key": "ctrl+f7",
@@ -139,6 +153,11 @@
           "command": "pymake.build",
           "when": "inPyMakeProject",
           "group": "PyMake:build"
+        },
+        {
+          "command": "pymake.debugBuild",
+          "when": "inPyMakeProject",
+          "group": "PyMake:debug"
         },
         {
           "command": "pymake.run",

@@ -5,7 +5,7 @@ import * as commands from './pymake/commands';
 import * as debuggerModule from './pymake/debugger';
 import { Target } from './pymake/targets';
 import { StatusBar } from './status';
-import {PyMakeTestAdapter} from './pymake/testAdapter';
+import { PyMakeTestAdapter } from './pymake/testAdapter';
 import { TestHub, testExplorerExtensionId } from 'vscode-test-adapter-api';
 import { Log, TestAdapterRegistrar } from 'vscode-test-adapter-util';
 
@@ -147,6 +147,7 @@ export class PyMake implements vscode.Disposable {
 		register('scanToolchains', async () => commands.scanToolchains(this));
 		register('configure', async () => commands.configure(this));
 		register('build', async () => commands.build(this, this.buildTargets));
+		register('debugBuild', async () => commands.build(this, this.buildTargets, false, true));
 		register('clean', async () => commands.clean(this));
 		register('run', async () => {
 			if (!this.launchTarget || !this.launchTarget.executable) {
@@ -186,16 +187,16 @@ export class PyMake implements vscode.Disposable {
 			const testHub = testExplorerExtension.exports;
 			const log = new Log('PyMakeTestExplorer', this.workspaceFolder, 'PyMake Explorer Log');
 			this.extensionContext.subscriptions.push(log);
-		
+
 			// this will register a CmakeAdapter for each WorkspaceFolder
 			this.extensionContext.subscriptions.push(
-			  new TestAdapterRegistrar(
-				testHub,
-				(workspaceFolder) => new PyMakeTestAdapter(this, log),
-				log
-			  )
+				new TestAdapterRegistrar(
+					testHub,
+					(workspaceFolder) => new PyMakeTestAdapter(this, log),
+					log
+				)
 			);
-		  }
+		}
 	}
 };
 

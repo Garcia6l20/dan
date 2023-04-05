@@ -3,6 +3,7 @@ import { channelExec, streamExec, termExec } from "./run";
 import { PyMake } from "../extension";
 import { isTarget, Target } from "./targets";
 import { TestSuiteInfo, TestInfo } from "./testAdapter";
+import { DebuggerEnvironmentVariable } from "./debugger";
 
 export async function scanToolchains(ext: PyMake) {
     let args = [];
@@ -117,7 +118,19 @@ function baseArgs(ext: PyMake): string[] {
     return args;
 }
 
-export async function build(ext: PyMake, targets: Target[] | string[] = [], terminal = true) {
+interface PythonDebugConfiguration {
+    type: string;
+    name: string;
+    request: string;
+    program?: string;
+    module?: string;
+    justMyCode?: boolean;
+    args?: string[];
+    cwd?: string;
+    environment?: DebuggerEnvironmentVariable[];
+}
+
+export async function build(ext: PyMake, targets: Target[] | string[] = [], terminal = true, debug = false) {
     let args = baseArgs(ext);
     if (targets.length !== 0) {
         args.push(...targets.map((t) => {
@@ -128,7 +141,18 @@ export async function build(ext: PyMake, targets: Target[] | string[] = [], term
             }
         }));
     }
-    if (terminal) {
+    if (debug) {
+        const cfg: PythonDebugConfiguration = {
+            name: 'Pymake build',
+            type: 'python',
+            request: 'launch',
+            module: 'pymake',
+            justMyCode: ext.getConfig<boolean>('pythonDebugJustMyCode'),
+            args: ['build', ...args],
+            cwd: ext.projectRoot
+        };
+        await vscode.debug.startDebugging(undefined, cfg);
+    } else if (terminal) {
         termExec('build', args, null, true, ext.projectRoot);
     } else {
         await channelExec('build', args, null, true, ext.projectRoot);
