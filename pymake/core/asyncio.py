@@ -11,11 +11,7 @@ class cached(BaseDecorator):
         self.__cache: dict[int, Future] = dict()
 
     async def __call__(self, *args, **kwds):
-        if self.is_method:
-            # drop self since it is not handled in the cache key
-            key = hash((args[1:], frozenset(kwds)))
-        else:
-            key = hash((args, frozenset(kwds)))
+        key = hash((args, frozenset(kwds)))
         if key not in self.__cache:
             self.__cache[key] = Future()
             self.__cache[key].set_result(await self.__fn(*args, **kwds))
@@ -23,11 +19,6 @@ class cached(BaseDecorator):
             await self.__cache[key]
 
         return self.__cache[key].result()
-
-    def clear(self, *args, **kwds):
-        key = hash((args, frozenset(kwds)))
-        if key in self.__cache:
-            del self.__cache[key]
 
     def clear_all(self):
         self.__cache = dict()
