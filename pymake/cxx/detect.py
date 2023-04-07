@@ -161,18 +161,18 @@ def detect_compiler_id(executable, env=None):
         # "-E" run only preprocessor
         # "-x c" compiler as C code
         # the output is of lines in form of "#define name value"
-        "-dM -E -x c",
-        "--driver-mode=g++ -dM -E -x c",  # clang-cl
-        "-c -xdumpmacros",  # SunCC,
+        ['-dM', '-E', '-x', 'c'],
+        ['--driver-mode=g++', '-dM', '-E', '-x', 'c'],  # clang-cl
+        ['-c', '-xdumpmacros'],  # SunCC,
         # cl (Visual Studio, MSVC)
         # "/nologo" Suppress Startup Banner
         # "/E" Preprocess to stdout
         # "/B1" C front-end
         # "/c" Compile Without Linking
         # "/TC" Specify Source File Type
-        f'/nologo /E /B1 "{cmd}" /c /TC',
-        "/QdM /E /TC"  # icc (Intel) on Windows,
-        "-Wp,-dM -E -x c"  # QNX QCC
+        ['/nologo', '/E', '/B1', cmd, '/c', '/TC'],
+        ['/QdM', '/E', '/TC'],  # icc (Intel) on Windows,
+        ['-Wp', '-dM', '-E', '-x', 'c'],  # QNX QCC
     ]
     try:
         for detector in detectors:
@@ -222,7 +222,7 @@ class Compiler:
         self.env = env
         self.tools = tools
 
-    @property
+    @ property
     def version(self):
         return self.compiler_id.version
 
@@ -395,7 +395,7 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
 _home_var = 'USERPROFILE' if os.name == 'nt' else 'HOME'
 
 
-@functools.cache
+@ functools.cache
 def get_pymake_path():
     path = Path(os.getenv('PYMAKE_DATA', os.getenv(_home_var))) / '.pymake'
     path.mkdir(exist_ok=True, parents=False)
