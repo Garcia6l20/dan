@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { channelExec, streamExec, termExec } from "./run";
+import { channelExec, streamExec } from "./run";
 import { PyMake } from "../extension";
 import { isTarget, Target } from "./targets";
 import { TestSuiteInfo, TestInfo } from "./testAdapter";
@@ -19,7 +19,8 @@ export async function getToolchains(): Promise<string[]> {
     let toolchains: string[] = [];
     let stream = streamExec(['python', '-m', 'pymake', 'list-toolchains']);
     let errors: string[] = [];
-    stream.onLine((line, isError) => {
+    stream.onLine((buf: Buffer, isError) => {
+        const line = buf.toString();
         if (!isError) {
             for (let item of splitLines(line)) {
                 item = item.trim();
@@ -41,7 +42,7 @@ export async function getToolchains(): Promise<string[]> {
 }
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
-    let stream = streamExec(['python', '-m', 'pymake', 'list-targets', '-js', '-q', ext.buildPath]);
+    let stream = streamExec(['python', '-m', 'pymake', 'list-targets', '--json', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
@@ -103,7 +104,7 @@ export async function configure(ext: PyMake) {
     }
     args.push('--toolchain');
     args.push(await vscode.window.showQuickPick(['default', ...ext.toolchains]) ?? 'default');
-    return termExec('configure', args, null, true, ext.projectRoot);
+    return channelExec('configure', args, null, true, ext.projectRoot);
 }
 
 function baseArgs(ext: PyMake): string[] {
@@ -130,7 +131,7 @@ interface PythonDebugConfiguration {
     environment?: DebuggerEnvironmentVariable[];
 }
 
-export async function build(ext: PyMake, targets: Target[] | string[] = [], terminal = true, debug = false) {
+export async function build(ext: PyMake, targets: Target[] | string[] = [], debug = false) {
     let args = baseArgs(ext);
     if (targets.length !== 0) {
         args.push(...targets.map((t) => {
@@ -152,15 +153,13 @@ export async function build(ext: PyMake, targets: Target[] | string[] = [], term
             cwd: ext.projectRoot
         };
         await vscode.debug.startDebugging(undefined, cfg);
-    } else if (terminal) {
-        termExec('build', args, null, true, ext.projectRoot);
     } else {
         await channelExec('build', args, null, true, ext.projectRoot);
     }
 }
 
 export async function clean(ext: PyMake) {
-    return termExec('clean', [...baseArgs(ext), ...ext.buildTargets.map(t => t.fullname)], null, true, ext.projectRoot);
+    return channelExec('clean', [...baseArgs(ext), ...ext.buildTargets.map(t => t.fullname)], null, true, ext.projectRoot);
 }
 
 export async function run(ext: PyMake) {
@@ -168,11 +167,11 @@ export async function run(ext: PyMake) {
     if (ext.launchTarget) {
         args.push(ext.launchTarget.fullname);
     }
-    return termExec('run', args, null, true, ext.projectRoot);
+    return channelExec('run', args, null, true, ext.projectRoot);
 }
 
 export async function test(ext: PyMake) {
     let args = baseArgs(ext);
     args.push(...ext.tests);
-    return termExec('test', args, null, true, ext.projectRoot);
+    return channelExec('test', args, null, true, ext.projectRoot);
 }

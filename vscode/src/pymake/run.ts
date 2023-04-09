@@ -7,9 +7,9 @@ export function streamExec(
 ) {
     const spawned = cp.spawn(command[0], command.slice(1), options);
     return {
-        onLine(fn: (line: string, isError: boolean) => void) {
-            spawned.stdout?.on("data", (msg: Buffer) => fn(msg.toString(), false));
-            spawned.stderr?.on("data", (msg: Buffer) => fn(msg.toString(), true));
+        onLine(fn: (line: Buffer, isError: boolean) => void) {
+            spawned.stdout?.on("data", (msg: Buffer) => fn(msg, false));
+            spawned.stderr?.on("data", (msg: Buffer) => fn(msg, true));
         },
         kill(signal?: NodeJS.Signals) {
             spawned.kill(signal || "SIGKILL");
@@ -50,8 +50,12 @@ export function channelExec(command: string,
             token.onCancellationRequested(() => stream.kill());
             let oldPercentage = 0;
             progress.report({ message: 'command', increment: 0 });
-            stream.onLine((msg, isError) => {
-                const match = /(.+):\s+(\d+)%\|/g.exec(msg);
+            stream.onLine((msg: Buffer, isError) => {
+                const line = msg.toString().trim();
+                if (line.length === 0) {
+                    return;
+                }
+                const match = /(.+):\s+(\d+)%\|/g.exec(line);
                 if (match) {
                     const percentage = parseInt(match[2]);
                     const increment = percentage - oldPercentage;
@@ -60,8 +64,7 @@ export function channelExec(command: string,
                         progress.report({ increment: increment, message: match[1] });
                     }
                 } else {
-                    channel.appendLine(msg.trim());
-                    channel.show();
+                    channel.appendLine(line);
                 }
             });
             progress.report({ increment: 100 - oldPercentage, message: 'done' });

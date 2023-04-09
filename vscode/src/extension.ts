@@ -147,7 +147,7 @@ export class PyMake implements vscode.Disposable {
 		register('scanToolchains', async () => commands.scanToolchains(this));
 		register('configure', async () => commands.configure(this));
 		register('build', async () => commands.build(this, this.buildTargets));
-		register('debugBuild', async () => commands.build(this, this.buildTargets, false, true));
+		register('debugBuild', async () => commands.build(this, this.buildTargets, true));
 		register('clean', async () => commands.clean(this));
 		register('run', async () => {
 			if (!this.launchTarget || !this.launchTarget.executable) {
