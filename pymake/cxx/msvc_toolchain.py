@@ -2,6 +2,7 @@ import asyncio
 import json
 
 import aiofiles
+from pymake.core.runners import sync_run
 from pymake.core.settings import BuildType
 from pymake.core.utils import unique
 from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
@@ -12,6 +13,7 @@ class MSVCToolchain(Toolchain):
     def __init__(self, data, tools):
         Toolchain.__init__(self, data)
         self.cc = Path(data['cc'])
+        self.cxx = self.cc
         self.lnk = Path(data['link'])
         self.lib = Path(data['lib'])
         self.env = data['env']
@@ -33,9 +35,9 @@ class MSVCToolchain(Toolchain):
             raise InvalidConfiguration(f'unknown build mode: {mode}')
 
     def has_cxx_compile_options(self, *opts) -> bool:
-        _, err, _ = asyncio.run(
-            self.run([self.cxx, *opts], no_raise=True))
-        return err.splitlines()[0].find('no input files') >= 0
+        _, err, _ = sync_run([self.cxx, *opts], no_raise=True)
+        # D9002 => unknown option
+        return err.splitlines()[0].find('D9002') == 0
 
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
         return [f'/I{p}' for p in include_paths]
@@ -53,6 +55,12 @@ class MSVCToolchain(Toolchain):
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return [f'/D{d}' for d in definitions]
+
+    def make_library_name(self, basename: str, shared: bool) -> str:
+        return f'{basename}.{"dll" if shared else "lib"}'
+
+    def make_executable_name(self, basename: str) -> str:
+        return f'{basename}.exe'
 
     async def scan_dependencies(self, file: Path, options: list[str], build_path: Path) -> set[FileDependency]:
         if not scan:
@@ -81,14 +89,19 @@ class MSVCToolchain(Toolchain):
     def cxxmodules_flags(self) -> list[str]:
         return list()
 
-    async def compile(self, sourcefile: Path, output: Path, options: list[str]):
+    async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False, compile_commands=True, **kwargs):
         args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options),
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
-        await self.run('cc', output, args)
+        if compile_commands:
+            self.compile_commands.insert(sourcefile, output.parent, args)
+        if not dry_run:
+            await self.run('cc', output, args, **kwargs)
+        return args
 
     async def link(self, objects: set[Path], output: Path, options: list[str]):
         args = [self.lnk, '/nologo', *options, *objects, f'/OUT:{str(output)}']
         await self.run('link', output, args)
+        return args
 
     async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
         objects = list(objects)
@@ -99,6 +112,7 @@ class MSVCToolchain(Toolchain):
             objs.append(obj.name)
         args = [self.lib, '/nologo', *objs, f'/OUT:{output}']
         await self.run('static_lib', output, args, cwd=cwd)
+        return args
 
     async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
         objects = list(objects)
@@ -110,3 +124,4 @@ class MSVCToolchain(Toolchain):
         args = [self.lnk, '/nologo',
                 f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']
         await self.run('shared_lib', output, args)
+        return args

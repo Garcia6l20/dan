@@ -40,6 +40,8 @@ def init_toolchains(name: str = None):
     if tc_type == 'gcc':
         from .gcc_toolchain import GCCToolchain
         tc_type = GCCToolchain
+    elif tc_type == 'clang':
+        from .clang_toolchain import ClangToolchain
     elif tc_type == 'msvc':
         from .msvc_toolchain import MSVCToolchain
         tc_type = MSVCToolchain

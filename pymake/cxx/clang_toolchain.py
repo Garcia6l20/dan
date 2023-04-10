@@ -10,7 +10,7 @@ cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
 
 
-class GCCToolchain(Toolchain):
+class ClangToolchain(Toolchain):
     def __init__(self, data, tools):
         Toolchain.__init__(self, data)
         self.cc = data['cc']

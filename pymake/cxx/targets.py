@@ -57,6 +57,7 @@ class CXXObject(Target):
         self.__dirty = False
         if previous_args:
             args = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags, dry_run=True)
+            args = [str(arg) for arg in args]
             if sorted(args) != sorted(previous_args):
                 self.__dirty = True
 
@@ -130,6 +131,8 @@ class CXXTarget(Target):
                  dependencies: set[TargetDependencyLike] = set(),
                  link_libraries: set[str] = set(),
                  private_link_libraries: set[str] = set(),
+                 link_options: set[str] = set(),
+                 private_link_options: set[str] = set(),
                  preload_dependencies: set[TargetDependencyLike] = set(),
                  **kw_args) -> None:
         super().__init__(name, **kw_args)
@@ -150,6 +153,9 @@ class CXXTarget(Target):
 
         self.compile_definitions = OptionSet(self, 'compile_definitions',
                                              compile_definitions, private_compile_definitions, transform=self.toolchain.make_compile_definitions)
+
+        self.link_options = OptionSet(self, 'link_options',
+                                      link_options, private_link_options)
 
         for path in includes:
             path = Path(path)
@@ -254,7 +260,7 @@ class Executable(CXXObjectsTarget):
         super().__init__(name, sources, *args, **kwargs)
 
         self.output = self.build_path / \
-            (self.name if os.name != 'nt' else self.name + '.exe')
+            self.toolchain.make_executable_name(self.name)
 
     @asyncio.cached
     async def initialize(self):
@@ -279,7 +285,8 @@ class Executable(CXXObjectsTarget):
 
         # link
         self.info(f'linking {self.output}...')
-        self.cache.link_args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs)
+        self.cache.link_args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
+                                                         [*self.libs, *self.link_options.public, *self.link_options.private])
         self.debug(f'done')
 
     @asyncio.cached
@@ -331,15 +338,6 @@ class Library(CXXObjectsTarget):
             tmp.extend(self.toolchain.make_link_options([self.output]))
         return tmp
 
-    @property
-    def ext(self):
-        if os.name == 'posix':
-            return 'a' if self.static else 'so'
-        elif os.name == 'nt':
-            return 'lib' if self.static else 'dll'
-        else:
-            raise RuntimeError(f'Unknwon os name: {os.name}')
-
     @asyncio.cached
     async def initialize(self):
         await self.preload()
@@ -358,7 +356,8 @@ class Library(CXXObjectsTarget):
 
         if self.library_type != LibraryType.INTERFACE:
             self.load_dependencies(self.objs)
-            self.output = self.build_path / f"lib{self.name}.{self.ext}"
+            self.output = self.build_path / \
+                self.toolchain.make_library_name(self.name, self.shared)
         else:
             self.output = self.build_path / f"lib{self.name}.stamp"
         await super().initialize()

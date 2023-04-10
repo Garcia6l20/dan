@@ -1,7 +1,11 @@
 from pymake import include
+import platform
 
 include(
     'spdlog',
     'catch2',
-    'liburing',
 )
+
+if platform.system() == 'Linux':
+    include('liburing')
+
