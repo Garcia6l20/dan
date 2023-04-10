@@ -19,6 +19,8 @@ class MissingPackage(RuntimeError):
 def find_pkg_config(name, paths=list()) -> Path:
     return find_file(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
 
+def has_package(name,  paths=list()):
+    return find_pkg_config(name,  paths) is not None
 
 class Data:
     def __init__(self) -> None:
