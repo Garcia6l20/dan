@@ -156,7 +156,7 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
 
 @commands.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
-@click.option('-js', '--json', 'j', is_flag=True, help='Output in json format')
+@click.option('--json', 'j', is_flag=True, help='Output in json format')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
 def list_targets(all: bool, j: bool, show_type: bool, **kwargs):
