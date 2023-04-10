@@ -162,13 +162,20 @@ def _get_jinja_env():
 
 
 async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
+    from pymake.cxx import target_toolchain
     dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
     requires = [dep for dep in lib.dependencies if isinstance(dep, Package)]
+    libs = target_toolchain.make_link_options(
+        [Path(f'${{libdir}}/{lib.name}')])
+    cflags = lib.compile_definitions.public
+    cflags.extend(target_toolchain.make_include_options(['${includedir}']))
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\
         .render({
             'lib': lib,
+            'libs': libs,
+            'cflags': cflags,
             'settings': settings,
             'prefix': Path(settings.destination).absolute(),
             'requires': requires

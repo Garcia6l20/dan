@@ -7,6 +7,6 @@ includedir=${prefix}/{{ settings.includes_prefix }}
 Name: {{ lib.name }}
 Description: {{ lib.description }}
 Version: {{ lib.version }}
-Libs: {% if not lib.interface %}-L${libdir} -l{{ lib.name }}{% endif %}{% for l in lib.link_libraries.public_raw %} -l{{ l }}{% endfor %}
-Cflags:{% for def in lib.compile_definitions.public %} {{ def }}{% endfor %} -I${includedir}
+Libs:{% for opt in libs %} {{ opt }}{% endfor %}
+Cflags:{% for opt in cflags %} {{ opt }}{% endfor %} -I${includedir}
 Requires:{% for req in requires %} {{ req.name }}{% endfor %}
