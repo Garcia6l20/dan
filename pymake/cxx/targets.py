@@ -70,7 +70,7 @@ class CXXObject(Target):
     async def __call__(self):
         self.info(f'generating {self.output}...')
         commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
-        self.cache.compile_args = commands[0]
+        self.cache.compile_args = [str(a) for a in commands[0]]
 
 
 class OptionSet:
@@ -271,7 +271,9 @@ class Executable(CXXObjectsTarget):
 
         previous_args = self.cache.get('link_args')
         if previous_args:
-            args = self.toolchain.make_link_commands([str(obj.output) for obj in self.objs], self.output, self.libs)[0]
+            args = self.toolchain.make_link_commands([str(obj.output) for obj in self.objs], self.output,
+                                                     [*self.libs, *self.link_options.public, *self.link_options.private])[0]
+            args = [str(a) for a in args]
             if sorted(previous_args) != sorted(args):
                 self.__dirty = True
 
@@ -288,7 +290,7 @@ class Executable(CXXObjectsTarget):
         self.info(f'linking {self.output}...')
         commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
                                              [*self.libs, *self.link_options.public, *self.link_options.private])
-        self.cache.link_args = commands[0]
+        self.cache.link_args = [str(a) for a in commands[0]]
         self.debug(f'done')
 
     @asyncio.cached
