@@ -19,6 +19,7 @@ class CXXObject(Target):
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain
+        self.__dirty = True
 
     @property
     def cxx_flags(self):
@@ -53,10 +54,9 @@ class CXXObject(Target):
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
-        previous_args = self.cache.get('compile_args')
-        self.__dirty = False
+        previous_args = self.cache.get('compile_args')        
         if previous_args:
-            args = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags, dry_run=True)
+            args = self.toolchain.make_compile_commands(self.source, self.output, self.private_cxx_flags)[0]
             args = [str(arg) for arg in args]
             if sorted(args) != sorted(previous_args):
                 self.__dirty = True
@@ -69,7 +69,8 @@ class CXXObject(Target):
 
     async def __call__(self):
         self.info(f'generating {self.output}...')
-        self.cache.compile_args = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+        commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+        self.cache.compile_args = commands[0]
 
 
 class OptionSet:
@@ -261,6 +262,7 @@ class Executable(CXXObjectsTarget):
 
         self.output = self.build_path / \
             self.toolchain.make_executable_name(self.name)
+        self.__dirty = False
 
     @asyncio.cached
     async def initialize(self):
@@ -268,9 +270,8 @@ class Executable(CXXObjectsTarget):
         await super().initialize()
 
         previous_args = self.cache.get('link_args')
-        self.__dirty = False
         if previous_args:
-            args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True)
+            args = self.toolchain.make_link_commands([str(obj.output) for obj in self.objs], self.output, self.libs)[0]
             if sorted(previous_args) != sorted(args):
                 self.__dirty = True
 
@@ -285,8 +286,9 @@ class Executable(CXXObjectsTarget):
 
         # link
         self.info(f'linking {self.output}...')
-        self.cache.link_args = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
-                                                         [*self.libs, *self.link_options.public, *self.link_options.private])
+        commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
+                                             [*self.libs, *self.link_options.public, *self.link_options.private])
+        self.cache.link_args = commands[0]
         self.debug(f'done')
 
     @asyncio.cached

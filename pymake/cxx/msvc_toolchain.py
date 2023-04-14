@@ -5,7 +5,7 @@ import aiofiles
 from pymake.core.runners import sync_run
 from pymake.core.settings import BuildType
 from pymake.core.utils import unique
-from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
+from pymake.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
 
 
@@ -89,39 +89,25 @@ class MSVCToolchain(Toolchain):
     def cxxmodules_flags(self) -> list[str]:
         return list()
 
-    async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False, compile_commands=True, **kwargs):
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: list[str]) -> CommandArgsList:
         args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options),
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
-        if compile_commands:
-            self.compile_commands.insert(sourcefile, output.parent, args)
-        if not dry_run:
-            await self.run('cc', output, args, **kwargs)
-        return args
+        return [args]
 
-    async def link(self, objects: set[Path], output: Path, options: list[str]):
-        args = [self.lnk, '/nologo', *options, *objects, f'/OUT:{str(output)}']
-        await self.run('link', output, args)
-        return args
+    def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
+        return [[self.lnk, '/nologo', *options, *objects, f'/OUT:{str(output)}']]
 
-    async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
+    def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         objects = list(objects)
-        cwd = objects[0].parent
         objs = [objects[0].name]
         for obj in objects[1:]:
-            assert obj.parent == cwd
             objs.append(obj.name)
-        args = [self.lib, '/nologo', *objs, f'/OUT:{output}']
-        await self.run('static_lib', output, args, cwd=cwd)
-        return args
+        return [[self.lib, '/nologo', *objs, f'/OUT:{output}']]
 
-    async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list()):
+    def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         objects = list(objects)
-        cwd = objects[0].parent
         objs = [objects[0].name]
         for obj in objects[1:]:
-            assert obj.parent == cwd
             objs.append(obj.name)
-        args = [self.lnk, '/nologo',
-                f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']
-        await self.run('shared_lib', output, args)
-        return args
+        return [[self.lnk, '/nologo',
+                f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']]

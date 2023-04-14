@@ -2,7 +2,7 @@ from pymake.core.asyncio import sync_wait
 from pymake.core.pathlib import Path
 from pymake.core.settings import BuildType
 from pymake.core.target import FileDependency
-from pymake.core.runners import async_run, CommandError
+from pymake.core.runners import async_run, sync_run, CommandError
 from pymake.core.version import Version
 from pymake.logging import Logging
 from pymake.cxx.compile_commands import CompileCommands
@@ -12,6 +12,8 @@ import tempfile
 
 scan = True
 
+CommandArgs = list[str|Path]
+CommandArgsList = list[CommandArgs]
 
 class Toolchain(Logging):
     def __init__(self, data) -> None:
@@ -38,46 +40,71 @@ class Toolchain(Logging):
         return self._compile_commands
 
     def init(self, mode: str):
-        ...
+        raise NotImplementedError()
 
     def has_cxx_compile_options(*opts) -> bool:
-        ...
+        raise NotImplementedError()
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
-        ...
+        raise NotImplementedError()
 
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
-        ...
+        raise NotImplementedError()
 
     def make_link_options(self, libraries: set[Path]) -> list[str]:
-        ...
+        raise NotImplementedError()
 
     def make_library_name(self, basename: str, shared: bool) -> str:
-        ...
+        raise NotImplementedError()
 
     def make_executable_name(self, basename: str) -> str:
-        ...
-
+        raise NotImplementedError()
+    
     async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
-        ...
+        raise NotImplementedError()
 
     def compile_generated_files(self, output: Path) -> set[Path]:
         return set()
 
-    async def compile(self, sourcefile: Path, output: Path, options: set[str], dry_run=False, compile_commands=True, **kwargs):
-        ...
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
+        raise NotImplementedError()
 
-    async def link(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
-        ...
+    async def compile(self, sourcefile: Path, output: Path, options: set[str], **kwds):
+        commands = self.make_compile_commands(sourcefile, output, options)
+        self.compile_commands.insert(sourcefile, output.parent, commands[0])
+        for index, command in enumerate(commands):
+            await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
+        return commands
 
-    async def static_lib(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
-        ...
+    def make_link_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
+        raise NotImplementedError()
 
-    async def shared_lib(self, objects: set[Path], output: Path, options: set[str], dry_run=False):
-        ...
+    async def link(self, objects: set[Path], output: Path, options: set[str], **kwds):
+        commands = self.make_link_commands(objects, output, options)
+        for index, command in enumerate(commands):
+            await self.run(f'link{index}', output, command, **kwds, cwd=output.parent)
+        return commands
 
-    async def run(self, name: str, output: Path, args, quiet=False, **kwargs):
-        return await async_run(args, env=self.env, logger=self if not quiet else None, ** kwargs)
+    def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
+        raise NotImplementedError()
+
+    async def static_lib(self, objects: set[Path], output: Path, options: set[str], **kwds):
+        commands = self.make_static_lib_commands(objects, output, options)
+        for index, command in enumerate(commands):
+            await self.run(f'static_lib{index}', output, command, **kwds, cwd=output.parent)
+        return commands
+
+    def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
+        raise NotImplementedError()
+
+    async def shared_lib(self, objects: set[Path], output: Path, options: set[str], **kwds):
+        commands = self.make_static_lib_commands(objects, output, options)
+        for index, command in enumerate(commands):
+            await self.run(f'shared_lib{index}', output, command, **kwds, cwd=output.parent)
+        return commands
+
+    async def run(self, name: str, output: Path, args, quiet=False, **kwds):
+        return await async_run(args, env=self.env, logger=self if not quiet else None, **kwds)
 
     @property
     def cxxmodules_flags(self) -> list[str]:
@@ -88,12 +115,8 @@ class Toolchain(Logging):
             f.write(source)
             f.flush()
             try:
-                sync_wait(
-                    self.compile(Path(f.name), Path(f.name).with_suffix('.o'), options,
-                                 compile_commands=False,
-                                 log=False,
-                                 quiet=True,
-                                 ))
+                fname = Path(f.name)
+                sync_run(self.make_compile_commands(fname, fname.with_suffix('.o'), options)[0])
                 return True
             except CommandError as err:
                 print(err)

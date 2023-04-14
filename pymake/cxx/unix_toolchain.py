@@ -1,7 +1,7 @@
 from functools import cached_property
 from pymake.core.settings import BuildType
 from pymake.core.utils import unique
-from pymake.cxx.toolchain import Toolchain, Path, FileDependency, scan
+from pymake.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
 from pymake.cxx import auto_fpic
 from pymake.core.runners import sync_run, async_run
@@ -10,7 +10,7 @@ cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
 
 
-class GCCToolchain(Toolchain):
+class UnixToolchain(Toolchain):
     def __init__(self, data, tools):
         Toolchain.__init__(self, data)
         self.cc = data['cc']
@@ -136,40 +136,33 @@ class GCCToolchain(Toolchain):
     @property
     def cxxmodules_flags(self) -> list[str]:
         return ['-std=c++20', '-fmodules-ts']
-
-    async def compile(self, sourcefile: Path, output: Path, options: list[str], dry_run=False, compile_commands=True, **kwargs):
+    
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
         args = self.get_base_compile_args(sourcefile)
         args.extend([*self.compile_options, *options, '-MD', '-MT', str(output),
                     '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)])
         if auto_fpic:
             args.insert(1, '-fPIC')
-        if compile_commands:
-            self.compile_commands.insert(sourcefile, output.parent, args)
-        if not dry_run:
-            await self.run('cc', output, args, **kwargs)
-        return args
+        return [args]
 
-    async def link(self, objects: set[Path], output: Path, options: list[str], dry_run=False):
+    def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         args = [self.cxx, *objects, '-o', str(output), *unique(
             self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
-        if not dry_run:
-            await self.run('link', output, args)
-            if self._build_type in [BuildType.release, BuildType.release_min_size]:
-                await async_run([self.strip, output])
-        return args
+        commands = [args]
+        if self._build_type in [BuildType.release, BuildType.release_min_size]:
+            commands.append([self.strip, output])
+        return commands
 
-    async def static_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
-        args = [self.ar, 'cr', output, *objects]
-        if not dry_run:
-            await self.run('static_lib', output, args)
-            await async_run([self.ranlib, output])
-        return args
+    def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
+        return [
+            [self.ar, 'cr', output, *objects], # *options],
+            [self.ranlib, output],
+        ]
 
-    async def shared_lib(self, objects: set[Path], output: Path, options: list[str] = list(), dry_run=False):
+    def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         args = [self.cxx, '-shared', *
                 unique(self.default_ldflags, options), *objects, '-o', output]
-        if not dry_run:
-            await self.run('shared_lib', output, args)
-            if self._build_type in [BuildType.release, BuildType.release_min_size]:
-                await async_run([self.strip, output])
-        return args
+        commands = [args]
+        if self._build_type in [BuildType.release, BuildType.release_min_size]:
+            commands.append([self.strip, output])
+        return commands

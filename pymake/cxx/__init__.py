@@ -37,16 +37,15 @@ def init_toolchains(name: str = None):
     toolchain_data = data['toolchains'][name]
 
     tc_type = toolchain_data['type']
-    if tc_type == 'gcc':
-        from .gcc_toolchain import GCCToolchain
-        tc_type = GCCToolchain
-    elif tc_type == 'clang':
-        from .clang_toolchain import ClangToolchain
-    elif tc_type == 'msvc':
-        from .msvc_toolchain import MSVCToolchain
-        tc_type = MSVCToolchain
-    else:
-        raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
+    match tc_type:
+        case 'gcc' | 'clang':
+            from .unix_toolchain import UnixToolchain
+            tc_type = UnixToolchain
+        case 'msvc':
+            from .msvc_toolchain import MSVCToolchain
+            tc_type = MSVCToolchain
+        case _:
+            raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
     target_toolchain = tc_type(toolchain_data, data['tools'])
     host_toolchain = target_toolchain
 
