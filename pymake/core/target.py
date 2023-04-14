@@ -1,11 +1,15 @@
+from enum import Enum
 from functools import cached_property
-from pathlib import Path
-from typing import Union, TypeAlias
+from pymake.core.pathlib import Path
+import time
+from typing import Callable, Union, TypeAlias
 import inspect
 
 from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
 from pymake.core.errors import InvalidConfiguration
+from pymake.core.settings import InstallMode, InstallSettings, safe_load
+from pymake.core.version import Version
 from pymake.logging import Logging
 
 
@@ -48,29 +52,112 @@ class FileDependency(PathImpl):
         return self.stat().st_mtime
 
 
+class Option:
+    def __init__(self, parent: 'Target', name: str, default) -> None:
+        self.__parent = parent
+        self.__cache = parent.cache
+        self.fullname = f'{parent.name}.{name}'
+        self.name = name
+        self.__default = default
+        if name == 'console_width':
+            pass
+        self.__value = getattr(self.__cache, self.fullname) if hasattr(
+            self.__cache, self.fullname) else default
+        self.__value_type = type(default)
+
+    def reset(self):
+        self.value = self.__default
+
+    @property
+    def value(self):
+        return self.__value
+
+    @value.setter
+    def value(self, value):
+        value = safe_load(self.fullname, value, self.__value_type)
+        if self.__value != value:
+            self.__value = value
+            setattr(self.__cache, self.fullname, value)
+            setattr(self.__cache,
+                    f'{self.__parent.fullname}.options.timestamp', time.time())
+
+
+class Options:
+    def __init__(self, parent: 'Target') -> None:
+        self.__parent = parent
+        self.__cache = parent.cache
+        self.__items: set[Option] = set()
+
+    def add(self, name: str, default_value):
+        opt = Option(self.__parent, name, default_value)
+        self.__items.add(opt)
+        return opt
+
+    def get(self, name: str):
+        for o in self.__items:
+            if name in {o.name, o.fullname}:
+                return o
+
+    @cached_property
+    def modification_date(self):
+        return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
+
+    def __getattr__(self, name):
+        opt = self.get(name)
+        if opt:
+            return opt.value
+
+    def __iter__(self):
+        return iter(self.__items)
+
+
 class Target(Logging):
     clean_request = False
-    all: set['Target'] = set()
-    default: set['Target'] = set()
 
-    def __init__(self, name: str, parent: 'Target' = None, all=True) -> None:
+    def __init__(self,
+                 name: str,
+                 description: str = None,
+                 version: str = None,
+                 parent: 'Target' = None,
+                 all=True) -> None:
         from pymake.core.include import context
-        self.makefile = context.current
-        self.source_path = context.current.source_path
-        self.build_path = context.current.build_path
+        self._name = name
+        self.description = description
+        self.version = Version(version) if version else None
+        self.parent = parent
+        self.__cache: SubCache = None
+        if parent is None:
+            self.makefile = context.current
+            self.source_path = context.current.source_path
+            self.build_path = context.current.build_path
+            self.options = Options(self)
+        else:
+            self.source_path = parent.source_path
+            self.build_path = parent.build_path
+            self.makefile = parent.makefile
+            self.options = parent.options
+
+        if self.version is None and hasattr(self.makefile, 'version'):
+            self.version = self.makefile.version
+
+        if self.description is None and hasattr(self.makefile, 'description'):
+            self.description = self.makefile.description
+
         self.other_generated_files: set[Path] = set()
         self.dependencies: Dependencies[Target] = Dependencies()
         self.preload_dependencies: Dependencies[Target] = Dependencies()
+        self._utils: list[Callable] = list()
         self.output: Path = None
-        self._name = name
-        self.parent = parent
-        if self.fullname in Target.all:
-            raise InvalidConfiguration(f'target {self.fullname} already exists')
+
+        if self.fullname in context.all_targets:
+            raise InvalidConfiguration(
+                f'target {self.fullname} already exists')
         super().__init__(self.fullname)
         self.makefile.targets.add(self)
+        from pymake.core.include import context
         if all:
-            Target.default.add(self)
-        Target.all.add(self)
+            context.default_targets.add(self)
+        context.all_targets.add(self)
 
     @property
     def name(self) -> str:
@@ -78,20 +165,28 @@ class Target(Logging):
 
     @cached_property
     def fullname(self) -> str:
-        return f'{self.makefile.name}.{self._name}'
+        return f'{self.makefile.fullname}.{self._name}'
 
-    @cached_property
+    @property
     def cache(self) -> SubCache:
-        return self.makefile.cache.subcache(self.fullname)
+        if not self.__cache:
+            self.__cache = self.makefile.cache.subcache(self.fullname)
+        return self.__cache
 
-    @asyncio.once_method
+    @asyncio.cached
     async def preload(self):
+        self.debug('preloading...')
+        deps = self.dependencies
+        self.dependencies = Dependencies()
+        self.load_dependencies(deps)
         await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
         await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
+        await asyncio.gather(*[obj.build() for obj in self.preload_dependencies])
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         await self.preload()
+        self.debug('initializing...')
 
         await asyncio.gather(*[obj.initialize() for obj in self.target_dependencies])
         if self.output and not self.output.is_absolute():
@@ -107,6 +202,12 @@ class Target(Logging):
         elif isinstance(dependency, FileDependency):
             self.dependencies.add(dependency)
         elif isinstance(dependency, str):
+            from pymake.pkgconfig.package import Package
+            for pkg in Package.all.values():
+                if pkg.name == dependency:
+                    self.load_dependency(pkg)
+                    return
+
             self.load_dependency(Path(dependency))
         elif isinstance(dependency, Path):
             dependency = FileDependency(self.source_path / dependency)
@@ -117,19 +218,21 @@ class Target(Logging):
 
     @property
     def modification_time(self):
-        return self.output.stat().st_mtime if self.output else None
+        return self.output.stat().st_mtime if self.output.exists() else 0.0
 
     @property
     def up_to_date(self):
         if self.output and not self.output.exists():
             return False
-        if not self.dependencies.up_to_date:
+        elif not self.dependencies.up_to_date:
             return False
-        if self.modification_time and self.dependencies.modification_time > self.modification_time:
+        elif self.modification_time and self.dependencies.modification_time > self.modification_time:
+            return False
+        elif self.modification_time and self.modification_time < self.options.modification_date:
             return False
         return True
 
-    @asyncio.once_method
+    @asyncio.cached
     async def build(self):
         await self.initialize()
 
@@ -148,7 +251,11 @@ class Target(Logging):
     def target_dependencies(self):
         return [t for t in self.dependencies if isinstance(t, Target)]
 
-    @asyncio.once_method
+    @property
+    def file_dependencies(self):
+        return [t for t in self.dependencies if isinstance(t, FileDependency)]
+
+    @asyncio.cached
     async def clean(self):
         await self.initialize()
 
@@ -164,7 +271,29 @@ class Target(Logging):
         try:
             await asyncio.gather(*clean_tasks)
         except FileNotFoundError as err:
-            self.warn(f'file not found: {err.filename}')
+            self.warning(f'file not found: {err.filename}')
+
+    @asyncio.cached
+    async def install(self, settings: InstallSettings, mode: InstallMode):
+        installed_files = list()
+        if mode == InstallMode.dev:
+            if len(self._utils) > 0:
+                lines = list()
+                for fn in self._utils:
+                    tmp = inspect.getsourcelines(fn)[0]
+                    tmp[0] = f'\n\n@self.utility\n'
+                    lines.extend(tmp)
+                filepath = settings.libraries_destination / \
+                    'pymake' / f'{self.name}.py'
+                filepath.parent.mkdir(exist_ok=True, parents=True)
+                async with aiofiles.open(filepath, 'w') as f:
+                    await f.writelines(lines)
+                    installed_files.append(filepath)
+        return installed_files
 
     def __call__(self):
         ...
+
+    def utility(self, fn: Callable):
+        self._utils.append(fn)
+        setattr(self, fn.__name__, fn)

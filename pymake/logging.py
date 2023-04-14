@@ -105,7 +105,7 @@ class Logging:
         self._logger = logging.getLogger(name)
         self.debug = self._logger.debug
         self.info = self._logger.info
-        self.warn = self._logger.warn
+        self.warning = self._logger.warning
         self.error = self._logger.error
 
 

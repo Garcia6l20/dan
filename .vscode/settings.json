@@ -3,8 +3,12 @@
     "terminal.integrated.env.linux": {
         "PYTHONPATH": "${workspaceFolder}"
     },
-    "files.associations": {
-        "string_view": "cpp"
-    },
-    "cmake.sourceDirectory": "${workspaceFolder}/tests/cxx/libraries"
+    "python.testing.unittestEnabled": true,
+    "python.testing.pytestEnabled": false,
+    "cmake.sourceDirectory": "${workspaceFolder}/examples/cxx/libraries",
+    "python.testing.unittestArgs": [
+        "-v",
+        "./tests",
+        "test_*.py"
+    ]
 }

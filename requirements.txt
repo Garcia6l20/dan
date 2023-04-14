@@ -3,5 +3,6 @@ jinja2
 distro
 pyyaml
 aiofiles
+aiohttp
 termcolor
 tqdm

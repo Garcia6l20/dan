@@ -1,4 +1,4 @@
-from pathlib import Path
+from pymake.core.pathlib import Path
 from pymake.core import asyncio
 from pymake.core.target import Target, TargetDependencyLike
 from typing import Callable
@@ -6,7 +6,7 @@ import inspect
 
 
 class generator:
-    def __init__(self, output: str, dependencies: TargetDependencyLike = None, name=None):
+    def __init__(self, output: str, dependencies: TargetDependencyLike = list(), name=None):
         self.output = Path(output)
         self.dependencies = dependencies
 

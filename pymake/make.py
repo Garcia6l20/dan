@@ -1,28 +1,48 @@
 
 import functools
 import logging
-from pathlib import Path
+import os
+from pymake.core.pathlib import Path
 import sys
-from tqdm import tqdm
+import tqdm
 
 from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
-from pymake.core import asyncio
+from pymake.core import aiofiles, asyncio
+from pymake.core.settings import InstallMode, Settings, safe_load
+from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
-from pymake.core.target import Target
+from pymake.core.target import Option, Target
 from pymake.cxx.targets import Executable
+from pymake.core.runners import max_jobs
+from collections.abc import Iterable
 
 
 def make_target_name(name: str):
     return name.replace('_', '-')
 
 
+def flatten(list_of_lists):
+    if len(list_of_lists) == 0:
+        return list_of_lists
+    if isinstance(list_of_lists[0], Iterable):
+        return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
+    return list_of_lists[:1] + flatten(list_of_lists[1:])
+
+
 class Make(Logging):
     _config_name = 'pymake.config.yaml'
     _cache_name = 'pymake.cache.yaml'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False):
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None):
+
+        from pymake.core.include import context_reset
+        context_reset()
+
+        jobs = jobs or os.cpu_count()
+        max_jobs(jobs)
+
         if quiet:
             assert not verbose, "'quiet' cannot be combined with 'verbose'"
             log_level = logging.ERROR
@@ -36,6 +56,7 @@ class Make(Logging):
 
         self.config = None
         self.cache = None
+        self.for_install = for_install
         path = Path(path)
         if not path.exists() or not (path / 'makefile.py').exists():
             self.source_path = Path.cwd().absolute()
@@ -53,86 +74,202 @@ class Make(Logging):
         self.config = Cache(self.config_path)
         self.cache = Cache(self.cache_path)
 
-        import pymake.core.globals
-        pymake.core.globals.cache = self.cache
+        self.settings: Settings = self.config.get('settings', Settings())
 
-        if self.source_path == self.build_path and self.config.source_path:
-            self.source_path = Path(self.config.source_path)
+        self.source_path = Path(self.config.get(
+            'source_path', self.source_path))
 
         self.debug(f'source path: {self.source_path}')
         self.debug(f'build path: {self.build_path}')
-        
+        self.debug(f'jobs: {jobs}')
+
         assert (self.source_path /
                 'makefile.py').exists(), f'no makefile in {self.source_path}'
         assert (self.source_path !=
                 self.build_path), f'in-source build are not allowed'
 
-    def configure(self, toolchain, build_type):
-        if not self.config:
-            self.config = dict()
+    def configure(self, toolchain):
         self.config.source_path = str(self.source_path)
         self.config.build_path = str(self.build_path)
         self.config.toolchain = toolchain
-        self.config.build_type = build_type
 
-    @asyncio.once_method
+    @asyncio.cached
     async def initialize(self):
         assert self.source_path and self.config_path.exists(), 'configure first'
 
         toolchain = self.config.toolchain
-        build_type = self.config.build_type
-        init_toolchains(toolchain)
-        self.info(f'using \'{toolchain}\' in \'{build_type}\' mode')
-        include_makefile(self.source_path, self.build_path)
+        build_type = self.settings.build_type
 
+        self.info(
+            f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
+
+        from pymake.core.include import context_reset
+        import gc
+        while True:
+            context_reset()
+            gc.collect()
+
+            init_toolchains(toolchain)
+
+            include_makefile(self.source_path, self.build_path)
+
+            from pymake.core.include import context
+            if len(context.missing) > 0:
+                await context.install_missing()
+            else:
+                break
+
+        from pymake.core.include import context
         from pymake.cxx import target_toolchain
-        target_toolchain.set_mode(build_type)
+        target_toolchain.build_type = build_type
+        if self.for_install:
+            library_dest = Path(self.settings.install.destination) / \
+                self.settings.install.libraries_prefix
+            target_toolchain.set_rpath(str(library_dest.absolute()))
 
         self.active_targets: dict[str, Target] = dict()
 
         if self.required_targets and len(self.required_targets) > 0:
-            for target in Target.all:
+            for target in context.all_targets:
                 if target.name in self.required_targets or target.fullname in self.required_targets:
                     self.active_targets[target.fullname] = target
         else:
-            for target in Target.default:
+            for target in context.default_targets:
                 self.active_targets[target.fullname] = target
 
         self.debug(f'targets: {[name for name in self.active_targets.keys()]}')
 
-    @property
-    def toolchains(self):
+    @staticmethod
+    def all_options() -> list[Option]:
+        from pymake.core.include import context
+        opts = []
+        for target in context.all_targets:
+            for o in target.options:
+                opts.append(o)
+        for makefile in context.all_makefiles:
+            for o in makefile.options:
+                opts.append(o)
+        return opts
+
+    def apply_options(self, *options):
+        all_opts = self.all_options()
+        for option in options:
+            name, value = option.split('=')
+            found = False
+            for opt in all_opts:
+                if opt.fullname == name:
+                    found = True
+                    opt.value = value
+                    break
+            assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
+
+    def apply_settings(self, *settings):
+        for setting in settings:
+            name, value = setting.split('=')
+            parts = name.split('.')
+            setting = self.settings
+            for part in parts[:-1]:
+                if not hasattr(setting, part):
+                    raise RuntimeError(f'no such setting: {name}')
+                setting = getattr(setting, part)
+            if not hasattr(setting, parts[-1]):
+                raise RuntimeError(f'no such setting: {name}')
+            value = safe_load(name, value, type(getattr(setting, parts[-1])))
+            setattr(setting, parts[-1], value)
+
+    @staticmethod
+    def get(*names) -> list['Target']:
+        from pymake.core.include import context
+        targets = list()
+        for name in names:
+            found = False
+            for target in context.all_targets:
+                if name in [target.fullname, target.name]:
+                    found = True
+                    targets.append(target)
+                    break
+            if not found:
+                raise RuntimeError(f'target not found: {name}')
+        return targets
+
+    @staticmethod
+    def toolchains():
         from pymake.cxx.detect import get_toolchains
         return get_toolchains()
+
+    class progress:
+
+        def __init__(self, desc, targets, task_builder) -> None:
+            self.desc = desc
+            self.targets = targets
+            self.builder = task_builder
+            import shutil
+            term_cols = shutil.get_terminal_size().columns
+            self.max_desc_width = int(term_cols * 0.25)
+            self.pbar = tqdm.tqdm(total=len(targets), desc='building')
+            self.pbar.unit = ' targets'
+
+        def __enter__(self):
+            def update(n=1):
+                desc = self.desc + ' ' + \
+                    ', '.join([t.name for t in self.targets])
+                if len(desc) > self.max_desc_width:
+                    desc = desc[:self.max_desc_width] + ' ...'
+                self.pbar.set_description_str(desc)
+                self.pbar.update(n)
+            update(0)
+
+            def on_done(t: Target, *args, **kwargs):
+                self.targets.remove(t)
+                update()
+
+            tasks = list()
+
+            for t in self.targets:
+                tsk = asyncio.create_task(self.builder(t))
+                tsk.add_done_callback(functools.partial(on_done, t))
+                tasks.append(tsk)
+
+            return tasks
+
+        def __exit__(self, *args):
+            self.pbar.set_description_str(self.desc + ' done')
+            self.pbar.refresh()
+            return
 
     async def build(self):
         await self.initialize()
         targets = set(self.active_targets.values())
-        pbar = tqdm(total=len(targets), desc='building')
-        import shutil
-        term_cols = shutil.get_terminal_size().columns
-        max_desc_width = int(term_cols * 0.25)
 
-        tsks = list()
-        def set_desc():
-            desc = 'building ' + ', '.join([t.name for t in targets])
-            if len(desc) > max_desc_width:
-                desc = desc[:max_desc_width] + ' ...'
-            pbar.set_description_str(desc)
+        with self.progress('building', targets, lambda t: t.build()) as tasks:
+            await asyncio.gather(*tasks)
 
-        def on_done(t: Target, *args, **kwargs):
-            targets.remove(t)
-            set_desc()
-            pbar.update()
+    async def install(self, mode: InstallMode = InstallMode.user):
 
-        for t in targets:
-            tsk = asyncio.create_task(t.build())
-            tsk.add_done_callback(functools.partial(on_done, t))
-            tsks.append(tsk)
+        from pymake.core.include import context
 
-        set_desc()
+        self.for_install = True
+        destination = Path(self.settings.install.destination)
+        if not destination.is_absolute():
+            self.settings.install.destination = str(Path.cwd() / destination)
 
-        await asyncio.gather(*tsks)
+        await self.initialize()
+        self.active_targets = dict()
+        for target in context.installed_targets:
+            self.active_targets[target.fullname] = target
+
+        await self.build()
+
+        targets = list(self.active_targets.values())
+        with self.progress('installing', targets, lambda t: t.install(self.settings.install, mode)) as tasks:
+            installed_files = await asyncio.gather(*tasks)
+            installed_files = unique(flatten(installed_files))
+            manifest_path = self.settings.install.data_destination / \
+                'pymake' / f'{context.root.name}-manifest.txt'
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+            async with aiofiles.open(manifest_path, 'w') as f:
+                await f.writelines([os.path.relpath(p, manifest_path.parent) + '\n' for p in installed_files])
 
     @property
     def executable_targets(self) -> list[Executable]:
@@ -143,11 +280,32 @@ class Make(Logging):
         if script:
             load_env_toolchain(script)
         else:
-            create_toolchains(script)
+            create_toolchains()
 
     async def run(self):
         await self.initialize()
-        await asyncio.gather(*[t.execute() for t in self.executable_targets])
+        results = await asyncio.gather(*[t.execute(log=True) for t in self.executable_targets])
+        for result in results:
+            if result[2] != 0:
+                return result[2]
+        return 0
+
+    async def test(self):
+        await self.initialize()
+        tests = list()
+        from pymake.core.include import context
+        for makefile in context.all_makefiles:
+            for test in makefile.tests:
+                if len(self.required_targets) == 0 or test.fullname in self.required_targets:
+                    tests.append(test)
+        with self.progress('testing', tests, lambda t: t.__call__()) as tasks:
+            results = await asyncio.gather(*tasks)
+            if all(results):
+                self.info('Success !')
+                return 0
+            else:
+                self.error('Failed !')
+                return 255
 
     async def clean(self, target: str = None):
         await self.initialize()

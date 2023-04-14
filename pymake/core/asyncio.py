@@ -1,53 +1,47 @@
 from asyncio import *
-import functools
-import inspect
-import os
+import threading
 
-import aiofiles
+from pymake.core.functools import BaseDecorator
 
 
-class OnceLock:
-    def __init__(self) -> None:
-        self.__done = False
-        self.__lock = Lock()
+class cached(BaseDecorator):
 
-    @property
-    def done(self):
-        return self.__done
+    def __init__(self, fn):
+        self.__fn = fn
+        self.__cache: dict[int, Future] = dict()
 
-    async def __aenter__(self):
-        await self.__lock.acquire()
-        return self.__done
+    async def __call__(self, *args, **kwds):
+        key = hash((args, frozenset(kwds)))
+        if key not in self.__cache:
+            self.__cache[key] = Future()
+            self.__cache[key].set_result(await self.__fn(*args, **kwds))
+        elif not self.__cache[key].done():
+            await self.__cache[key]
 
-    async def __aexit__(self, exc_type, exc, tb):
-        self.__done = True
-        self.__lock.release()
+        return self.__cache[key].result()
+
+    def clear_all(self):
+        self.__cache = dict()
 
 
-def once_method(fn):
-    lock_name = f'_{fn.__name__}_lock'
-    result_name = f'_{fn.__name__}_result'
+class _SyncWaitThread(threading.Thread):
+    def __init__(self, coro):
+        self.coro = coro
+        self.result = None
+        self.err = None
+        super().__init__()
 
-    async def inner(self, done, *args, **kwds):
-        if done:
-            return getattr(self, result_name)
-        result = fn(self, *args, **kwds)
-        if inspect.iscoroutine(result):
-            result = await result
-        setattr(self, result_name, result)
-        return result
+    def run(self):
+        try:
+            self.result = run(self.coro)
+        except Exception as err:
+            self.err = err
 
-    @functools.wraps(fn)
-    async def wrapper(self, *args, **kwds):
-        if not hasattr(self, lock_name):
-            lock = OnceLock()
-            setattr(self, lock_name, lock)
-        else:
-            lock = getattr(self, lock_name)
-        recursive_once = kwds.pop('recursive_once', False)
-        if recursive_once:
-            return await inner(self, lock.done, *args, **kwds)
-        async with lock as done:
-            return await inner(self, done, *args, **kwds)
 
-    return wrapper
+def sync_wait(coro):
+    thread = _SyncWaitThread(coro)
+    thread.start()
+    thread.join()
+    if thread.err:
+        raise thread.err
+    return thread.result

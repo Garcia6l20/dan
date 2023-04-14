@@ -12,6 +12,7 @@
                 {"label": "Build", "value": "build"},
                 {"label": "Clean", "value": "clean"},
                 {"label": "Run", "value": "run"},
+                {"label": "Test", "value": "test"},
                 {"label": "Configure", "value": "configure"},
             ]
         },
@@ -26,6 +27,12 @@
                 {"label": "CXX/qt", "value": "cxx/qt"},
                 {"label": "CXX/modules", "value": "cxx/modules"},
             ]
+        },
+        {
+            "id": "unitTestName",
+            "description": "Enter a unit test matcher",
+            "type": "promptString",
+            "default": ""
         }
     ],
     "configurations": [
@@ -35,8 +42,8 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["configure", "-v", "-t", "gcc-12.2.0", "./build"],
-            "cwd": "${workspaceFolder}/tests",
+            "args": ["configure", "-v", "-t", "default", "./build"],
+            "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -48,7 +55,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "./build"],
-            "cwd": "${workspaceFolder}/tests",
+            "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -59,8 +66,8 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["scan-toolchains", "-v"],
-            "cwd": "${workspaceFolder}/tests",
+            "args": ["scan-toolchains"],
+            "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -72,7 +79,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/tests/${input:test}",
+            "cwd": "${workspaceFolder}/examples/${input:test}",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -84,7 +91,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/tests/cxx/modules",
+            "cwd": "${workspaceFolder}/examples/cxx/modules",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -96,7 +103,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/tests/cxx",
+            "cwd": "${workspaceFolder}/examples/cxx",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -108,7 +115,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "build"],
-            "cwd": "${workspaceFolder}/tests/cxx/simple",
+            "cwd": "${workspaceFolder}/examples/cxx/simple",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -120,7 +127,7 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "build"],
-            "cwd": "${workspaceFolder}/tests/cxx/libraries",
+            "cwd": "${workspaceFolder}/examples/cxx/libraries",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -132,10 +139,22 @@
             "module": "pymake",
             "justMyCode": true,
             "args": ["${input:makefileCommand}", "-v", "build"],
-            "cwd": "${workspaceFolder}/tests/cxx/smc",
+            "cwd": "${workspaceFolder}/examples/cxx/smc",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
-        }
+        },
+        {
+            "name": "unit tests",
+            "type": "python",
+            "request": "launch",
+            "module": "unittest",
+            "justMyCode": false,
+            "args": ["discover", "-v", ".", "test_*${input:unitTestName}*.py"],
+            "cwd": "${workspaceFolder}/tests",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
     ]
 }
