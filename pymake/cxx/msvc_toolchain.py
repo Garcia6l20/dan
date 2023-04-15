@@ -17,8 +17,14 @@ class MSVCToolchain(Toolchain):
         self.lnk = Path(data['link'])
         self.lib = Path(data['lib'])
         self.env = data['env']
-        self.default_cflags = ['/nologo', '/EHsc', '/GA', '/MT']
-        self.default_cxxflags = [f'/std:c++{self.cpp_std}']
+
+    @property
+    def default_cflags(self):
+        return ['/nologo', '/EHsc', '/GA', '/MT']
+
+    @property
+    def default_cxxflags(self):
+        return [f'/std:c++{self.cpp_std}']
 
     @Toolchain.build_type.setter
     def build_type(self, mode: BuildType):
@@ -43,15 +49,16 @@ class MSVCToolchain(Toolchain):
         return [f'/I{p}' for p in include_paths]
 
     def make_link_options(self, libraries: set[Path | str]) -> list[str]:
-        opts = list()
+        lib_paths = list()
+        libs = list()
         for lib in libraries:
             if isinstance(lib, Path):
-                opts.append(f'/LIBPATH:{lib.parent}')
-                opts.append(f'{lib.stem}.lib')
+                lib_paths.append(f'/LIBPATH:{lib.parent}')
+                libs.append(f'{lib.stem}.lib')
             else:
                 assert isinstance(lib, str)
-                opts.append(f'{lib}.lib')
-        return opts
+                libs.append(f'{lib}.lib')
+        return [*libs, *lib_paths]
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return [f'/D{d}' for d in definitions]
