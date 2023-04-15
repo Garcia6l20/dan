@@ -8,5 +8,5 @@ Name: {{ lib.name }}
 Description: {{ lib.description }}
 Version: {{ lib.version }}
 Libs:{% for opt in libs %} {{ opt }}{% endfor %}
-Cflags:{% for opt in cflags %} {{ opt }}{% endfor %} -I${includedir}
+Cflags:{% for opt in cflags %} {{ opt }}{% endfor %}
 Requires:{% for req in requires %} {{ req.name }}{% endfor %}

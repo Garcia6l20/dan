@@ -91,9 +91,6 @@ class Package(CXXTarget):
                     deps.add(Package(req, self.search_paths))
         self.includes.public.append(self.data.get('includedir'))
         self.dependencies.update(deps)
-        libs: str = self.data.get('libs')
-        if libs.find(f'-l{self.name}') < 0:
-            self.library_type = LibraryType.INTERFACE
 
         await super().preload()
 
@@ -118,7 +115,9 @@ class Package(CXXTarget):
         tmp = list()
         for pkg in self.package_dependencies:
             tmp.extend(pkg.libs)
-        tmp.extend(self.data.get('libs').split())
+        libs = self.data.get('libs')
+        if libs:
+            tmp.extend(libs.split())
         return unique(tmp)
 
     @asyncio.cached
@@ -167,7 +166,8 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     lib.info(f'creating pkgconfig: {dest}')
     requires = [dep for dep in lib.dependencies if isinstance(dep, Package)]
     libs = target_toolchain.make_link_options(
-        [Path(f'${{libdir}}/{lib.name}')])
+        [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
+    libs.extend(lib.link_options.public)
     cflags = lib.compile_definitions.public
     cflags.extend(target_toolchain.make_include_options(['${includedir}']))
     data = _get_jinja_env()\

@@ -28,6 +28,9 @@ catch2 = Library('catch2',
                  preload_dependencies=[config],
                  all=False)
 
+if target_toolchain.type == 'msvc':
+    catch2.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
+
 config.options = catch2.options
 
 

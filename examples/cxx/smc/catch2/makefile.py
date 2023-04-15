@@ -11,7 +11,4 @@ example = Executable('pymake-test-catch2',
 
 catch2.discover_tests(example)
 
-if platform.system() == 'Windows':
-    example.link_options.add('/SUBSYSTEM:CONSOLE')
-
 self.install(example)
