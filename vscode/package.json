@@ -11,10 +11,6 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onCommand:pymake.scanToolchains",
-    "onCommand:pymake.configure",
-    "onCommand:pymake.build",
-    "onCommand:pymake.clean",
     "workspaceContains:makefile.py"
   ],
   "main": "./dist/extension.js",

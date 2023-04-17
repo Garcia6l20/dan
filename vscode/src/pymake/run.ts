@@ -14,7 +14,7 @@ export function streamExec(
         kill(signal?: NodeJS.Signals) {
             spawned.kill(signal || "SIGKILL");
         },
-        finishP() {
+        finished() {
             return new Promise<number>(res => {
                 spawned.on("exit", code => res(code ? code : 0));
             });
@@ -49,7 +49,7 @@ export function channelExec(command: string,
         async (progress, token) => {
             token.onCancellationRequested(() => stream.kill());
             let oldPercentage = 0;
-            progress.report({ message: 'command', increment: 0 });
+            progress.report({ message: 'running...', increment: 0 });
             stream.onLine((msg: Buffer, isError) => {
                 const line = msg.toString().trim();
                 if (line.length === 0) {
@@ -67,8 +67,8 @@ export function channelExec(command: string,
                     channel.appendLine(line);
                 }
             });
+            await stream.finished();
             progress.report({ increment: 100 - oldPercentage, message: 'done' });
-            await stream.finishP();
             channel.appendLine(`${command} done`);
         }
     );

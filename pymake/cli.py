@@ -17,12 +17,13 @@ _logger = logging.getLogger('cli')
 
 _common_opts = [
     click.option('--quiet', '-q', is_flag=True,
-                 help='Dont print informations (errors only)'),
+                 help='Dont print informations (errors only).', envvar='PYMAKE_QUIET'),
     click.option('--verbose', '-v', is_flag=True,
-                 help='Pring debug informations'),
+                 help='Pring debug informations.', envvar='PYMAKE_VERBOSE'),
     click.option('--jobs', '-j',
-                 help='Maximum jobs', default=None, type=int),
-    click.argument('PATH'),
+                 help='Maximum jobs.', default=None, type=int, envvar='PYMAKE_JOBS'),
+    click.option('--build-path', '-B', 'path', help='Path where pymake has been initialized.',
+                 type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='PYMAKE_BUILD_PATH'),
     click.argument('TARGETS', nargs=-1),
 ]
 _base_help_ = '''
@@ -42,9 +43,37 @@ def add_options(options):
 common_opts = add_options(_common_opts)
 
 
+class CommandsContext:
+    def __init__(self, *args, **kwds) -> None:
+        self._make_args = [*args]
+        self._make_kwds = {**kwds}
+        self._make = None
+
+    def __call__(self, *args, **kwds):
+        if len(args):
+            self._make_args.extend(*args)
+        self._make_kwds.update(**kwds)
+
+    @property
+    def make(self):
+        if self._make is None:
+            self._make = Make(*self._make_args, **self._make_kwds)
+        return self._make
+
+
+pass_context = click.make_pass_decorator(CommandsContext)
+
+
 @click.group()
-def commands():
-    pass
+@click.option('--quiet', '-q', is_flag=True,
+              help='Dont print informations (errors only)')
+@click.option('--verbose', '-v', is_flag=True,
+              help='Pring debug informations')
+@click.option('--jobs', '-j',
+              help='Maximum jobs', default=None, type=int)
+@click.pass_context
+def cli(ctx, **kwds):
+    ctx.obj = CommandsContext(**kwds)
 
 
 def available_toolchains():
@@ -55,15 +84,17 @@ def available_toolchains():
 _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
 
 
-@commands.command()
+@cli.command()
 @click.option('--verbose', '-v', is_flag=True,
               help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
               type=_toolchain_choice)
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True)
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True)
-@click.argument('BUILD_PATH', type=click.Path(resolve_path=True, path_type=Path))
-@click.argument('SOURCE_PATH', type=click.Path(exists=True, resolve_path=True, path_type=Path), default=Path.cwd())
+@click.option('--build-path', '-B', help='Path where pymake has been initialized.',
+              type=click.Path(resolve_path=True, path_type=Path), required=True, default='build')
+@click.option('--source-path', '-S', help='Path where source is located.',
+              type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
 def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     config = Cache(build_path / Make._config_name)
@@ -73,7 +104,7 @@ def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tupl
     _logger.info(f'source path: {config.source_path}')
     _logger.info(f'build path: {config.build_path}')
     config.toolchain = toolchain or config.get(
-        'toolchain') or click.prompt('Toolchain', type=_toolchain_choice)
+        'toolchain') or click.prompt('Toolchain', type=_toolchain_choice, default='default')
     if not hasattr(config, 'settings'):
         config.settings = Settings()
     asyncio.run(config.save())
@@ -95,27 +126,28 @@ def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tupl
         asyncio.run(make.config.save())
 
 
-
-@commands.command()
+@cli.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
-def build(**kwargs):
-    make = Make(**kwargs)
-    asyncio.run(make.build())
+@pass_context
+def build(ctx: CommandsContext, **kwds):
+    ctx(**kwds)  # update kwds
+    asyncio.run(ctx.make.build())
     from pymake.cxx import target_toolchain
     target_toolchain.compile_commands.update()
 
 
-@commands.command()
+@cli.command()
 @common_opts
 @click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
-def install(mode: str, **kwargs):
-    make = Make(**kwargs)
+@pass_context
+def install(ctx: CommandsContext, mode: str, **kwargs):
+    ctx(**kwargs)
     mode = InstallMode[mode]
-    asyncio.run(make.install(mode))
+    asyncio.run(ctx.make.install(mode))
 
 
-@commands.command()
+@cli.command()
 @click.option('--verbose', '-v', is_flag=True,
               help='Pring debug informations')
 @click.option('--yes', '-y', is_flag=True, help='Proceed without asking')
@@ -154,118 +186,50 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
         rm_empty(manifest.parent)
 
 
-@commands.command()
+@cli.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
-@click.option('--json', 'j', is_flag=True, help='Output in json format')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
-def list_targets(all: bool, j: bool, show_type: bool, **kwargs):
-    make = Make(**kwargs)
-    asyncio.run(make.initialize())
+@pass_context
+def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
+    ctx(**kwargs)
+    asyncio.run(ctx.make.initialize())
     from pymake.core.include import context
     out = []
     targets = context.all_targets if all else context.default_targets
     for target in targets:
-        if j:
-            out.append({
-                'name': target.name,
-                'fullname': target.fullname,
-                'buildPath': str(target.build_path),
-                'output': str(target.output),
-                'executable': isinstance(target, Executable),
-                'type': type(target).__name__
-            })
-        elif show_type:
+        if show_type:
             out.append(target.fullname + ' - ' + type(target).__name__)
         else:
             out.append(target.fullname)
-    if not j:
-        click.echo('\n'.join(out))
-    else:
-        import json
-        click.echo(json.dumps(out))
+    click.echo('\n'.join(out))
 
 
-@commands.command()
-@click.option('-js', '--json', 'j', is_flag=True, help='Output in json format')
+@cli.command()
 @common_opts
-def list_tests(j, **kwargs):
-    make = Make(**kwargs)
-    asyncio.run(make.initialize())
-    from pymake.core.include import context, MakeFile
-    from pymake.core.test import Test
-    if j:
-        def make_test_info(test: Test):
-            info = {
-                'type': 'test',
-                'id': test.fullname,
-                'label': test.name,
-                'debuggable': False,
-                'target': test.executable.fullname,
-                'out': str(test.out),
-                'err': str(test.err),
-            }
-            if isinstance(test.executable, Executable):
-                info['debuggable'] = True
-                if test.file:
-                    info['file'] = str(test.file)
-                else:
-                    info['file'] = str(test.executable.source_path / test.executable.sources[0])
-                
-                if test.lineno:
-                    info['line'] = test.lineno
-                
-                if test.workingDir:
-                    info['workingDirectory'] = str(test.workingDir)
-                else:
-                    info['workingDirectory'] = str(test.executable.build_path)
+@pass_context
+def list_tests(ctx: CommandsContext, **kwargs):
+    ctx(**kwargs)
+    asyncio.run(ctx.make.initialize())
+    from pymake.core.include import context
+    for mf in context.all_makefiles:
+        for test in mf.tests:
+            click.echo(test.fullname)
 
-                if len(test.args) > 0:
-                    info['args'] = test.args
 
-            return info
-
-        def make_suite_info(mf: MakeFile):
-            if len(mf.tests) == 0 and mf.children == 0:
-                return None
-
-            suite = {
-                'type': 'suite',
-                'id': mf.fullname,
-                'label': mf.name,
-                'children': list()
-            }
-            for test in mf.tests:
-                suite['children'].append(make_test_info(test))
-
-            for child in mf.children:
-                child_suite = make_suite_info(child)
-                if child_suite is not None:
-                    suite['children'].append(child_suite)
-
-            if len(suite['children']) > 0:
-                return suite
-
-        import json
-        click.echo(json.dumps(make_suite_info(context.root)))
-    else:
-        for mf in context.all_makefiles:
-            for test in mf.tests:
-                click.echo(test.fullname)
-
-@commands.command()
+@cli.command()
 def list_toolchains(**kwargs):
     for name, _ in Make.toolchains()['toolchains'].items():
         click.echo(name)
 
 
-@commands.command()
+@cli.command()
 @common_opts
 def clean(**kwargs):
     asyncio.run(Make(**kwargs).clean())
 
 
-@commands.command()
+@cli.command()
 @common_opts
 def run(**kwargs):
     make = Make(**kwargs)
@@ -273,7 +237,7 @@ def run(**kwargs):
     sys.exit(rc)
 
 
-@commands.command()
+@cli.command()
 @common_opts
 def test(**kwargs):
     make = Make(**kwargs)
@@ -281,7 +245,7 @@ def test(**kwargs):
     sys.exit(rc)
 
 
-@commands.command()
+@cli.command()
 @click.option('-s', '--script', help='Use a source script to resolve compilation environment')
 def scan_toolchains(script: str, **kwargs):
     from pymake.cxx.detect import create_toolchains, load_env_toolchain
@@ -291,7 +255,125 @@ def scan_toolchains(script: str, **kwargs):
         create_toolchains()
 
 
-@commands.result_callback()
+@cli.group()
+def code():
+    ''' vscode specific commands
+    '''
+    pass
+
+
+@code.command()
+@common_opts
+@pass_context
+def get_targets(ctx: CommandsContext, **kwargs):
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    asyncio.run(ctx.make.initialize())
+    from pymake.core.include import context
+    out = []
+    targets = context.all_targets
+    for target in targets:
+        out.append({
+            'name': target.name,
+            'fullname': target.fullname,
+            'buildPath': str(target.build_path),
+            'output': str(target.output),
+            'executable': isinstance(target, Executable),
+            'type': type(target).__name__
+        })
+    import json
+    click.echo(json.dumps(out))
+
+
+@cli.command()
+@common_opts
+@pass_context
+def get_tests(ctx: CommandsContext, **kwargs):
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    asyncio.run(ctx.make.initialize())
+    from pymake.core.include import context
+    out = list()
+    for mf in context.all_makefiles:
+        for test in mf.tests:
+            out.append(test.fullname)
+    import json
+    click.echo(json.dumps(out))
+
+
+@code.command()
+@common_opts
+@pass_context
+def get_test_suites(ctx: CommandsContext, **kwargs):
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    asyncio.run(ctx.make.initialize())
+    from pymake.core.include import context, MakeFile
+    from pymake.core.test import Test
+
+    def make_test_info(test: Test):
+        info = {
+            'type': 'test',
+            'id': test.fullname,
+            'label': test.name,
+            'debuggable': False,
+            'target': test.executable.fullname,
+            'out': str(test.out),
+            'err': str(test.err),
+        }
+        if isinstance(test.executable, Executable):
+            info['debuggable'] = True
+            if test.file:
+                info['file'] = str(test.file)
+            else:
+                info['file'] = str(
+                    test.executable.source_path / test.executable.sources[0])
+
+            if test.lineno:
+                info['line'] = test.lineno
+
+            if test.workingDir:
+                info['workingDirectory'] = str(test.workingDir)
+            else:
+                info['workingDirectory'] = str(test.executable.build_path)
+
+            if len(test.args) > 0:
+                info['args'] = test.args
+
+        return info
+
+    def make_suite_info(mf: MakeFile):
+        if len(mf.tests) == 0 and mf.children == 0:
+            return None
+
+        suite = {
+            'type': 'suite',
+            'id': mf.fullname,
+            'label': mf.name,
+            'children': list()
+        }
+        for test in mf.tests:
+            suite['children'].append(make_test_info(test))
+
+        for child in mf.children:
+            child_suite = make_suite_info(child)
+            if child_suite is not None:
+                suite['children'].append(child_suite)
+
+        if len(suite['children']) > 0:
+            return suite
+
+    import json
+    click.echo(json.dumps(make_suite_info(context.root)))
+
+
+@code.command()
+def get_toolchains(**kwargs):
+    import json
+    click.echo(json.dumps(list(Make.toolchains()['toolchains'].keys())))
+
+
+@cli.result_callback()
 def process_result(result, **kwargs):
     asyncio.run(Cache.save_all())
 
@@ -299,7 +381,7 @@ def process_result(result, **kwargs):
 def main():
     import sys
     try:
-        commands(auto_envvar_prefix='PYMAKE')
+        cli(auto_envvar_prefix='PYMAKE')
     except Exception as err:
         _logger.error(str(err))
         ex_type, ex, tb = sys.exc_info()

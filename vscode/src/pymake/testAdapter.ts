@@ -122,7 +122,7 @@ export class PyMakeTestAdapter implements TestAdapter {
         stream.onLine((line, isError) => {
             out += line;
         });
-        const res = await stream.finishP();
+        const res = await stream.finished();
         let log: string = '';
         log += await fsPromises.readFile(path.join(test.out), 'utf-8');
         log += await fsPromises.readFile(path.join(test.err), 'utf-8');
