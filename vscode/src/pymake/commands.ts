@@ -13,92 +13,48 @@ export async function scanToolchains(ext: PyMake) {
     return channelExec('scan-toolchains');
 }
 
-const splitLines = (str: string) => str.split(/\r?\n/);
+const pymakeBaseArgs = ['python', '-m', 'pymake'];
+const codeInterfaceArgs = [...pymakeBaseArgs, 'code'];
 
-export async function getToolchains(): Promise<string[]> {
-    let toolchains: string[] = [];
-    let stream = streamExec(['python', '-m', 'pymake', 'list-toolchains']);
-    let errors: string[] = [];
-    stream.onLine((buf: Buffer, isError) => {
-        const line = buf.toString();
-        if (!isError) {
-            for (let item of splitLines(line)) {
-                item = item.trim();
-                if (item.length) {
-                    toolchains.push(item);
-                }
-            }
-        } else {
-            errors.push(line.trim());
+async function codeIterface<T>(ext: PyMake, fn: string): Promise<T> {
+    let stream = streamExec([...codeInterfaceArgs, fn], {
+        env: {
+            ...process.env,
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'PYMAKE_BUILD_PATH': ext.buildPath,
         }
     });
-    await stream.finishP();
-    if (errors.length) {
-        await vscode.window.showErrorMessage('PyMake: Failed to get toolchains', { detail: errors.join('\n') });
-        return [];
-    } else {
-        return toolchains;
-    }
-}
-
-export async function getTargets(ext: PyMake): Promise<Target[]> {
-    let stream = streamExec(['python', '-m', 'pymake', 'list-targets', '--json', '-q', ext.buildPath]);
     let data = '';
     stream.onLine((line, isError) => {
         data += line;
     });
-    let rc = await stream.finishP();
+    let rc = await stream.finished();
     if (rc !== 0) {
-        await vscode.window.showErrorMessage('PyMake: Failed to get targets', { modal: true, detail: data });
-        return [];
+        throw Error(`PyMake: ${fn} failed: ${data}`);
     } else {
-        let targets: Target[] = [];
-        let rawTargets = JSON.parse(data);
-        for (let t of rawTargets) {
-            targets.push(t as Target);
-        }
-        return targets;
+        return JSON.parse(data) as T;
     }
+}
+
+export async function getToolchains(ext: PyMake): Promise<string[]> {
+    return codeIterface<string[]>(ext, 'get-toolchains');
+}
+
+export async function getTargets(ext: PyMake): Promise<Target[]> {
+    return codeIterface<Target[]>(ext, 'get-targets');
 }
 
 
 export async function getTests(ext: PyMake): Promise<string[]> {
-    let stream = streamExec(['python', '-m', 'pymake', 'list-tests', '-q', ext.buildPath]);
-    let data = '';
-    stream.onLine((line, isError) => {
-        data += line;
-    });
-    let rc = await stream.finishP();
-    if (rc !== 0) {
-        await vscode.window.showErrorMessage('PyMake: Failed to get tests', { modal: true, detail: data });
-        return [];
-    } else {
-        let tests: string[] = [];
-        for (let t of splitLines(data)) {
-            if (t.length > 0) {
-                tests.push(t);
-            }
-        }
-        return tests;
-    }
+    return codeIterface<string[]>(ext, 'get-tests');
 }
 
 export async function getTestSuites(ext: PyMake): Promise<TestSuiteInfo> {
-    let stream = streamExec(['python', '-m', 'pymake', 'list-tests', '-js', '-q', ext.buildPath]);
-    let data = '';
-    stream.onLine((line, isError) => {
-        data += line;
-    });
-    let rc = await stream.finishP();
-    if (rc !== 0) {
-        throw Error(`PyMake: Failed to get tests: ${data}`);
-    } else {
-        return JSON.parse(data) as TestSuiteInfo;
-    }
+    return codeIterface<TestSuiteInfo>(ext, 'get-test-suites');
 }
 
 export async function configure(ext: PyMake) {
-    let args = [ext.buildPath];
+    let args = ['-B', ext.buildPath, '-S', ext.projectRoot];
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
     }
@@ -108,7 +64,7 @@ export async function configure(ext: PyMake) {
 }
 
 function baseArgs(ext: PyMake): string[] {
-    let args = [ext.buildPath];
+    let args = ['-B', ext.buildPath];
     if (ext.getConfig<boolean>('verbose')) {
         args.push('-v');
     }

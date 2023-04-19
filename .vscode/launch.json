@@ -9,11 +9,26 @@
             "description": "Select a command",
             "type": "pickString",
             "options": [
-                {"label": "Build", "value": "build"},
-                {"label": "Clean", "value": "clean"},
-                {"label": "Run", "value": "run"},
-                {"label": "Test", "value": "test"},
-                {"label": "Configure", "value": "configure"},
+                {
+                    "label": "Build",
+                    "value": "build"
+                },
+                {
+                    "label": "Clean",
+                    "value": "clean"
+                },
+                {
+                    "label": "Run",
+                    "value": "run"
+                },
+                {
+                    "label": "Test",
+                    "value": "test"
+                },
+                {
+                    "label": "Configure",
+                    "value": "configure"
+                },
             ]
         },
         {
@@ -21,11 +36,26 @@
             "description": "Select a test",
             "type": "pickString",
             "options": [
-                {"label": "Generators", "value": "simple"},
-                {"label": "CXX/simple", "value": "cxx/simple"},
-                {"label": "CXX/library", "value": "cxx/library"},
-                {"label": "CXX/qt", "value": "cxx/qt"},
-                {"label": "CXX/modules", "value": "cxx/modules"},
+                {
+                    "label": "Generators",
+                    "value": "simple"
+                },
+                {
+                    "label": "CXX/simple",
+                    "value": "cxx/simple"
+                },
+                {
+                    "label": "CXX/library",
+                    "value": "cxx/library"
+                },
+                {
+                    "label": "CXX/qt",
+                    "value": "cxx/qt"
+                },
+                {
+                    "label": "CXX/modules",
+                    "value": "cxx/modules"
+                },
             ]
         },
         {
@@ -42,7 +72,13 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["configure", "-v", "-t", "default", "./build"],
+            "args": [
+                "configure",
+                "-v",
+                "-t",
+                "default",
+                "./build"
+            ],
             "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -54,10 +90,14 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v", "./build"],
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
             "cwd": "${workspaceFolder}/examples",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
             }
         },
         {
@@ -66,7 +106,9 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["scan-toolchains"],
+            "args": [
+                "scan-toolchains"
+            ],
             "cwd": "${workspaceFolder}/examples",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
@@ -78,20 +120,11 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v"],
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
             "cwd": "${workspaceFolder}/examples/${input:test}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "cxx/modules test",
-            "type": "python",
-            "request": "launch",
-            "module": "pymake",
-            "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v"],
-            "cwd": "${workspaceFolder}/examples/cxx/modules",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"
             }
@@ -102,10 +135,30 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v"],
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
             "cwd": "${workspaceFolder}/examples/cxx",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/modules test",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/modules",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
             }
         },
         {
@@ -114,10 +167,14 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v", "build"],
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
             "cwd": "${workspaceFolder}/examples/cxx/simple",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
             }
         },
         {
@@ -126,10 +183,14 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v", "build"],
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
             "cwd": "${workspaceFolder}/examples/cxx/libraries",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
             }
         },
         {
@@ -138,10 +199,14 @@
             "request": "launch",
             "module": "pymake",
             "justMyCode": true,
-            "args": ["${input:makefileCommand}", "-v", "build"],
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
             "cwd": "${workspaceFolder}/examples/cxx/smc",
             "env": {
-                "PYTHONPATH": "${workspaceFolder}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
             }
         },
         {
@@ -150,7 +215,12 @@
             "request": "launch",
             "module": "unittest",
             "justMyCode": false,
-            "args": ["discover", "-v", ".", "test_*${input:unitTestName}*.py"],
+            "args": [
+                "discover",
+                "-v",
+                ".",
+                "test_*${input:unitTestName}*.py"
+            ],
             "cwd": "${workspaceFolder}/tests",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}"

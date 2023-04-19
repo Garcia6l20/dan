@@ -12,6 +12,9 @@
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
+			"env": {
+				"PYTHONPATH": "${workspaceFolder}/.."
+			},
 			"outFiles": [
 				"${workspaceFolder}/dist/**/*.js"
 			],

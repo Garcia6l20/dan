@@ -173,7 +173,7 @@ export class PyMake implements vscode.Disposable {
 	}
 
 	async onLoaded() {
-		this.toolchains = await commands.getToolchains();
+		this.toolchains = await commands.getToolchains(this);
 		this.targets = await commands.getTargets(this);
 
 		vscode.commands.executeCommand("setContext", "inPyMakeProject", true);

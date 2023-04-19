@@ -38,13 +38,13 @@ pymake scan-toolchains [-s <env-script>]
 ### Configuration
 
 ```bash
-pymake configure <build_path> [-t <toolchain>] [-s <setting>=<value>] [-o <option>=<value>]
+pymake configure [-B <build_path>] [-S <source_path>] [-t <toolchain>] [-s <setting>=<value>] [-o <option>=<value>]
 ```
 
 ### Build
 
 ```bash
-pymake build <build_path> [-v] [--for-install] [TARGETS]...
+pymake build [-B <build_path>] [-v] [--for-install] [TARGETS]...
 ```
 
 ### Install
@@ -52,13 +52,13 @@ pymake build <build_path> [-v] [--for-install] [TARGETS]...
 Install targets marked with `self.install(...)` to the *install.destination* setting.
 
 ```bash
-pymake install <build_path> [TARGETS]... [user|dev]
+pymake install [-B <build_path>] [TARGETS]... [user|dev]
 ```
 
 Settings:
 - *install.destination*: The install destination (default: /usr/local).
-- *install.runtime_prefix*: Executables prefix (default: bin).
-- *install.libraries_prefix*: Executables prefix (default: lib).
-- *install.includes_prefix*: Executables prefix (default: include).
-- *install.data_prefix*: Executables prefix (default: share).
+- *install.runtime_prefix*: Executables installation prefix (default: bin).
+- *install.libraries_prefix*: Libraries installation prefix (default: lib).
+- *install.includes_prefix*: Includes installation prefix (default: include).
+- *install.data_prefix*: Data files installation prefix (default: share).
 - *install.project_prefix*: !!! NOT USED YET !!! Project prefix (default: None).
