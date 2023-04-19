@@ -14,7 +14,10 @@ class cached(BaseDecorator):
         key = hash((args, frozenset(kwds)))
         if key not in self.__cache:
             self.__cache[key] = Future()
-            self.__cache[key].set_result(await self.__fn(*args, **kwds))
+            try:
+                self.__cache[key].set_result(await self.__fn(*args, **kwds))
+            except Exception as ex:
+                self.__cache[key].set_exception(ex)
         elif not self.__cache[key].done():
             await self.__cache[key]
 

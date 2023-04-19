@@ -384,7 +384,7 @@ def main():
         cli(auto_envvar_prefix='PYMAKE')
     except Exception as err:
         _logger.error(str(err))
-        ex_type, ex, tb = sys.exc_info()
+        _ex_type, _ex, tb = sys.exc_info()
         import traceback
         _logger.debug(' '.join(traceback.format_tb(tb)))
         try:

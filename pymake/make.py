@@ -242,7 +242,14 @@ class Make(Logging):
         targets = set(self.active_targets.values())
 
         with self.progress('building', targets, lambda t: t.build()) as tasks:
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            got_error = False
+            for result in results:
+                if isinstance(result, Exception):
+                    self._logger.exception(result)
+                    got_error = True
+            if got_error:
+                raise RuntimeError('One or more targets failed, check log...')
 
     async def install(self, mode: InstallMode = InstallMode.user):
 

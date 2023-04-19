@@ -1,5 +1,5 @@
-from pymake.cli import cli
+from pymake.cli import main
 
 
 if __name__ == '__main__':
-    cli(auto_envvar_prefix='PYMAKE')
+    main()
