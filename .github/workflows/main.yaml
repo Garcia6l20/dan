@@ -37,10 +37,10 @@ jobs:
       - name: Build examples
         run: |
           cd examples
-          pymake configure -v -t default build-default
-          pymake build -v build-default
+          pymake configure -v -t default
+          pymake build -v
 
       - name: Run examples tests
         run: |
           cd examples
-          pymake test -v build-default
+          pymake test -v
