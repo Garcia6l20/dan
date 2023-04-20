@@ -35,7 +35,7 @@ class Make(Logging):
     _config_name = 'pymake.config.yaml'
     _cache_name = 'pymake.cache.yaml'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None):
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress = False):
 
         from pymake.core.include import context_reset
         context_reset()
@@ -56,6 +56,7 @@ class Make(Logging):
 
         self.config = None
         self.cache = None
+        self.no_progress = no_progress
         self.for_install = for_install
         path = Path(path)
         if not path.exists() or not (path / 'makefile.py').exists():
@@ -194,14 +195,14 @@ class Make(Logging):
 
     class progress:
 
-        def __init__(self, desc, targets, task_builder) -> None:
+        def __init__(self, desc, targets, task_builder, disable) -> None:
             self.desc = desc
             self.targets = targets
             self.builder = task_builder
             import shutil
             term_cols = shutil.get_terminal_size().columns
             self.max_desc_width = int(term_cols * 0.25)
-            self.pbar = tqdm.tqdm(total=len(targets), desc='building')
+            self.pbar = tqdm.tqdm(total=len(targets), desc='building', disable=disable)
             self.pbar.unit = ' targets'
 
         def __enter__(self):
@@ -236,7 +237,7 @@ class Make(Logging):
         await self.initialize()
         targets = set(self.active_targets.values())
 
-        with self.progress('building', targets, lambda t: t.build()) as tasks:
+        with self.progress('building', targets, lambda t: t.build(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
@@ -266,7 +267,7 @@ class Make(Logging):
         await self.build()
 
         targets = list(self.active_targets.values())
-        with self.progress('installing', targets, lambda t: t.install(self.settings.install, mode)) as tasks:
+        with self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
             manifest_path = self.settings.install.data_destination / \
@@ -302,7 +303,7 @@ class Make(Logging):
         for test in context.root.tests:
             if len(self.required_targets) == 0 or test.fullname in self.required_targets:
                 tests.append(test)
-        with self.progress('testing', tests, lambda t: t.__call__()) as tasks:
+        with self.progress('testing', tests, lambda t: t.__call__(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks)
             if all(results):
                 self.info('Success !')

@@ -24,6 +24,7 @@ _common_opts = [
                  help='Maximum jobs.', default=None, type=int, envvar='PYMAKE_JOBS'),
     click.option('--build-path', '-B', 'path', help='Path where pymake has been initialized.',
                  type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='PYMAKE_BUILD_PATH'),
+    click.option('--no-progress', is_flag=True, help='Disable progress bars', envvar='PYMAKE_NOPROGRESS'),
     click.argument('TARGETS', nargs=-1),
 ]
 _base_help_ = '''
