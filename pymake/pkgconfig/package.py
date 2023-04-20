@@ -202,6 +202,7 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     requires = [dep for dep in lib.dependencies if isinstance(dep, Package)]
     libs = target_toolchain.make_link_options(
         [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
+    libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
     cflags = lib.compile_definitions.public
     cflags.extend(target_toolchain.make_include_options(['${includedir}']))
