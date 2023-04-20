@@ -122,10 +122,12 @@ class Target(Logging):
                  all=True) -> None:
         from pymake.core.include import context
         self._name = name
+        self.default = all
         self.description = description
         self.version = Version(version) if version else None
         self.parent = parent
         self.__cache: SubCache = None
+        self.__unresolved_dependencies = list()
         if parent is None:
             self.makefile = context.current
             self.source_path = context.current.source_path
@@ -149,15 +151,8 @@ class Target(Logging):
         self._utils: list[Callable] = list()
         self.output: Path = None
 
-        if self.fullname in context.all_targets:
-            raise InvalidConfiguration(
-                f'target {self.fullname} already exists')
         super().__init__(self.fullname)
         self.makefile.targets.add(self)
-        from pymake.core.include import context
-        if all:
-            context.default_targets.add(self)
-        context.all_targets.add(self)
 
     @property
     def name(self) -> str:
@@ -173,12 +168,43 @@ class Target(Logging):
             self.__cache = self.makefile.cache.subcache(self.fullname)
         return self.__cache
 
+    async def __load_unresolved_dependencies(self):
+        if len(self.__unresolved_dependencies) == 0:
+            return
+        deps_install_path = self.build_path / 'pkgs'
+        deps_settings = InstallSettings(deps_install_path)
+        deps_installs = list()
+        if self.makefile.requirements is not None:
+            reqs = self.makefile.requirements
+        # TODO find a better way to handle this !!!
+        # CASE: searching for package within requirements loading
+        elif self.makefile.parent is not None \
+                and self.makefile.parent.parent is not None \
+                and self.makefile.parent.parent.requirements is not None:
+            reqs = self.makefile.parent.parent.requirements
+        else:
+            raise RuntimeError(
+                f'Unresolved dependencies maybe you should provide a requirements.py file')
+        for dep in self.__unresolved_dependencies:
+            t = reqs.find(dep.name)
+            if not t:
+                raise RuntimeError(f'Unresolved dependency "{dep.name}"')
+            deps_installs.append(t.install(deps_settings, InstallMode.dev))
+        await asyncio.gather(*deps_installs)
+
+        from pymake.pkgconfig.package import Package
+        for dep in self.__unresolved_dependencies:
+            pkg = Package(dep.name, search_paths=[
+                deps_install_path])
+            self.load_dependency(pkg)
+
     @asyncio.cached
     async def preload(self):
         self.debug('preloading...')
         deps = self.dependencies
         self.dependencies = Dependencies()
         self.load_dependencies(deps)
+        await self.__load_unresolved_dependencies()
         await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
         await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
         await asyncio.gather(*[obj.build() for obj in self.preload_dependencies])
@@ -197,24 +223,30 @@ class Target(Logging):
             self.load_dependency(dependency)
 
     def load_dependency(self, dependency):
-        if isinstance(dependency, Target):
-            self.dependencies.add(dependency)
-        elif isinstance(dependency, FileDependency):
-            self.dependencies.add(dependency)
-        elif isinstance(dependency, str):
-            from pymake.pkgconfig.package import Package
-            for pkg in Package.all.values():
-                if pkg.name == dependency:
-                    self.load_dependency(pkg)
-                    return
-
-            self.load_dependency(Path(dependency))
-        elif isinstance(dependency, Path):
-            dependency = FileDependency(self.source_path / dependency)
-            self.dependencies.add(dependency)
-        else:
-            raise RuntimeError(
-                f'Unhandled dependency {dependency} ({type(dependency)})')
+        from pymake.pkgconfig.package import UnresolvedPackage
+        match dependency:
+            case Target() | FileDependency():
+                self.dependencies.add(dependency)
+            case str():
+                from pymake.pkgconfig.package import Package
+                for pkg in Package.all.values():
+                    if pkg.name == dependency:
+                        self.load_dependency(pkg)
+                        break
+                else:
+                    if Path(self.source_path / dependency).exists():
+                        self.load_dependency(FileDependency(
+                            self.source_path / dependency))
+                    else:
+                        self.load_dependency(UnresolvedPackage(dependency))
+            case Path():
+                dependency = FileDependency(self.source_path / dependency)
+                self.dependencies.add(dependency)
+            case UnresolvedPackage():
+                self.__unresolved_dependencies.append(dependency)
+            case _:
+                raise RuntimeError(
+                    f'Unhandled dependency {dependency} ({type(dependency)})')
 
     @property
     def modification_time(self):

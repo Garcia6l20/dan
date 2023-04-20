@@ -21,4 +21,5 @@ fmt = Library('fmt',
               preload_dependencies=[gitfmt],
               all=False)
 
+self.export(fmt)
 self.install(fmt)

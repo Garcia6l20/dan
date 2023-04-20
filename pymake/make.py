@@ -105,19 +105,14 @@ class Make(Logging):
 
         from pymake.core.include import context_reset
         import gc
-        while True:
-            context_reset()
-            gc.collect()
 
-            init_toolchains(toolchain)
+        # for test purpose
+        context_reset()
+        gc.collect()
 
-            include_makefile(self.source_path, self.build_path)
+        init_toolchains(toolchain)
 
-            from pymake.core.include import context
-            if len(context.missing) > 0:
-                await context.install_missing()
-            else:
-                break
+        include_makefile(self.source_path, self.build_path)
 
         from pymake.core.include import context
         from pymake.cxx import target_toolchain
@@ -243,12 +238,15 @@ class Make(Logging):
 
         with self.progress('building', targets, lambda t: t.build()) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            got_error = False
+            errors = list()
             for result in results:
                 if isinstance(result, Exception):
                     self._logger.exception(result)
-                    got_error = True
-            if got_error:
+                    errors.append(result)
+            err_count = len(errors)
+            if err_count == 1:
+                raise errors[0]
+            elif err_count > 1:
                 raise RuntimeError('One or more targets failed, check log...')
 
     async def install(self, mode: InstallMode = InstallMode.user):
@@ -301,10 +299,9 @@ class Make(Logging):
         await self.initialize()
         tests = list()
         from pymake.core.include import context
-        for makefile in context.all_makefiles:
-            for test in makefile.tests:
-                if len(self.required_targets) == 0 or test.fullname in self.required_targets:
-                    tests.append(test)
+        for test in context.root.tests:
+            if len(self.required_targets) == 0 or test.fullname in self.required_targets:
+                tests.append(test)
         with self.progress('testing', tests, lambda t: t.__call__()) as tasks:
             results = await asyncio.gather(*tasks)
             if all(results):

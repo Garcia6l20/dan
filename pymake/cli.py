@@ -212,9 +212,8 @@ def list_tests(ctx: CommandsContext, **kwargs):
     ctx(**kwargs)
     asyncio.run(ctx.make.initialize())
     from pymake.core.include import context
-    for mf in context.all_makefiles:
-        for test in mf.tests:
-            click.echo(test.fullname)
+    for test in context.root.tests:
+        click.echo(test.fullname)
 
 
 @cli.command()
@@ -294,9 +293,8 @@ def get_tests(ctx: CommandsContext, **kwargs):
     asyncio.run(ctx.make.initialize())
     from pymake.core.include import context
     out = list()
-    for mf in context.all_makefiles:
-        for test in mf.tests:
-            out.append(test.fullname)
+    for test in context.root.tests:
+        out.append(test.fullname)
     import json
     click.echo(json.dumps(out))
 
