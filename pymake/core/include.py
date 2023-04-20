@@ -96,7 +96,7 @@ class MakeFile(sys.__class__):
         self.__cache: Cache = None
         self.__tests: list[Test] = list()
         self.children: list[MakeFile] = list()
-        if self.parent:
+        if self.name != 'requirements' and self.parent:
             self.parent.children.append(self)
         self.options = Options(self)
 
