@@ -1,5 +1,5 @@
-from click import Path
-from pymake.core import asyncio
+from pymake.core.pathlib import Path
+from pymake.core import asyncio, aiofiles
 from pymake.core.target import Target
 from pymake.core.runners import async_run
 from pymake.logging import Logging
@@ -21,16 +21,20 @@ class GitSources(Target, Logging):
 
         if not self.clean_request:
             if not self.git_dir.exists():
-                _, _, rc = await async_run(f'git clone {self.url} {self.output}', logger=self)
-                assert rc == 0
+                try:
+                    self.output.mkdir()
+                    await async_run(f'git init', logger=self, cwd=self.output)
+                    await async_run(f'git config advice.detachedHead off', logger=self, cwd=self.output)
+                    await async_run(f'git remote add origin {self.url}', logger=self, cwd=self.output)
+                    await async_run(f'git fetch -q --depth 1 origin {self.refspec}', logger=self, cwd=self.output)
+                    await async_run(f'git checkout FETCH_HEAD', logger=self, cwd=self.output)
+                    
+                    for patch in self.patches:
+                        await async_run(f'git am {self.source_path / patch}', logger=self, cwd=self.output)
 
-            self.sha1 = (await async_run(f'git rev-parse {self.refspec}', cwd=self.output, logger=self))[0].strip()
-            current_sha1 = (await async_run(f'git rev-parse HEAD', cwd=self.output, logger=self))[0].strip()
-            if self.sha1 != current_sha1:
-                await async_run(f'git checkout {self.sha1}', cwd=self.output, logger=self)
-
-                for patch in self.patches:
-                    await async_run(f'git am {self.source_path / patch}', cwd=self.output, logger=self)
+                except Exception as e:
+                    await aiofiles.rmtree(self.output)
+                    raise e
 
         return await super().initialize()
 
