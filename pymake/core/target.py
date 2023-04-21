@@ -171,7 +171,7 @@ class Target(Logging):
     async def __load_unresolved_dependencies(self):
         if len(self.__unresolved_dependencies) == 0:
             return
-        deps_install_path = self.build_path / 'pkgs'
+        deps_install_path = self.makefile.requirements.parent.build_path / 'pkgs'
         deps_settings = InstallSettings(deps_install_path)
         deps_installs = list()
         if self.makefile.requirements is None:
