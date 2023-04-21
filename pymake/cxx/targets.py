@@ -239,6 +239,7 @@ class CXXObjectsTarget(CXXTarget):
         async with asyncio.TaskGroup() as group:
             for obj in self.objs:
                 group.create_task(obj.initialize())
+                self.load_dependency(obj)
 
     async def __build__(self):
         # compile objects

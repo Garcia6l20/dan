@@ -49,9 +49,6 @@ class UnixToolchain(Toolchain):
                 flags.extend(self.env["LDFLAGS"].strip().split(' '))
         return unique(flags)
 
-    def set_rpath(self, rpath: str):
-        self.rpath = rpath
-
     @Toolchain.build_type.setter
     def build_type(self, mode: BuildType):
         self._build_type = mode

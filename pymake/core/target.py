@@ -268,9 +268,9 @@ class Target(Logging):
             return False
         elif not self.dependencies.up_to_date:
             return False
-        elif self.modification_time and self.dependencies.modification_time > self.modification_time:
+        elif self.dependencies.modification_time > self.modification_time:
             return False
-        elif self.modification_time and self.modification_time < self.options.modification_date:
+        elif self.modification_time < self.options.modification_date:
             return False
         return True
     
