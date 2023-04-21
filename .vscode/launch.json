@@ -26,6 +26,10 @@
                     "value": "test"
                 },
                 {
+                    "label": "List targets",
+                    "value": "list-targets"
+                },
+                {
                     "label": "Configure",
                     "value": "configure"
                 },
@@ -67,25 +71,7 @@
     ],
     "configurations": [
         {
-            "name": "configure",
-            "type": "python",
-            "request": "launch",
-            "module": "pymake",
-            "justMyCode": true,
-            "args": [
-                "configure",
-                "-v",
-                "-t",
-                "default",
-                "./build"
-            ],
-            "cwd": "${workspaceFolder}/examples",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "tests",
+            "name": "examples",
             "type": "python",
             "request": "launch",
             "module": "pymake",
@@ -101,36 +87,7 @@
             }
         },
         {
-            "name": "scan-toolchains",
-            "type": "python",
-            "request": "launch",
-            "module": "pymake",
-            "justMyCode": true,
-            "args": [
-                "scan-toolchains"
-            ],
-            "cwd": "${workspaceFolder}/examples",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "single test",
-            "type": "python",
-            "request": "launch",
-            "module": "pymake",
-            "justMyCode": true,
-            "args": [
-                "${input:makefileCommand}",
-                "-v"
-            ],
-            "cwd": "${workspaceFolder}/examples/${input:test}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
-        },
-        {
-            "name": "cxx test",
+            "name": "cxx",
             "type": "python",
             "request": "launch",
             "module": "pymake",
@@ -146,7 +103,7 @@
             }
         },
         {
-            "name": "cxx/modules test",
+            "name": "cxx/modules",
             "type": "python",
             "request": "launch",
             "module": "pymake",
@@ -162,7 +119,7 @@
             }
         },
         {
-            "name": "cxx/simple test",
+            "name": "cxx/simple",
             "type": "python",
             "request": "launch",
             "module": "pymake",
@@ -178,7 +135,7 @@
             }
         },
         {
-            "name": "cxx/libraries test",
+            "name": "cxx/libraries",
             "type": "python",
             "request": "launch",
             "module": "pymake",
@@ -194,7 +151,7 @@
             }
         },
         {
-            "name": "cxx/smc test",
+            "name": "cxx/smc",
             "type": "python",
             "request": "launch",
             "module": "pymake",
@@ -204,6 +161,38 @@
                 "-v"
             ],
             "cwd": "${workspaceFolder}/examples/cxx/smc",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/smc/catch2",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/smc/catch2",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/smc/spdlog",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/smc/spdlog",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
                 "PYMAKE_BUILD_PATH": "./build"

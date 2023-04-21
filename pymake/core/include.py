@@ -1,5 +1,7 @@
+from contextlib import contextmanager
 from functools import cached_property
 import importlib.util
+import os
 import sys
 from pymake.core import aiofiles, asyncio
 
@@ -10,7 +12,7 @@ from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.target import Options, Target
 from pymake.core.test import Test, AsyncExecutable
 from pymake.logging import Logging
-from pymake.pkgconfig.package import Package
+from pymake.pkgconfig.package import AbstractPackage, Package, UnresolvedPackage
 
 
 class TargetNotFound(RuntimeError):
@@ -35,7 +37,7 @@ def load(*recipes: str):
         raise LoadRequest(missing_recipes)
 
 
-def requires(*names) -> list[Target]:
+def requires(*names) -> list[AbstractPackage]:
     ''' Requirement lookup
 
     1. Searches for a target exported by a previously included makefile
@@ -50,31 +52,25 @@ def requires(*names) -> list[Target]:
     '''
     global context
     res = list()
-    missing_packages = list()
     for name in names:
-        found = None
+        pkg = UnresolvedPackage(name)
         for t in context.exported_targets:
             if t.name == name:
-                found = t
+                pkg = t
                 break
-
-        if not found:
+        else:
             for t in Package.all.values():
                 if t.name == name:
-                    found = t
+                    pkg = t
                     break
-            try:
-                found = Package(name, search_paths=[
-                                context.root.build_path / 'pkgs'])
-            except:
-                pass
+            else:
+                try:
+                    pkg = Package(name, search_paths=[
+                        context.current.build_path / 'pkgs'])
+                except:
+                    pass
 
-        if not found:
-            missing_packages.append(name)
-        res.append(found)
-
-    if len(missing_packages) > 0:
-        raise LoadRequest(missing_packages)
+        res.append(pkg)
 
     return res
 
@@ -84,12 +80,14 @@ class MakeFile(sys.__class__):
     def _setup(self,
                name: str,
                source_path: Path,
-               build_path: Path) -> None:
+               build_path: Path,
+               requirements: 'MakeFile' = None) -> None:
         self.name = name
         self.description = None
         self.version = None
         self.source_path = source_path
         self.build_path = build_path
+        self.__requirements = requirements
         self.parent: MakeFile = self.parent if hasattr(
             self, 'parent') else None
         self.targets: set[Target] = set()
@@ -98,7 +96,7 @@ class MakeFile(sys.__class__):
         self.__cache: Cache = None
         self.__tests: list[Test] = list()
         self.children: list[MakeFile] = list()
-        if self.parent:
+        if self.name != 'requirements' and self.parent:
             self.parent.children.append(self)
         self.options = Options(self)
 
@@ -115,26 +113,73 @@ class MakeFile(sys.__class__):
     def export(self, *targets: Target):
         for target in targets:
             self.__exports.append(target)
-            context.exported_targets.add(target)
 
     def install(self, *targets: Target):
         self.__installs.extend(targets)
 
-    @property
-    def installed_targets(self):
-        return self.__installs
+    def find(self, name) -> Target:
+        """Find a target.
+
+        Args:
+            name (str): The target name to find.
+
+        Returns:
+            Target: The found target or None.
+        """
+        for t in self.exported_targets:
+            if t.name == name:
+                return t
+        for c in self.children:
+            t = c.find(name)
+            if t:
+                return t
 
     def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path | str = None, lineno: int = None):
         self.__tests.append(
             Test(self, executable, name=name, args=args, file=file, lineno=lineno))
+        
+    @property
+    def requirements(self):
+        if self.__requirements is not None:
+            return self.__requirements
+        elif self.parent is not None:
+            return self.parent.requirements
+    
+    @requirements.setter
+    def requirements(self, value : 'MakeFile'):
+        self.__requirements = value
 
     @property
     def tests(self):
-        return self.__tests
+        tests = self.__tests
+        for c in self.children:
+            tests.extend(c.tests)
+        return tests
 
     @property
-    def _exported_targets(self) -> list[Target]:
+    def exported_targets(self) -> list[Target]:
         return self.__exports
+
+    @property
+    def installed_targets(self):
+        targets = self.__installs
+        for c in self.children:
+            targets.extend(c.installed_targets)
+        return targets
+
+    @property
+    def all_targets(self):
+        targets = self.targets
+        for c in self.children:
+            targets.update(c.all_targets)
+        return targets
+
+    @property
+    def default_targets(self):
+        targets = {t for t in self.targets if t.default == True}
+        for c in self.children:
+            targets.update(c.default_targets)
+        return targets
 
 
 class Context(Logging):
@@ -142,51 +187,7 @@ class Context(Logging):
         self.__root: MakeFile = None
         self.__current: MakeFile = None
         self.__all_makefiles: set[MakeFile] = set()
-        self.__all_targets: set[Target] = set()
-        self.__default_targets: set[Target] = set()
-        self.__exported_targets: set[Target] = set()
-        self.missing: list[LoadRequest] = list()
-        self.__pkg_installs: dict[str, asyncio.Event] = dict()
         super().__init__('context')
-
-    async def _install_pkg(self, module_path, build_path):
-        name = module_path.stem
-        settings = InstallSettings()
-        settings.destination = self.root.build_path / 'pkgs'
-        pkgs_data = self.root.build_path / 'pkgs-build'
-        while True:
-            try:
-                mf: MakeFile = load_makefile(module_path, build_path)
-                tasks = list()
-                if name not in self.__pkg_installs:
-                    self.__pkg_installs[name] = asyncio.Event()
-                    self.info(f'installing {name}')
-                    for t in mf.installed_targets:
-                        async def install():
-                            await t.install(settings, InstallMode.dev)
-                            async with aiofiles.open(build_path / 'done', 'w') as f:
-                                await f.write('OK')
-                        tasks.append(install())
-                else:
-                    # wait for install completion
-                    tasks.append(self.__pkg_installs[name].wait())
-                await asyncio.gather(*tasks)
-                self.__pkg_installs[name].set()
-                break
-            except LoadRequest as missing:
-                await self.install_missing([missing])
-
-    async def install_missing(self, missing=None):
-        tasks = list()
-        settings = InstallSettings()
-        settings.destination = context.root.build_path / 'pkgs'
-        pkgs_data = context.root.build_path / 'pkgs-build'
-        for req in (missing or self.missing):
-            for recipe in req.recipes:
-                module_path = req.makefile.source_path / f'{recipe}.py'
-                build_path = pkgs_data / recipe
-                tasks.append(self._install_pkg(module_path, build_path))
-        await asyncio.gather(*tasks)
 
     @property
     def root(self):
@@ -200,27 +201,21 @@ class Context(Logging):
     def all_makefiles(self) -> set[MakeFile]:
         return self.__all_makefiles
 
-    def install(self, *targets: Target):
-        self.__installed_targets.update(targets)
-
     @property
     def all_targets(self) -> set[Target]:
-        return self.__all_targets
+        return self.root.all_targets
 
     @property
     def exported_targets(self) -> set[Target]:
-        return self.__exported_targets
+        return self.root.exported_targets
 
     @property
     def default_targets(self) -> set[Target]:
-        return self.__default_targets
+        return self.root.default_targets
 
     @property
     def installed_targets(self) -> set[Target]:
-        targets = set()
-        for m in self.all_makefiles:
-            targets.update(m.installed_targets)
-        return targets
+        return self.root.installed_targets
 
     @current.setter
     def current(self, current: MakeFile):
@@ -230,6 +225,7 @@ class Context(Logging):
         else:
             current.parent = self.__current
             self.__current = current
+
         self.__all_makefiles.add(current)
 
     def up(self):
@@ -251,6 +247,10 @@ context = Context()
 
 
 def context_reset():
+    """Reset whole context
+
+    Mainly used for test purpose
+    """
     global context
     for m in context.all_makefiles:
         del m
@@ -258,7 +258,7 @@ def context_reset():
     context = Context()
 
 
-def _init_makefile(module, name: str = 'root', build_path: Path = None):
+def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None):
     global context
     source_path = Path(module.__file__).parent
     if not build_path:
@@ -271,11 +271,12 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None):
     module._setup(
         name,
         source_path,
-        build_path)
+        build_path,
+        requirements)
 
 
-def load_makefile(module_path: Path, build_path: Path) -> MakeFile:
-    name = module_path.stem
+def load_makefile(module_path: Path, name: str = None, build_path: Path = None) -> MakeFile:
+    name = name or module_path.stem
     spec = importlib.util.spec_from_file_location(
         f'{name}', module_path)
     module = importlib.util.module_from_spec(spec)
@@ -297,17 +298,31 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             'root', module_path)
         name = 'root'
     else:
-        module_path: Path = context.current.source_path / name / 'makefile.py'
-        if not module_path.exists():
-            module_path = context.current.source_path / f'{name}.py'
-        spec = importlib.util.spec_from_file_location(
-            f'{context.current.name}.{name}', module_path)
+        lookups = [
+            os.path.join(name, 'makefile.py'),
+            f'{name}.py',
+        ]
+        for lookup in lookups:
+            module_path = context.current.source_path / lookup
+            if module_path.exists():
+                spec = importlib.util.spec_from_file_location(
+                    f'{context.current.name}.{name}', module_path)
+                break
+        else:
+            raise RuntimeError(
+                f'Cannot find anything to include for "{name}" (looked for: {", ".join(lookups)})')
     module = importlib.util.module_from_spec(spec)
     _init_makefile(module, name, build_path)
+
+    requirements_file = module_path.with_stem('requirements')
+    if module_path.stem == 'makefile' and requirements_file.exists():
+        context.current.requirements = load_makefile(
+            requirements_file, name='requirements')
+
     exports = list()
     try:
         spec.loader.exec_module(module)
-        exports = context.current._exported_targets
+        exports = context.exported_targets
     except LoadRequest as missing:
         context.missing.append(missing)
     except TargetNotFound as err:

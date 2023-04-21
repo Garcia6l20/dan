@@ -1,6 +1,5 @@
 from pymake import self, requires
 from pymake.cxx import Executable
-import platform
 
 catch2, = requires('catch2')
 

@@ -17,8 +17,8 @@ class BuildType(Enum):
 
 
 class InstallSettings(SubCache):
-    def __init__(self):
-        self.destination = '/usr/local'
+    def __init__(self, destination: str | Path = '/usr/local'):
+        self.destination = str(destination)
         self.runtime_prefix = 'bin'
         self.libraries_prefix = 'lib'
         self.includes_prefix = 'include'
@@ -48,13 +48,14 @@ class Settings(SubCache):
         self.build_type = BuildType.debug
         self.install = InstallSettings()
 
-def safe_load(name : str, value,  t:type):
+
+def safe_load(name: str, value,  t: type):
     if t is not None and not isinstance(value, t):
         err = f'value {name} should be of type {t}'
         if type(value) == str:
             if issubclass(t, Enum):
                 names = [n.lower()
-                            for n in t._member_names_]
+                         for n in t._member_names_]
                 value = value.lower()
                 if value in names:
                     value = t(names.index(value))

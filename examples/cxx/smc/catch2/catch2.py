@@ -83,6 +83,7 @@ add_catch2_option('console_width', shutil.get_terminal_size().columns)
 
 # config['CATCH_CONFIG_FALLBACK_STRINGIFIER'] = "fallback ??"
 
+
 @catch2.utility
 def discover_tests(exe):
     from pymake import self as makefile
@@ -103,7 +104,7 @@ def discover_tests(exe):
         def is_commented(pos: int, content: str):
             linestart = content.rfind('\n', 0, pos)
             if linestart != -1 and content.find('//', linestart + 1, pos) != -1:
-                    return True
+                return True
             blockstart = content.rfind('/*', 0, pos)
             if blockstart != -1 and content.find('*/', blockstart + 2, pos) == -1:
                 return True
@@ -118,7 +119,7 @@ def discover_tests(exe):
                 if is_commented(pos, content):
                     continue
 
-                macro = m.group(1)                
+                macro = m.group(1)
                 title = m.group(2)
                 if macro == 'SCENARIO':
                     title = 'Scenario: ' + title
@@ -153,4 +154,5 @@ def discover_tests(exe):
                               title], file=data['filepath'], lineno=data['lineno'])
 
 
+self.export(catch2)
 self.install(catch2)

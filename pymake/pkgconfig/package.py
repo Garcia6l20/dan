@@ -1,4 +1,5 @@
 from copy import deepcopy
+import functools
 import jinja2
 from pymake.core import aiofiles, asyncio
 from pymake.core.pathlib import Path
@@ -8,7 +9,8 @@ import importlib.util
 from pymake.core.find import find_file, library_paths_lookup
 from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.utils import unique
-from pymake.cxx.targets import CXXTarget, Library, LibraryType
+from pymake.cxx.targets import CXXTarget, Library
+from pymake.logging import Logging
 
 
 class MissingPackage(RuntimeError):
@@ -19,8 +21,10 @@ class MissingPackage(RuntimeError):
 def find_pkg_config(name, paths=list()) -> Path:
     return find_file(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
 
+
 def has_package(name,  paths=list()):
     return find_pkg_config(name,  paths) is not None
+
 
 class Data:
     def __init__(self) -> None:
@@ -55,6 +59,33 @@ class Data:
         return value
 
 
+class AbstractPackage:
+
+    @property
+    def found(self) -> bool:
+        """Check if the package has been found or not
+
+        :retun: True if package has been found
+        """
+        ...
+
+
+class UnresolvedPackage(Logging):
+    def __init__(self, name: str):
+        self.name = name
+        super().__init__(name)
+
+    @property
+    def found(self):
+        return False
+
+    def __skipped_method_call(self, name, *args, **kwargs):
+        self.debug('call to %s skipped (unresolved)', name)
+
+    def __getattr__(self, name):
+        return functools.partial(self.__skipped_method_call, name)
+
+
 class Package(CXXTarget):
     all: dict[str, 'Package'] = dict()
 
@@ -77,6 +108,10 @@ class Package(CXXTarget):
             module = importlib.util.module_from_spec(spec)
             setattr(module, 'self', self)
             spec.loader.exec_module(module)
+
+    @property
+    def found(self):
+        return True
 
     @asyncio.cached
     async def preload(self):
@@ -167,6 +202,7 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     requires = [dep for dep in lib.dependencies if isinstance(dep, Package)]
     libs = target_toolchain.make_link_options(
         [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
+    libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
     cflags = lib.compile_definitions.public
     cflags.extend(target_toolchain.make_include_options(['${includedir}']))

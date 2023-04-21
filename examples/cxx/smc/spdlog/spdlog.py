@@ -1,5 +1,5 @@
 import os
-from pymake import self, requires, load
+from pymake import self, requires
 from pymake.cxx import Library
 from pymake.smc import GitSources
 
@@ -37,4 +37,5 @@ spdlog.header_match = r'^(?:(?!bundled).)*\.(h.?)$'
 if os.name == 'posix':
     spdlog.link_libraries.add('pthread', public=True)
 
+self.export(spdlog)
 self.install(spdlog)

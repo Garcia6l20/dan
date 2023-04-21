@@ -24,6 +24,7 @@ _common_opts = [
                  help='Maximum jobs.', default=None, type=int, envvar='PYMAKE_JOBS'),
     click.option('--build-path', '-B', 'path', help='Path where pymake has been initialized.',
                  type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='PYMAKE_BUILD_PATH'),
+    click.option('--no-progress', is_flag=True, help='Disable progress bars', envvar='PYMAKE_NOPROGRESS'),
     click.argument('TARGETS', nargs=-1),
 ]
 _base_help_ = '''
@@ -212,9 +213,8 @@ def list_tests(ctx: CommandsContext, **kwargs):
     ctx(**kwargs)
     asyncio.run(ctx.make.initialize())
     from pymake.core.include import context
-    for mf in context.all_makefiles:
-        for test in mf.tests:
-            click.echo(test.fullname)
+    for test in context.root.tests:
+        click.echo(test.fullname)
 
 
 @cli.command()
@@ -294,9 +294,8 @@ def get_tests(ctx: CommandsContext, **kwargs):
     asyncio.run(ctx.make.initialize())
     from pymake.core.include import context
     out = list()
-    for mf in context.all_makefiles:
-        for test in mf.tests:
-            out.append(test.fullname)
+    for test in context.root.tests:
+        out.append(test.fullname)
     import json
     click.echo(json.dumps(out))
 
@@ -384,7 +383,7 @@ def main():
         cli(auto_envvar_prefix='PYMAKE')
     except Exception as err:
         _logger.error(str(err))
-        ex_type, ex, tb = sys.exc_info()
+        _ex_type, _ex, tb = sys.exc_info()
         import traceback
         _logger.debug(' '.join(traceback.format_tb(tb)))
         try:
