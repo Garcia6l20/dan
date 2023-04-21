@@ -196,10 +196,15 @@ class Target(Logging):
         deps = self.dependencies
         self.dependencies = Dependencies()
         self.load_dependencies(deps)
-        await self.__load_unresolved_dependencies()
-        await asyncio.gather(*[obj.preload() for obj in self.target_dependencies])
-        await asyncio.gather(*[obj.initialize() for obj in self.preload_dependencies])
-        await asyncio.gather(*[obj.build() for obj in self.preload_dependencies])
+        
+        async with asyncio.TaskGroup() as group:
+            group.create_task(self.__load_unresolved_dependencies())
+            for dep in self.preload_dependencies:
+                group.create_task(dep.build())
+
+        async with asyncio.TaskGroup() as group:
+            for dep in self.target_dependencies:
+                group.create_task(dep.preload())
 
     @asyncio.cached
     async def initialize(self):

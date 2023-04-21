@@ -1,4 +1,6 @@
 from asyncio import *
+from asyncio.taskgroups import TaskGroup
+
 import threading
 
 from pymake.core.functools import BaseDecorator
@@ -48,3 +50,4 @@ def sync_wait(coro):
     if thread.err:
         raise thread.err
     return thread.result
+
