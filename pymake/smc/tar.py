@@ -25,19 +25,9 @@ class TarSources(Target, Logging):
         self.archive_name = url.split("/")[-1]
         self.output: Path = self.build_path / 'sources'
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-
-        if not self.clean_request:
-            if not self.output.exists():
-                self.info(f'downloading {self.url}')
-                await fetch_file(self.url, self.build_path / self.archive_name)
-                with tarfile.open(self.build_path / self.archive_name) as f:
-                    self.info(f'extracting {self.archive_name}')
-                    f.extractall(self.output)
-
-        return await super().initialize()
-
     async def __call__(self):
-        pass
+        self.info(f'downloading {self.url}')
+        await fetch_file(self.url, self.build_path / self.archive_name)
+        with tarfile.open(self.build_path / self.archive_name) as f:
+            self.info(f'extracting {self.archive_name}')
+            f.extractall(self.output)

@@ -15,28 +15,19 @@ class GitSources(Target, Logging):
         self.git_dir: Path = self.output / '.git'
         self.patches = patches
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-
-        if not self.clean_request:
-            if not self.git_dir.exists():
-                try:
-                    self.output.mkdir()
-                    await async_run(f'git init', logger=self, cwd=self.output)
-                    await async_run(f'git config advice.detachedHead off', logger=self, cwd=self.output)
-                    await async_run(f'git remote add origin {self.url}', logger=self, cwd=self.output)
-                    await async_run(f'git fetch -q --depth 1 origin {self.refspec}', logger=self, cwd=self.output)
-                    await async_run(f'git checkout FETCH_HEAD', logger=self, cwd=self.output)
-                    
-                    for patch in self.patches:
-                        await async_run(f'git am {self.source_path / patch}', logger=self, cwd=self.output)
-
-                except Exception as e:
-                    await aiofiles.rmtree(self.output)
-                    raise e
-
-        return await super().initialize()
-
     async def __call__(self):
-        return
+        try:
+            self.output.mkdir()
+            await async_run(f'git init', logger=self, cwd=self.output)
+            await async_run(f'git config advice.detachedHead off', logger=self, cwd=self.output)
+            await async_run(f'git remote add origin {self.url}', logger=self, cwd=self.output)
+            await async_run(f'git fetch -q --depth 1 origin {self.refspec}', logger=self, cwd=self.output)
+            await async_run(f'git checkout FETCH_HEAD', logger=self, cwd=self.output)
+            
+            for patch in self.patches:
+                await async_run(f'git am {self.source_path / patch}', logger=self, cwd=self.output)
+
+        except Exception as e:
+            await aiofiles.rmtree(self.output)
+            raise e
+

@@ -253,9 +253,9 @@ class CXXObjectsTarget(CXXTarget):
 
     async def __call__(self):
         # compile objects
-        builds = {dep.build() for dep in self.cxx_dependencies}
-        builds.update({dep.build() for dep in self.objs})
-        await asyncio.gather(*builds)
+        async with asyncio.TaskGroup() as group:
+            for dep in self.objs:
+                group.create_task(dep.build())
 
 
 class Executable(CXXObjectsTarget):

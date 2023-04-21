@@ -17,7 +17,8 @@ class ConfigureFile(Target):
                  input_file: str | Path,
                  output_file: Path = None,
                  variables: dict[str, Any] = dict(),
-                 dependencies: list = list()) -> None:
+                 dependencies: list = list(),
+                 preload_dependencies: list = list()) -> None:
         self.input_file: Path = Path(input_file)
         super().__init__(name, all=False)
         if not self.input_file.is_absolute():
@@ -28,6 +29,7 @@ class ConfigureFile(Target):
         else:
             self.output = self.build_path / \
                 '.'.join(self.input_file.name.split('.')[:-1])
+        self.preload_dependencies = set(preload_dependencies)
         self.load_dependencies(dependencies)
         self.load_dependency(self.input_file)
         self.__variables = variables
@@ -35,12 +37,7 @@ class ConfigureFile(Target):
     def __setitem__(self, key, value):
         self.__variables[key] = value
 
-    @asyncio.cached
-    async def initialize(self):
-        await super().initialize()
-        if self.up_to_date:
-            return
-
+    async def __call__(self):
         self.output.parent.mkdir(exist_ok=True, parents=True)
         def gen_define(name, replacement):
             if name in self.__variables:
@@ -56,6 +53,7 @@ class ConfigureFile(Target):
                     return f'#define {name} {replacement}\n'
             else:
                  return f'/* #undef {name} */\n'
+        
         async with aiofiles.open(self.input_file, 'r') as inf, aiofiles.open(self.output, 'w') as outf:
             writes = list()
             for line in await inf.readlines():                
@@ -69,5 +67,3 @@ class ConfigureFile(Target):
                 writes.append(outf.write(line))
             await asyncio.gather(*writes)
 
-    async def __call__(self):
-        return

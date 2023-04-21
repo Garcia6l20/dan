@@ -260,6 +260,11 @@ class Target(Logging):
         elif self.modification_time and self.modification_time < self.options.modification_date:
             return False
         return True
+    
+    async def _build_dependencies(self):
+        async with asyncio.TaskGroup() as group:
+            for dep in self.target_dependencies:
+                group.create_task(dep.build())
 
     @asyncio.cached
     async def build(self):
@@ -270,6 +275,8 @@ class Target(Logging):
             return
         elif self.output.exists():
             self.info('outdated !')
+
+        await self._build_dependencies()
 
         with utils.chdir(self.build_path):
             self.info('building...')
