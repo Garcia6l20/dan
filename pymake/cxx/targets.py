@@ -19,7 +19,7 @@ class CXXObject(Target):
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain
-        self.__dirty = True
+        self.__dirty = False
 
     @property
     def cxx_flags(self):
@@ -60,12 +60,15 @@ class CXXObject(Target):
             args = [str(arg) for arg in args]
             if sorted(args) != sorted(previous_args):
                 self.__dirty = True
+        else:
+            self.__dirty = True
 
     @property
     def up_to_date(self):
-        if self.__dirty:
-            return False
-        return super().up_to_date
+        res = super().up_to_date
+        if res and self.__dirty:
+            res = False
+        return res
 
     async def __call__(self):
         self.info(f'generating {self.output}...')

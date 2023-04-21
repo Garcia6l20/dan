@@ -268,6 +268,8 @@ class Target(Logging):
         if self.up_to_date:
             self.info('up to date !')
             return
+        elif self.output.exists():
+            self.info('outdated !')
 
         with utils.chdir(self.build_path):
             self.info('building...')
