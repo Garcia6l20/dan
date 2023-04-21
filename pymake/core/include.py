@@ -87,7 +87,7 @@ class MakeFile(sys.__class__):
         self.version = None
         self.source_path = source_path
         self.build_path = build_path
-        self.requirements = requirements
+        self.__requirements = requirements
         self.parent: MakeFile = self.parent if hasattr(
             self, 'parent') else None
         self.targets: set[Target] = set()
@@ -137,6 +137,17 @@ class MakeFile(sys.__class__):
     def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path | str = None, lineno: int = None):
         self.__tests.append(
             Test(self, executable, name=name, args=args, file=file, lineno=lineno))
+        
+    @property
+    def requirements(self):
+        if self.__requirements is not None:
+            return self.__requirements
+        elif self.parent is not None:
+            return self.parent.requirements
+    
+    @requirements.setter
+    def requirements(self, value : 'MakeFile'):
+        self.__requirements = value
 
     @property
     def tests(self):

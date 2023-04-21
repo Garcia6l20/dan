@@ -174,19 +174,11 @@ class Target(Logging):
         deps_install_path = self.build_path / 'pkgs'
         deps_settings = InstallSettings(deps_install_path)
         deps_installs = list()
-        if self.makefile.requirements is not None:
-            reqs = self.makefile.requirements
-        # TODO find a better way to handle this !!!
-        # CASE: searching for package within requirements loading
-        elif self.makefile.parent is not None \
-                and self.makefile.parent.parent is not None \
-                and self.makefile.parent.parent.requirements is not None:
-            reqs = self.makefile.parent.parent.requirements
-        else:
+        if self.makefile.requirements is None:
             raise RuntimeError(
                 f'Unresolved dependencies maybe you should provide a requirements.py file')
         for dep in self.__unresolved_dependencies:
-            t = reqs.find(dep.name)
+            t = self.makefile.requirements.find(dep.name)
             if not t:
                 raise RuntimeError(f'Unresolved dependency "{dep.name}"')
             deps_installs.append(t.install(deps_settings, InstallMode.dev))
