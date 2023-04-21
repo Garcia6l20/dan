@@ -113,8 +113,7 @@ class Package(CXXTarget):
     def found(self):
         return True
 
-    @asyncio.cached
-    async def preload(self):
+    async def __initialize__(self):
         await self.data.load(self.config_path)
         deps = set()
         requires = self.data.get('requires')
@@ -126,13 +125,6 @@ class Package(CXXTarget):
                     deps.add(Package(req, self.search_paths))
         self.includes.public.append(self.data.get('includedir'))
         self.dependencies.update(deps)
-
-        await super().preload()
-
-    @asyncio.cached
-    async def initialize(self):
-        # a package is initialized in preload
-        await self.preload()
 
     @property
     def cxx_flags(self):

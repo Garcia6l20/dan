@@ -29,10 +29,8 @@ class CXXObject(Target):
     def private_cxx_flags(self):
         return self.parent.private_cxx_flags
 
-    @asyncio.cached
-    async def initialize(self):
+    async def __initialize__(self):
         await self.parent.preload()
-        await self.preload()
 
         ext = 'o' if os.name != 'nt' else 'obj'
         self.output: Path = self.build_path / \
@@ -49,8 +47,7 @@ class CXXObject(Target):
                 deps = self.cache.deps
             self.load_dependencies(deps)
             self.load_dependency(self.source)
-        await super().initialize()
-
+        
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
@@ -237,15 +234,11 @@ class CXXObjectsTarget(CXXTarget):
     def headers(self):
         return [f for f in self.file_dependencies if f.suffix.startswith('.h')]
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-
+    async def __initialize__(self):
         self._init_sources()
-
-        await super().initialize()
-
-        await asyncio.gather(*[obj.initialize() for obj in self.objs])
+        async with asyncio.TaskGroup() as group:
+            for obj in self.objs:
+                group.create_task(obj.initialize())
 
     async def __build__(self):
         # compile objects
@@ -263,10 +256,8 @@ class Executable(CXXObjectsTarget):
             self.toolchain.make_executable_name(self.name)
         self.__dirty = False
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-        await super().initialize()
+    async def __initialize__(self):
+        await super().__initialize__()
 
         previous_args = self.cache.get('link_args')
         if previous_args:
@@ -341,10 +332,7 @@ class Library(CXXObjectsTarget):
             tmp.extend(self.toolchain.make_link_options([self.output]))
         return tmp
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-
+    async def __initialize__(self):
         self._init_sources()
 
         if self.library_type == LibraryType.AUTO:
@@ -363,7 +351,7 @@ class Library(CXXObjectsTarget):
                 self.toolchain.make_library_name(self.name, self.shared)
         else:
             self.output = self.build_path / f"lib{self.name}.stamp"
-        await super().initialize()
+        await super().__initialize__()
 
         previous_args = self.cache.get('generate_args')
         if self.static:
