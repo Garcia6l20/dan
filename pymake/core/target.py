@@ -282,14 +282,18 @@ class Target(Logging):
     @asyncio.cached
     async def build(self):
         await self.initialize()
+        
+        await self._build_dependencies()
+
+        result = self.__prebuild__()
+        if inspect.iscoroutine(result):
+            await result
 
         if self.up_to_date:
             self.info('up to date !')
             return
         elif self.output.exists():
             self.info('outdated !')
-
-        await self._build_dependencies()
 
         with utils.chdir(self.build_path):
             self.info('building...')
@@ -345,6 +349,9 @@ class Target(Logging):
         ...
 
     def __initialize__(self):
+        ...
+
+    def __prebuild__(self):
         ...
 
     def __build__(self):
