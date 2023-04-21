@@ -169,9 +169,6 @@ class Package(CXXTarget):
     def modification_time(self):
         return self.config_path.modification_time
 
-    async def __call__(self):
-        pass
-
     def __getattr__(self, name):
         value = self.data.get(name)
         if value is None:

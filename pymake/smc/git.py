@@ -15,7 +15,7 @@ class GitSources(Target, Logging):
         self.git_dir: Path = self.output / '.git'
         self.patches = patches
 
-    async def __call__(self):
+    async def __build__(self):
         try:
             self.output.mkdir()
             await async_run(f'git init', logger=self, cwd=self.output)

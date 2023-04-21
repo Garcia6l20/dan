@@ -280,7 +280,7 @@ class Target(Logging):
 
         with utils.chdir(self.build_path):
             self.info('building...')
-            result = self()
+            result = self.__build__()
             if inspect.iscoroutine(result):
                 return await result
             return result
@@ -329,7 +329,7 @@ class Target(Logging):
                     installed_files.append(filepath)
         return installed_files
 
-    def __call__(self):
+    def __build__(self):
         ...
 
     def utility(self, fn: Callable):

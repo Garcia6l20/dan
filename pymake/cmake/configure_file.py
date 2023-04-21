@@ -37,7 +37,7 @@ class ConfigureFile(Target):
     def __setitem__(self, key, value):
         self.__variables[key] = value
 
-    async def __call__(self):
+    async def __build__(self):
         self.output.parent.mkdir(exist_ok=True, parents=True)
         def gen_define(name, replacement):
             if name in self.__variables:

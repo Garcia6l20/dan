@@ -17,7 +17,7 @@ class generator:
                 self.output = output
                 self.load_dependencies(dependencies)
 
-            def __call__(self):
+            def __build__(self):
                 arg_spec = inspect.getfullargspec(fn)
                 args = list()
                 kwargs = dict()

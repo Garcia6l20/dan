@@ -40,7 +40,7 @@ class _QtMoccer:
         await super().clean()
         self.cache.reset('mocs')
 
-    async def __call__(self):
+    async def __build__(self):
 
         mocs = self.cache.get('mocs', list())
 
@@ -65,7 +65,7 @@ class _QtMoccer:
         for header in self.headers:
             mocings.append(do_moc(header))
         await asyncio.gather(*mocings)
-        await super().__call__()
+        await super().__build__()
 
 
 class QtExecutable(_QtMoccer, Executable):

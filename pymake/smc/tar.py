@@ -25,7 +25,7 @@ class TarSources(Target, Logging):
         self.archive_name = url.split("/")[-1]
         self.output: Path = self.build_path / 'sources'
 
-    async def __call__(self):
+    async def __build__(self):
         self.info(f'downloading {self.url}')
         await fetch_file(self.url, self.build_path / self.archive_name)
         with tarfile.open(self.build_path / self.archive_name) as f:
