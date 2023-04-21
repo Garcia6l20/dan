@@ -93,7 +93,7 @@ class Package(CXXTarget):
         self.output = None
         self.config_path = config_path or find_pkg_config(name, search_paths)
         self.search_paths = search_paths
-        self.data = Data()
+        self.data : Data = None
         if not self.config_path:
             raise MissingPackage(name)
         self.search_paths.insert(0, self.config_path.parent)
@@ -114,15 +114,19 @@ class Package(CXXTarget):
         return True
 
     async def __initialize__(self):
+        self.data = Data()
         await self.data.load(self.config_path)
         deps = set()
         requires = self.data.get('requires')
         if requires:
-            for req in requires.split():
-                if req in self.all:
-                    deps.add(self.all[req])
-                else:
-                    deps.add(Package(req, self.search_paths))
+            async with asyncio.TaskGroup() as group:
+                for req in requires.split():
+                    if req in self.all:
+                        dep = self.all[req]
+                    else:
+                        dep = Package(req, self.search_paths)
+                    group.create_task(dep.initialize())
+                    deps.add(dep)
         self.includes.public.append(self.data.get('includedir'))
         self.dependencies.update(deps)
 
