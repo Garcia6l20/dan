@@ -133,11 +133,15 @@ class Package(CXXTarget):
     @property
     def cxx_flags(self):
         from pymake.cxx import target_toolchain
-        tmp: list[str] = self.data.get('cflags').split()
-        tmp = target_toolchain.from_unix_flags(tmp)
+        cflags = self.data.get('cflags')
+        if cflags is not None:
+            cflags: list[str] = self.data.get('cflags').split()
+            cflags = target_toolchain.from_unix_flags(cflags)
+        else:
+            cflags = list()
         for dep in self.cxx_dependencies:
-            tmp.extend(dep.cxx_flags)
-        return unique(tmp)
+            cflags.extend(dep.cxx_flags)
+        return unique(cflags)
 
     @property
     def package_dependencies(self):

@@ -14,6 +14,7 @@ class Test:
                  executable: AsyncExecutable,
                  name: str = None,
                  args:list[str] = list(),
+                 expected_result = 0,
                  file: Path | str = None,
                  lineno: int = None,
                  workingDir: Path = None):
@@ -27,15 +28,16 @@ class Test:
         self.out = self.workingDir / f'{log_basename}.stdout'
         self.err = self.workingDir / f'{log_basename}.stderr'
         self.args = args
+        self.expected_result = expected_result
 
     async def __call__(self):
         out, err, rc = await self.executable.execute(*self.args, no_raise=True)
         async with aiofiles.open(self.out, 'w') as outlog, \
               aiofiles.open(self.err, 'w') as errlog:
               await asyncio.gather(outlog.write(out), errlog.write(err))
-        if rc != 0:
+        if rc != self.expected_result:
             self.executable.error(
-                f'Test \'{self.name}\' failed !\nstdout: {out}\nstderr: {err}')
+                f'Test \'{self.name}\' failed (returned: {rc}, expected: {self.expected_result}) !\nstdout: {out}\nstderr: {err}')
             return False
         else:
             self.executable.info(f'Test \'{self.name}\' succeed !')

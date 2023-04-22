@@ -6,8 +6,15 @@ from pymake.core import aiofiles
 import jinja2
 
 _conanfile_template = """[requires]
-{% for r in requirements -%}
+{% for r in requirements %}
 {{r.name}}/{{r.refspec}}
+{%- endfor %}
+
+[options]
+{% for r in requirements -%}
+{% for k, v in r.options.items() %}
+{{r.name}}/*:{{k}}={{v}}
+{%- endfor %}
 {%- endfor %}
 
 [generators]
@@ -27,17 +34,25 @@ class ConanFile(Target):
             await out.write(content)
 
 class Package(Target):
-    def __init__(self, spec, parent) -> None:
+    @staticmethod
+    def from_spec(spec: str, parent=None):
         match re_match(spec):
             case r'(.+)/(.+)' as m:
-                self.refspec = m[2]
-                super().__init__(name=m[1], version=self.refspec)
+                return Package(name=m[1], refspec=m[2], parent=parent)
             case _:
                 raise RuntimeError(f'invalid conan requirement specification "{spec}"')
-                
-        self.output = parent.output.parent / f'{self.name}.pc'
+
+    def __init__(self, name, refspec, options:dict[str, bool|str] = dict(), parent=None) -> None:
+        super().__init__(name, version=refspec, parent=parent)
+        self.refspec = refspec
+        self.options = options
         self.makefile.export(self)
-        self.load_dependency(parent)
+    
+    def __initialize__(self):
+        assert self.parent is not None
+        self.output = self.parent.output.parent / f'{self.name}.pc'
+        self.load_dependency(self.parent)
+
 
 class Requirements(Target):
 
@@ -51,8 +66,15 @@ class Requirements(Target):
             self.output = self.output.with_suffix('.sh')
 
         reqs = list()
-        for spec in requirements:
-            reqs.append(Package(spec, parent=self))
+        for r in requirements:
+            match r:
+                case str():
+                    reqs.append(Package.from_spec(r, parent=self))
+                case Package():
+                    r.parent = self
+                    reqs.append(r)
+                case _:
+                    raise RuntimeError(f'unhandled requirement specification "{r}" (type: "{type(r)}")')
         self.preload_dependencies.add(ConanFile(reqs))
 
         
