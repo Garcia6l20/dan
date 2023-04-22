@@ -29,10 +29,8 @@ class CXXObject(Target):
     def private_cxx_flags(self):
         return self.parent.private_cxx_flags
 
-    @asyncio.cached
-    async def initialize(self):
+    async def __initialize__(self):
         await self.parent.preload()
-        await self.preload()
 
         ext = 'o' if os.name != 'nt' else 'obj'
         self.output: Path = self.build_path / \
@@ -49,8 +47,7 @@ class CXXObject(Target):
                 deps = self.cache.deps
             self.load_dependencies(deps)
             self.load_dependency(self.source)
-        await super().initialize()
-
+        
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
@@ -70,7 +67,7 @@ class CXXObject(Target):
             res = False
         return res
 
-    async def __call__(self):
+    async def __build__(self):
         self.info(f'generating {self.output}...')
         commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
         self.cache.compile_args = [str(a) for a in commands[0]]
@@ -207,10 +204,6 @@ class CXXTarget(Target):
         flags.extend(self.compile_definitions.private)
         return unique(flags)
 
-    async def __call__(self):
-        # NOP
-        return
-
 
 class CXXObjectsTarget(CXXTarget):
     def __init__(self, name: str,
@@ -241,21 +234,18 @@ class CXXObjectsTarget(CXXTarget):
     def headers(self):
         return [f for f in self.file_dependencies if f.suffix.startswith('.h')]
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-
+    async def __initialize__(self):
         self._init_sources()
+        async with asyncio.TaskGroup() as group:
+            for obj in self.objs:
+                group.create_task(obj.initialize())
+                self.load_dependency(obj)
 
-        await super().initialize()
-
-        await asyncio.gather(*[obj.initialize() for obj in self.objs])
-
-    async def __call__(self):
+    async def __build__(self):
         # compile objects
-        builds = {dep.build() for dep in self.cxx_dependencies}
-        builds.update({dep.build() for dep in self.objs})
-        await asyncio.gather(*builds)
+        async with asyncio.TaskGroup() as group:
+            for dep in self.objs:
+                group.create_task(dep.build())
 
 
 class Executable(CXXObjectsTarget):
@@ -267,10 +257,8 @@ class Executable(CXXObjectsTarget):
             self.toolchain.make_executable_name(self.name)
         self.__dirty = False
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-        await super().initialize()
+    async def __initialize__(self):
+        await super().__initialize__()
 
         previous_args = self.cache.get('link_args')
         if previous_args:
@@ -286,8 +274,8 @@ class Executable(CXXObjectsTarget):
             return False
         return super().up_to_date
 
-    async def __call__(self):
-        await super().__call__()
+    async def __build__(self):
+        await super().__build__()
 
         # link
         self.info(f'linking {self.output}...')
@@ -345,10 +333,7 @@ class Library(CXXObjectsTarget):
             tmp.extend(self.toolchain.make_link_options([self.output]))
         return tmp
 
-    @asyncio.cached
-    async def initialize(self):
-        await self.preload()
-
+    async def __initialize__(self):
         self._init_sources()
 
         if self.library_type == LibraryType.AUTO:
@@ -367,7 +352,7 @@ class Library(CXXObjectsTarget):
                 self.toolchain.make_library_name(self.name, self.shared)
         else:
             self.output = self.build_path / f"lib{self.name}.stamp"
-        await super().initialize()
+        await super().__initialize__()
 
         previous_args = self.cache.get('generate_args')
         if self.static:
@@ -393,8 +378,8 @@ class Library(CXXObjectsTarget):
             return False
         return super().up_to_date
 
-    async def __call__(self):
-        await super().__call__()
+    async def __build__(self):
+        await super().__build__()
 
         self.info(
             f'creating {self.library_type.name.lower()} library {self.output}...')
@@ -468,5 +453,5 @@ class Module(CXXObjectsTarget):
     def cxx_flags(self):
         return {*self.toolchain.cxxmodules_flags, *super().cxx_flags}
 
-    async def __call__(self):
-        return await super().__call__()
+    async def __build__(self):
+        return await super().__build__()

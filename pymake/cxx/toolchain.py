@@ -28,6 +28,7 @@ class Toolchain(Logging):
         self._build_type = BuildType.debug
         self.compile_options: list[str] = list()
         self.link_options: list[str] = list()
+        self.rpath = None
 
     @property
     def build_type(self):

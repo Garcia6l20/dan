@@ -8,8 +8,8 @@ from pymake.pkgconfig.package import Package
 
 
 class _QtMoccer:
-    @asyncio.cached
-    async def initialize(self):
+    
+    async def __initialize__(self):
         qt_core = Package('Qt5Core')
         await qt_core.initialize()
         self.moc = self.makefile.cache.get('moc_executable')
@@ -33,14 +33,13 @@ class _QtMoccer:
                 CXXObject(f'{self.name}.{moc_name}', self, moc_path))
             self.other_generated_files.add(moc_path)
 
-        await super().initialize()
+        await super().__initialize__()
 
-    @asyncio.cached
-    async def clean(self):
-        await super().clean()
+    async def __clean__(self):
+        await super().__clean__()
         self.cache.reset('mocs')
 
-    async def __call__(self):
+    async def __build__(self):
 
         mocs = self.cache.get('mocs', list())
 
@@ -65,7 +64,7 @@ class _QtMoccer:
         for header in self.headers:
             mocings.append(do_moc(header))
         await asyncio.gather(*mocings)
-        await super().__call__()
+        await super().__build__()
 
 
 class QtExecutable(_QtMoccer, Executable):

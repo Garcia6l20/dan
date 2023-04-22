@@ -20,7 +20,7 @@ class generator:
                 self.load_dependencies(dependencies)
                 self.load_dependency(template)
 
-            def __call__(self):
+            def __build__(self):
                 import jinja2
                 arg_spec = inspect.getfullargspec(fn)
                 args = list()

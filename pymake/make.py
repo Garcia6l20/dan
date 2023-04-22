@@ -121,7 +121,7 @@ class Make(Logging):
         if self.for_install:
             library_dest = Path(self.settings.install.destination) / \
                 self.settings.install.libraries_prefix
-            target_toolchain.set_rpath(str(library_dest.absolute()))
+            target_toolchain.rpath = str(library_dest.absolute())
 
         self.active_targets: dict[str, Target] = dict()
 
@@ -251,7 +251,7 @@ class Make(Logging):
                 raise RuntimeError('One or more targets failed, check log...')
 
     async def install(self, mode: InstallMode = InstallMode.user):
-
+        await self.initialize()
         from pymake.core.include import context
 
         self.for_install = True

@@ -205,15 +205,28 @@ class Target(Logging):
         async with asyncio.TaskGroup() as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.preload())
+        
+        res = self.__preload__()
+        if inspect.iscoroutine(res):
+            res = await res
+        return res
 
     @asyncio.cached
     async def initialize(self):
         await self.preload()
         self.debug('initializing...')
 
-        await asyncio.gather(*[obj.initialize() for obj in self.target_dependencies])
+        async with asyncio.TaskGroup() as group:
+            for dep in self.target_dependencies:
+                group.create_task(dep.initialize())
+
         if self.output and not self.output.is_absolute():
             self.output = self.build_path / self.output
+        
+        res = self.__initialize__()
+        if inspect.iscoroutine(res):
+            res = await res
+        return res
 
     def load_dependencies(self, dependencies):
         for dependency in dependencies:
@@ -255,15 +268,26 @@ class Target(Logging):
             return False
         elif not self.dependencies.up_to_date:
             return False
-        elif self.modification_time and self.dependencies.modification_time > self.modification_time:
+        elif self.dependencies.modification_time > self.modification_time:
             return False
-        elif self.modification_time and self.modification_time < self.options.modification_date:
+        elif self.modification_time < self.options.modification_date:
             return False
         return True
+    
+    async def _build_dependencies(self):
+        async with asyncio.TaskGroup() as group:
+            for dep in self.target_dependencies:
+                group.create_task(dep.build())
 
     @asyncio.cached
     async def build(self):
         await self.initialize()
+        
+        await self._build_dependencies()
+
+        result = self.__prebuild__()
+        if inspect.iscoroutine(result):
+            await result
 
         if self.up_to_date:
             self.info('up to date !')
@@ -273,7 +297,7 @@ class Target(Logging):
 
         with utils.chdir(self.build_path):
             self.info('building...')
-            result = self()
+            result = self.__build__()
             if inspect.iscoroutine(result):
                 return await result
             return result
@@ -289,20 +313,19 @@ class Target(Logging):
     @asyncio.cached
     async def clean(self):
         await self.initialize()
-
-        clean_tasks = [t.clean() for t in self.target_dependencies]
-        if self.output and self.output.exists():
-            self.info('cleaning...')
-            if self.output.is_dir():
-                clean_tasks.append(aiofiles.rmtree(self.output))
-            else:
-                clean_tasks.append(aiofiles.os.remove(self.output))
-        clean_tasks.extend([aiofiles.os.remove(f)
-                           for f in self.other_generated_files if f.exists()])
-        try:
-            await asyncio.gather(*clean_tasks)
-        except FileNotFoundError as err:
-            self.warning(f'file not found: {err.filename}')
+        async with asyncio.TaskGroup() as group:
+            if self.output and self.output.exists():
+                self.info('cleaning...')
+                if self.output.is_dir():
+                    group.create_task(aiofiles.rmtree(self.output))
+                else:
+                    group.create_task(aiofiles.os.remove(self.output))
+            for f in self.other_generated_files:
+                if f.exists():
+                    group.create_task(aiofiles.os.remove(f))
+            res = self.__clean__()
+            if inspect.iscoroutine(res):
+                group.create_task(res)
 
     @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode):
@@ -322,7 +345,19 @@ class Target(Logging):
                     installed_files.append(filepath)
         return installed_files
 
-    def __call__(self):
+    def __preload__(self):
+        ...
+
+    def __initialize__(self):
+        ...
+
+    def __prebuild__(self):
+        ...
+
+    def __build__(self):
+        ...
+
+    def __clean__(self):
         ...
 
     def utility(self, fn: Callable):
