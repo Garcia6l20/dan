@@ -1,3 +1,4 @@
+from enum import Enum
 from pymake.core.asyncio import sync_wait
 from pymake.core.pathlib import Path
 from pymake.core.settings import BuildType
@@ -15,6 +16,10 @@ scan = True
 CommandArgs = list[str|Path]
 CommandArgsList = list[CommandArgs]
 
+class RuntimeType(Enum):
+    static = 0
+    dynamic = 1
+
 class Toolchain(Logging):
     def __init__(self, data) -> None:
         self._compile_commands: CompileCommands = None
@@ -29,6 +34,7 @@ class Toolchain(Logging):
         self.compile_options: list[str] = list()
         self.link_options: list[str] = list()
         self.rpath = None
+        self.runtime = RuntimeType.dynamic
 
     @property
     def build_type(self):
@@ -69,6 +75,14 @@ class Toolchain(Logging):
 
     def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
         raise NotImplementedError()
+    
+    def from_unix_flags(self, flags: list[str]) -> list[str]:
+        """Convert flags from unix-style to target-compiler-style"""
+        return flags
+    
+    def to_unix_flags(self, flags: list[str]) -> list[str]:
+        """Convert flags from target-compiler-style to unix-style"""
+        return flags
 
     async def compile(self, sourcefile: Path, output: Path, options: set[str], **kwds):
         commands = self.make_compile_commands(sourcefile, output, options)

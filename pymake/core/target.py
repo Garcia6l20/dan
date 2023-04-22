@@ -1,4 +1,3 @@
-from enum import Enum
 from functools import cached_property
 from pymake.core.pathlib import Path
 import time
@@ -7,7 +6,6 @@ import inspect
 
 from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
-from pymake.core.errors import InvalidConfiguration
 from pymake.core.settings import InstallMode, InstallSettings, safe_load
 from pymake.core.version import Version
 from pymake.logging import Logging
@@ -328,7 +326,8 @@ class Target(Logging):
                 group.create_task(res)
 
     @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode):
+    async def install(self, settings: InstallSettings, mode: InstallMode):        
+        await self.build()
         installed_files = list()
         if mode == InstallMode.dev:
             if len(self._utils) > 0:
@@ -355,6 +354,9 @@ class Target(Logging):
         ...
 
     def __build__(self):
+        ...
+
+    def __install__(self):
         ...
 
     def __clean__(self):

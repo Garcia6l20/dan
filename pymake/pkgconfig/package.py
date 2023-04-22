@@ -132,7 +132,9 @@ class Package(CXXTarget):
 
     @property
     def cxx_flags(self):
+        from pymake.cxx import target_toolchain
         tmp: list[str] = self.data.get('cflags').split()
+        tmp = target_toolchain.from_unix_flags(tmp)
         for dep in self.cxx_dependencies:
             tmp.extend(dep.cxx_flags)
         return unique(tmp)
@@ -143,12 +145,14 @@ class Package(CXXTarget):
 
     @property
     def libs(self):
+        from pymake.cxx import target_toolchain
         tmp = list()
         for pkg in self.package_dependencies:
             tmp.extend(pkg.libs)
         libs = self.data.get('libs')
         if libs:
-            tmp.extend(libs.split())
+            libs = target_toolchain.from_unix_flags(libs.split())
+            tmp.extend(libs)
         return unique(tmp)
 
     @asyncio.cached
@@ -197,8 +201,10 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
         [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
+    libs = target_toolchain.to_unix_flags(libs)
     cflags = lib.compile_definitions.public
     cflags.extend(target_toolchain.make_include_options(['${includedir}']))
+    cflags = target_toolchain.to_unix_flags(cflags)
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\
         .render({
