@@ -82,4 +82,12 @@ class Requirements(Target):
         from pymake.cxx import target_toolchain
         dest = self.output.parent
         dest.mkdir(exist_ok=True, parents=True)
-        await async_run(f'conan install . --output-folder={dest} -s build_type={target_toolchain.build_type.name.title()} -s compiler={target_toolchain.type} -s compiler.cppstd={target_toolchain.cpp_std} --build=missing', logger=self._logger, cwd=self.build_path)
+        await async_run([
+            'conan', 'install', '.',
+            f'--output-folder={dest}',
+            '-s', f'build_type={target_toolchain.build_type.name.title()}',
+            '-s', f'compiler={target_toolchain.type}',
+            '-s', f'compiler.version={target_toolchain.version.major}',
+            '-s', f'compiler.cppstd={target_toolchain.cpp_std}',
+            '--build=missing'],
+            logger=self._logger, cwd=self.build_path)
