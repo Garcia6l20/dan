@@ -35,6 +35,7 @@ jobs:
       - name: Install requirements
         run: |
           python -m pip install conan
+          conan profile detect
 
       - name: Install pymake
         run: |
