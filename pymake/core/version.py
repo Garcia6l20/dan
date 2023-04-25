@@ -9,32 +9,76 @@ class Version:
             args = Version.version_pattern.split(args[0])
         else:
             args = list(args)
-        it = iter(args)
-        self.major = int(next(it))
-        tmp = next(it, None)
-        self.minor = int(tmp) if tmp is not None else 0
-        tmp = next(it, None)
-        self.patch = int(tmp) if tmp is not None else 0
-        tmp = next(it, None)
-        self.build = int(tmp) if tmp is not None else 0
+        self._parts = tuple(int(a) for a in args)
 
-    def __eq__(self, other: 'Version'):
+    @property
+    def major(self):
+        return self._parts[0]
+
+    @property
+    def minor(self):
+        if len(self._parts) > 1:
+            return self._parts[1]
+
+    @property
+    def patch(self):
+        if len(self._parts) > 2:
+            return self._parts[2]
+        
+    @property
+    def build(self):
+        if len(self._parts) > 3:
+            return self._parts[3]
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            other = Version(other)
+        elif not isinstance(other, Version):
+            return False
         return self.major == other.major \
-            and self.minor == other.minor \
-            and self.patch == other.patch \
-            and self.build == other.build
+            and (self.minor or 0) == (other.minor or 0) \
+            and (self.patch or 0) == (other.patch or 0) \
+            and (self.build or 0) == (other.build or 0)
+
+    def __gt__(self, other: 'Version'):
+        if isinstance(other, str):
+            other = Version(other)
+        elif not isinstance(other, Version):
+            return False
+        return self.major >= other.major \
+            or (self.minor or 0) > (other.minor or 0) \
+            or (self.patch or 0) > (other.patch or 0) \
+            or (self.build or 0) > (other.build or 0)
 
     def __ge__(self, other: 'Version'):
+        if isinstance(other, str):
+            other = Version(other)
+        elif not isinstance(other, Version):
+            return False
         return self.major >= other.major \
-            or self.minor >= other.minor \
-            or self.patch >= other.patch \
-            or self.build >= other.build
+            or (self.minor or 0) >= (other.minor or 0) \
+            or (self.patch or 0) >= (other.patch or 0) \
+            or (self.build or 0) >= (other.build or 0)
     
     def __lt__(self, other: 'Version'):
+        if isinstance(other, str):
+            other = Version(other)
+        elif not isinstance(other, Version):
+            return False
         return self.major < other.major \
-            or self.minor < other.minor \
-            or self.patch < other.patch \
-            or self.build < other.build
+            or (self.minor or 0) < (other.minor or 0) \
+            or (self.patch or 0) < (other.patch or 0) \
+            or (self.build or 0) < (other.build or 0)
+    
+    def __le__(self, other: 'Version'):
+        if isinstance(other, str):
+            other = Version(other)
+        elif not isinstance(other, Version):
+            return False
+        return self.major < other.major \
+            or (self.minor or 0) <= (other.minor or 0) \
+            or (self.patch or 0) <= (other.patch or 0) \
+            or (self.build or 0) <= (other.build or 0)
 
     def __str__(self) -> str:
         res = str(self.major)
@@ -45,4 +89,4 @@ class Version:
                 if self.build is not None:
                     res += f'.{self.build}'
         return res
-    
+
