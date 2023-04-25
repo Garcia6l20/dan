@@ -80,7 +80,6 @@ class MSVCToolchain(Toolchain):
     def from_unix_flags(self, flags: list[str]):
         out = list()
         for flag in flags:
-            flag = flag.replace('"', '')
             match re_match(flag):
                 case r'-L(.+)' as m:
                     out.append(f'/LIBPATH:{m[1]}')

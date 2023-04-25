@@ -7,6 +7,7 @@ import re
 import importlib.util
 
 from pymake.core.find import find_file, library_paths_lookup
+from pymake.core.runners import cmdline2list
 from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.utils import unique
 from pymake.cxx.targets import CXXTarget, Library
@@ -135,7 +136,7 @@ class Package(CXXTarget):
         from pymake.cxx import target_toolchain
         cflags = self.data.get('cflags')
         if cflags is not None:
-            cflags: list[str] = self.data.get('cflags').split()
+            cflags = cmdline2list(cflags)
             cflags = target_toolchain.from_unix_flags(cflags)
         else:
             cflags = list()
@@ -154,8 +155,9 @@ class Package(CXXTarget):
         for pkg in self.package_dependencies:
             tmp.extend(pkg.libs)
         libs = self.data.get('libs')
-        if libs:
-            libs = target_toolchain.from_unix_flags(libs.split())
+        if libs is not None:
+            libs = cmdline2list(libs)
+            libs = target_toolchain.from_unix_flags(libs)
             tmp.extend(libs)
         return unique(tmp)
 
