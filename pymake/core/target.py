@@ -95,12 +95,28 @@ class Options:
         for o in self.__items:
             if name in {o.name, o.fullname}:
                 return o
+            
+    def update(self, options: dict):
+        for k, v in options.items():
+            if self[k]:
+                self[k] = v
+            else:
+                self.add(k, v)
+    
+    def items(self):
+        for o in self.__items:
+            yield o.name, o.value
 
     @cached_property
     def modification_date(self):
         return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
 
     def __getattr__(self, name):
+        opt = self.get(name)
+        if opt:
+            return opt.value
+        
+    def __getitem__(self, name):
         opt = self.get(name)
         if opt:
             return opt.value

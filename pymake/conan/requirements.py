@@ -45,7 +45,7 @@ class Package(Target):
     def __init__(self, name, refspec, options:dict[str, bool|str] = dict(), parent=None) -> None:
         super().__init__(name, version=refspec, parent=parent)
         self.refspec = refspec
-        self.options = options
+        self.options.update(options)
         self.makefile.export(self)
     
     def __initialize__(self):
