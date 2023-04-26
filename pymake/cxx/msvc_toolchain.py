@@ -76,7 +76,7 @@ class MSVCToolchain(Toolchain):
 
     def make_executable_name(self, basename: str) -> str:
         return f'{basename}.exe'
-    
+
     def from_unix_flags(self, flags: list[str]):
         out = list()
         for flag in flags:

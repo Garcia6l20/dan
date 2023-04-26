@@ -21,17 +21,20 @@ _conanfile_template = """[requires]
 PkgConfigDeps
 """
 
+
 class ConanFile(Target):
     def __init__(self, reqs: 'Requirements') -> None:
         super().__init__('conanfile', 'conan file generator')
         self.__reqs = reqs
-        self.output = self.build_path / 'conanfile.txt'        
+        self.output = self.build_path / 'conanfile.txt'
 
     async def __build__(self):
-        template = jinja2.Environment(loader=jinja2.BaseLoader).from_string(_conanfile_template)
+        template = jinja2.Environment(
+            loader=jinja2.BaseLoader).from_string(_conanfile_template)
         content = template.render(requirements=self.__reqs)
         async with aiofiles.open(self.output, 'w') as out:
             await out.write(content)
+
 
 class Package(Target):
     @staticmethod
@@ -40,14 +43,15 @@ class Package(Target):
             case r'(.+)/(.+)' as m:
                 return Package(name=m[1], refspec=m[2], parent=parent)
             case _:
-                raise RuntimeError(f'invalid conan requirement specification "{spec}"')
+                raise RuntimeError(
+                    f'invalid conan requirement specification "{spec}"')
 
-    def __init__(self, name, refspec, options:dict[str, bool|str] = dict(), parent=None) -> None:
+    def __init__(self, name, refspec, options: dict[str, bool | str] = dict(), parent=None) -> None:
         super().__init__(name, version=refspec, parent=parent)
         self.refspec = refspec
         self.options.update(options)
         self.makefile.export(self)
-    
+
     def __initialize__(self):
         assert self.parent is not None
         self.output = self.parent.output.parent / f'{self.name}.pc'
@@ -74,10 +78,18 @@ class Requirements(Target):
                     r.parent = self
                     reqs.append(r)
                 case _:
-                    raise RuntimeError(f'unhandled requirement specification "{r}" (type: "{type(r)}")')
+                    raise RuntimeError(
+                        f'unhandled requirement specification "{r}" (type: "{type(r)}")')
         self.preload_dependencies.add(ConanFile(reqs))
 
-        
+    def _get_version(self, toolchain):
+        from pymake.cxx.msvc_toolchain import MSVCToolchain
+        match toolchain:
+            case MSVCToolchain():
+                return f'{toolchain.version.major}{str(toolchain.version.minor)[0]}'
+            case _:
+                return str(toolchain.version.major)
+
     async def __build__(self):
         from pymake.cxx import target_toolchain
         dest = self.output.parent
@@ -87,7 +99,7 @@ class Requirements(Target):
             f'--output-folder={dest}',
             '-s', f'build_type={target_toolchain.build_type.name.title()}',
             '-s', f'compiler={target_toolchain.type}',
-            '-s', f'compiler.version={target_toolchain.version.major}',
+            '-s', f'compiler.version={self._get_version(target_toolchain)}',
             '-s', f'compiler.cppstd={target_toolchain.cpp_std}',
             '--build=missing'],
             logger=self._logger, cwd=self.build_path)
