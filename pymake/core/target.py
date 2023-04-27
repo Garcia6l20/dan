@@ -1,4 +1,3 @@
-from enum import Enum
 from functools import cached_property
 from pymake.core.pathlib import Path
 import time
@@ -7,7 +6,6 @@ import inspect
 
 from pymake.core import asyncio, aiofiles, utils
 from pymake.core.cache import SubCache
-from pymake.core.errors import InvalidConfiguration
 from pymake.core.settings import InstallMode, InstallSettings, safe_load
 from pymake.core.version import Version
 from pymake.logging import Logging
@@ -97,12 +95,28 @@ class Options:
         for o in self.__items:
             if name in {o.name, o.fullname}:
                 return o
+            
+    def update(self, options: dict):
+        for k, v in options.items():
+            if self[k]:
+                self[k] = v
+            else:
+                self.add(k, v)
+    
+    def items(self):
+        for o in self.__items:
+            yield o.name, o.value
 
     @cached_property
     def modification_date(self):
         return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
 
     def __getattr__(self, name):
+        opt = self.get(name)
+        if opt:
+            return opt.value
+        
+    def __getitem__(self, name):
         opt = self.get(name)
         if opt:
             return opt.value
@@ -328,7 +342,8 @@ class Target(Logging):
                 group.create_task(res)
 
     @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode):
+    async def install(self, settings: InstallSettings, mode: InstallMode):        
+        await self.build()
         installed_files = list()
         if mode == InstallMode.dev:
             if len(self._utils) > 0:
@@ -355,6 +370,9 @@ class Target(Logging):
         ...
 
     def __build__(self):
+        ...
+
+    def __install__(self):
         ...
 
     def __clean__(self):

@@ -32,6 +32,11 @@ jobs:
           git config --global user.email "gh-actions@github.com"
           git config --global user.name "GitHub Actions"
 
+      - name: Install requirements
+        run: |
+          python -m pip install conan
+          conan profile detect
+
       - name: Install pymake
         run: |
           python -m pip install --upgrade pip

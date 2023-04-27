@@ -134,9 +134,9 @@ class MakeFile(sys.__class__):
             if t:
                 return t
 
-    def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path | str = None, lineno: int = None):
+    def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path | str = None, lineno: int = None, expected_result = 0):
         self.__tests.append(
-            Test(self, executable, name=name, args=args, file=file, lineno=lineno))
+            Test(self, executable, name=name, args=args, file=file, lineno=lineno, expected_result=expected_result))
         
     @property
     def requirements(self):

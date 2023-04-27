@@ -47,13 +47,14 @@ class CXXObject(Target):
                 deps = self.cache.deps
             self.load_dependencies(deps)
             self.load_dependency(self.source)
-        
+
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
-        previous_args = self.cache.get('compile_args')        
+        previous_args = self.cache.get('compile_args')
         if previous_args:
-            args = self.toolchain.make_compile_commands(self.source, self.output, self.private_cxx_flags)[0]
+            args = self.toolchain.make_compile_commands(
+                self.source, self.output, self.private_cxx_flags)[0]
             args = [str(arg) for arg in args]
             if sorted(args) != sorted(previous_args):
                 self.__dirty = True
@@ -185,7 +186,7 @@ class CXXTarget(Target):
         tmp.extend(self.link_libraries.private)
         for dep in self.cxx_dependencies:
             tmp.extend(dep.libs)
-        return unique(reversed(tmp))
+        return unique(tmp)
 
     @cached_property
     def cxx_flags(self):

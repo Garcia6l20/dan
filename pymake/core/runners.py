@@ -41,6 +41,71 @@ def max_jobs(count=1):
     else:
         _jobs_sem = None
 
+def cmdline2list(s: str):
+    """
+    Translate a command line string into a sequence of arguments,
+    using the same rules as the MS C runtime:
+
+    1) Arguments are delimited by white space, which is either a
+       space or a tab.
+
+    2) A string surrounded by double quotation marks is
+       interpreted as a single argument, regardless of white space
+       contained within.  A quoted string can be embedded in an
+       argument.
+
+    3) A double quotation mark preceded by a backslash is
+       interpreted as a literal double quotation mark.
+
+    4) Backslashes are interpreted literally, unless they
+       immediately precede a double quotation mark.
+
+    5) If backslashes immediately precede a double quotation mark,
+       every pair of backslashes is interpreted as a literal
+       backslash.  If the number of backslashes is odd, the last
+       backslash escapes the next double quotation mark as
+       described in rule 3.
+    """
+    result = []
+    current = []
+    quote = None
+    escaped = False
+    for c in s:
+        match c:
+            case ' ' | '\t':
+                if escaped:
+                    current.append(c)
+                    escaped = False
+                else:
+                    if quote is None:
+                        if current:
+                            result.append(''.join(current))
+                            current = []
+                    else:
+                        current.append(c)
+            case "'" | '"':
+                if escaped:
+                    current.append(c)
+                    escaped = False
+                else:                    
+                    if quote is not None and quote == c:
+                        quote = None
+                    else:
+                        quote = c
+            case '\\':
+                if escaped:
+                    current.append('\\')
+                escaped = True
+            case _:
+                if escaped:
+                    current.append('\\')
+                current.append(c)
+                escaped = False
+
+    if current:
+        result.append(''.join(current))
+
+    return result
 
 async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None):
     if _jobs_sem is not None:

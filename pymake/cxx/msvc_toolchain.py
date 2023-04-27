@@ -1,12 +1,12 @@
-import asyncio
 import json
 
 import aiofiles
 from pymake.core.runners import sync_run
 from pymake.core.settings import BuildType
 from pymake.core.utils import unique
-from pymake.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, scan
+from pymake.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency, scan
 from pymake.core.errors import InvalidConfiguration
+from pymake.core.pm import re_match
 
 
 class MSVCToolchain(Toolchain):
@@ -20,7 +20,15 @@ class MSVCToolchain(Toolchain):
 
     @property
     def default_cflags(self):
-        return ['/nologo', '/EHsc', '/GA', '/MT']
+        rt = '/MD' if self.runtime == RuntimeType.dynamic else '/MT'
+        if self.build_type == BuildType.debug:
+            rt += 'd'
+        return [
+            '/nologo',
+            '/EHsc',
+            '/GA',
+            rt,
+        ]
 
     @property
     def default_cxxflags(self):
@@ -69,7 +77,37 @@ class MSVCToolchain(Toolchain):
     def make_executable_name(self, basename: str) -> str:
         return f'{basename}.exe'
 
+    def from_unix_flags(self, flags: list[str]):
+        out = list()
+        for flag in flags:
+            match re_match(flag):
+                case r'-L(.+)' as m:
+                    out.append(f'/LIBPATH:{m[1]}')
+                case r'-l(.+)' as m:
+                    out.append(f'{m[1]}.lib')
+                case r'-I(.+)' as m:
+                    out.append(f'/I{m[1]}')
+                case _:
+                    out.append(flag)
+        return out
+
+    def to_unix_flags(self, flags: list[str]):
+        out = list()
+        for flag in flags:
+            flag = flag.replace('"', '')
+            match re_match(flag):
+                case r'/LIBPATH:(.+)' as m:
+                    out.append(f'-L{m[1]}')
+                case r'(.+).lib' as m:
+                    out.append(f'-l{m[1]}')
+                case r'/I(.+)' as m:
+                    out.append(f'-I{m[1]}')
+                case _:
+                    out.append(flag)
+        return out
+
     async def scan_dependencies(self, file: Path, options: list[str], build_path: Path) -> set[FileDependency]:
+        return set()
         if not scan:
             return set()
 

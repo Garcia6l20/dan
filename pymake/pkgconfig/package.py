@@ -7,6 +7,7 @@ import re
 import importlib.util
 
 from pymake.core.find import find_file, library_paths_lookup
+from pymake.core.runners import cmdline2list
 from pymake.core.settings import InstallMode, InstallSettings
 from pymake.core.utils import unique
 from pymake.cxx.targets import CXXTarget, Library
@@ -93,7 +94,7 @@ class Package(CXXTarget):
         self.output = None
         self.config_path = config_path or find_pkg_config(name, search_paths)
         self.search_paths = search_paths
-        self.data : Data = None
+        self.data: Data = None
         if not self.config_path:
             raise MissingPackage(name)
         self.search_paths.insert(0, self.config_path.parent)
@@ -108,6 +109,8 @@ class Package(CXXTarget):
             module = importlib.util.module_from_spec(spec)
             setattr(module, 'self', self)
             spec.loader.exec_module(module)
+        self.__cflags = None
+        self.__libs = None
 
     @property
     def found(self):
@@ -132,10 +135,18 @@ class Package(CXXTarget):
 
     @property
     def cxx_flags(self):
-        tmp: list[str] = self.data.get('cflags').split()
-        for dep in self.cxx_dependencies:
-            tmp.extend(dep.cxx_flags)
-        return unique(tmp)
+        if self.__cflags is None:
+            from pymake.cxx import target_toolchain
+            cflags = self.data.get('cflags')
+            if cflags is not None:
+                cflags = cmdline2list(cflags)
+                cflags = target_toolchain.from_unix_flags(cflags)
+            else:
+                cflags = list()
+            for dep in self.cxx_dependencies:
+                cflags.extend(dep.cxx_flags)
+            self.__cflags = unique(cflags)
+        return self.__cflags
 
     @property
     def package_dependencies(self):
@@ -143,13 +154,18 @@ class Package(CXXTarget):
 
     @property
     def libs(self):
-        tmp = list()
-        for pkg in self.package_dependencies:
-            tmp.extend(pkg.libs)
-        libs = self.data.get('libs')
-        if libs:
-            tmp.extend(libs.split())
-        return unique(tmp)
+        if self.__libs is None:
+            from pymake.cxx import target_toolchain
+            tmp = list()
+            for pkg in self.package_dependencies:
+                tmp.extend(pkg.libs)
+            libs = self.data.get('libs')
+            if libs is not None:
+                libs = cmdline2list(libs)
+                libs = target_toolchain.from_unix_flags(libs)
+                tmp.extend(libs)
+            self.__libs = unique(tmp)
+        return self.__libs
 
     @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
@@ -197,8 +213,10 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
         [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
+    libs = target_toolchain.to_unix_flags(libs)
     cflags = lib.compile_definitions.public
     cflags.extend(target_toolchain.make_include_options(['${includedir}']))
+    cflags = target_toolchain.to_unix_flags(cflags)
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\
         .render({
