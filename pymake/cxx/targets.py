@@ -36,17 +36,11 @@ class CXXObject(Target):
         self.output: Path = self.build_path / \
             Path(f'{self.parent.name}.{self.source.name}.{ext}')
 
-        if not self.clean_request:
-            if not self.output.exists() or self.output.stat().st_mtime < self.source.stat().st_mtime or not hasattr(self.cache, 'deps'):
-                self.info(f'scanning dependencies of {self.source}')
-                deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
-                deps = [str(d) for d in deps if d.startswith(
-                    str(self.source_path)) or d.startswith(str(self.build_path))]
-                self.cache.deps = deps
-            else:
-                deps = self.cache.deps
+        deps = self.cache.get('deps')
+        if deps is not None:
             self.load_dependencies(deps)
-            self.load_dependency(self.source)
+
+        self.load_dependency(self.source)
 
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
@@ -72,6 +66,13 @@ class CXXObject(Target):
         self.info(f'generating {self.output}...')
         commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
         self.cache.compile_args = [str(a) for a in commands[0]]
+
+        self.info(f'scanning dependencies of {self.source}')
+        deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
+        deps = [d for d in deps
+                if self.source_path in Path(d).parents
+                or self.build_path in Path(d).parents]
+        self.cache.deps = deps
 
 
 class OptionSet:

@@ -106,25 +106,14 @@ class MSVCToolchain(Toolchain):
                     out.append(flag)
         return out
 
-    async def scan_dependencies(self, file: Path, options: list[str], build_path: Path) -> set[FileDependency]:
-        return set()
-        if not scan:
-            return set()
-
-        build_path.mkdir(parents=True, exist_ok=True)
-        desc = build_path / file.with_suffix(".json").name
-        args = [self.cc,
-                *unique(self.default_cflags, self.default_cxxflags, options),
-                '/scanDependencies', desc, file]
-        await self.run('scan', desc, args,
-                       cwd=build_path)
+    async def scan_dependencies(self, sourcefile: Path, options: list[str], build_path: Path) -> set[FileDependency]:
+        deps_path = build_path / sourcefile.with_suffix(".json").name
         deps = set()
-        async with aiofiles.open(desc, 'r') as f:
-            data = json.loads(await f.read())
-            for rule in data['rules']:
-                for req in rule['requires']:
-                    if 'source-path' in req:
-                        deps.add(FileDependency(req['source-path']))
+        if deps_path.exists():
+            async with aiofiles.open(deps_path, 'r') as f:
+                content = await f.read()
+                data = json.loads(content)
+                deps = set(data['Data']['Includes'])
         return deps
 
     def compile_generated_files(self, output: Path) -> set[Path]:
@@ -135,7 +124,9 @@ class MSVCToolchain(Toolchain):
         return list()
 
     def make_compile_commands(self, sourcefile: Path, output: Path, options: list[str]) -> CommandArgsList:
+        deps = output.parent / sourcefile.with_suffix(".json").name
         args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options),
+                '/sourceDependencies', deps,
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
         return [args]
 
