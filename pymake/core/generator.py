@@ -12,16 +12,18 @@ class generator:
 
     def __call__(self, fn: Callable):
         class Generator(Target):
-            def __init__(self, output: Path, dependencies: list[TargetDependencyLike] = list()) -> None:
-                super().__init__(output.stem)
-                self.output = output
-                self.load_dependencies(dependencies)
+            output = self.output
+            dependencies = set(self.dependencies)
 
             def __build__(self):
                 arg_spec = inspect.getfullargspec(fn)
-                args = list()
-                kwargs = dict()
                 if 'self' in arg_spec.args:
-                    args.append(self)
-                return fn(*args, **kwargs)
-        return Generator(self.output, self.dependencies)
+                    return fn(self)
+                elif not arg_spec.args:
+                    return fn()
+                else:
+                    raise RuntimeError("Only 'self' is allowed as Generator argument")
+
+        # hack the module location (used for Makefile's Targets resolution)
+        Generator.__module__ = fn.__module__
+        return Generator

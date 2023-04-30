@@ -1,5 +1,9 @@
+import inspect
 import os
 import sys
+import typing as t
+
+from click.core import Command
 from pymake.core.find import find_file
 from pymake.core.pathlib import Path
 import click
@@ -12,6 +16,19 @@ from pymake.cxx.targets import Executable
 
 
 from pymake.make import InstallMode, Make
+
+class AsyncContext(click.Context):
+    def invoke(__self, __callback, *args, **kwargs):
+        ret = super().invoke(__callback, *args, **kwargs)
+        if inspect.isawaitable(ret):
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return ret # must be awaited
+            return loop.run_until_complete(ret)
+        else:
+            return ret
+click.BaseCommand.context_class = AsyncContext
+
 
 _logger = logging.getLogger('cli')
 
@@ -96,7 +113,7 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build')
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
-def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
+async def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     config = Cache(build_path / Make._config_name)
     config.source_path = config.source_path if hasattr(
@@ -108,7 +125,7 @@ def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tupl
         'toolchain') or click.prompt('Toolchain', type=_toolchain_choice, default='default')
     if not hasattr(config, 'settings'):
         config.settings = Settings()
-    asyncio.run(config.save())
+    await config.save()
     from pymake.core.include import context
     caches = context.get('_caches')
     caches.remove(config)
@@ -116,24 +133,24 @@ def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tupl
 
     if len(settings) or len(options):
         make = Make(build_path, None, verbose, False)
-        asyncio.run(make.initialize())
+        await make.initialize()
 
         if len(options):
-            make.apply_options(*options)
+            await make.apply_options(*options)
 
         if len(settings):
-            make.apply_settings(*settings)
+            await make.apply_settings(*settings)
 
-        asyncio.run(make.config.save())
+        await make.config.save()
 
 
 @cli.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
 @pass_context
-def build(ctx: CommandsContext, **kwds):
+async def build(ctx: CommandsContext, **kwds):
     ctx(**kwds)  # update kwds
-    asyncio.run(ctx.make.build())
+    await ctx.make.build()
     from pymake.cxx import target_toolchain
     target_toolchain.compile_commands.update()
 
@@ -142,10 +159,10 @@ def build(ctx: CommandsContext, **kwds):
 @common_opts
 @click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
 @pass_context
-def install(ctx: CommandsContext, mode: str, **kwargs):
+async def install(ctx: CommandsContext, mode: str, **kwargs):
     ctx(**kwargs)
     mode = InstallMode[mode]
-    asyncio.run(ctx.make.install(mode))
+    await ctx.make.install(mode)
 
 
 @cli.command()
@@ -192,9 +209,9 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
 @pass_context
-def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
+async def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
     ctx(**kwargs)
-    asyncio.run(ctx.make.initialize())
+    await ctx.make.initialize()
     from pymake.core.include import context
     out = []
     targets = context.all_targets if all else context.default_targets
@@ -209,9 +226,9 @@ def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
 @cli.command()
 @common_opts
 @pass_context
-def list_tests(ctx: CommandsContext, **kwargs):
+async def list_tests(ctx: CommandsContext, **kwargs):
     ctx(**kwargs)
-    asyncio.run(ctx.make.initialize())
+    await ctx.make.initialize()
     from pymake.core.include import context
     for test in context.root.tests:
         click.echo(test.fullname)
@@ -225,23 +242,23 @@ def list_toolchains(**kwargs):
 
 @cli.command()
 @common_opts
-def clean(**kwargs):
-    asyncio.run(Make(**kwargs).clean())
+async def clean(**kwargs):
+    await Make(**kwargs).clean()
 
 
 @cli.command()
 @common_opts
-def run(**kwargs):
+async def run(**kwargs):
     make = Make(**kwargs)
-    rc = asyncio.run(make.run())
+    rc = await make.run()
     sys.exit(rc)
 
 
 @cli.command()
 @common_opts
-def test(**kwargs):
+async def test(**kwargs):
     make = Make(**kwargs)
-    rc = asyncio.run(make.test())
+    rc = await make.test()
     sys.exit(rc)
 
 

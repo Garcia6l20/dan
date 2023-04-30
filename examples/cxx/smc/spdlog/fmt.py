@@ -5,21 +5,20 @@ from pymake.smc import GitSources
 version = '9.1.0'
 description = 'A modern formatting library'
 
-gitfmt = GitSources('fmt', 'https://github.com/fmtlib/fmt.git', version)
+class FmtSources(GitSources):
+    name = 'fmt-source'
+    url = 'https://github.com/fmtlib/fmt.git'
+    refspec = version
 
-fmt_src = gitfmt.output / 'src'
-fmt_inc = gitfmt.output / 'include'
-
-fmt = Library('fmt',
-              description=description,
-              version=version,
-              sources=[
-                  fmt_src / 'format.cc',
-                  fmt_src / 'os.cc',
-              ],
-              includes=[fmt_inc],
-              preload_dependencies=[gitfmt],
-              all=False)
-
-self.export(fmt)
-self.install(fmt)
+class Fmt(Library):
+    name = 'fmt'
+    preload_dependencies = FmtSources,
+    
+    async def __initialize__(self):        
+        src = self.get_dependency(FmtSources).output
+        self.includes.add(src / 'include', public=True)
+        self.sources = [
+            src / 'src/format.cc',
+            src / 'src/os.cc',
+        ]
+        await super().__initialize__()

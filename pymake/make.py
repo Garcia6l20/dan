@@ -88,6 +88,8 @@ class Make(Logging):
                 'makefile.py').exists(), f'no makefile in {self.source_path}'
         assert (self.source_path !=
                 self.build_path), f'in-source build are not allowed'
+        
+        self.targets = list()
 
     def configure(self, toolchain):
         self.config.source_path = str(self.source_path)
@@ -133,13 +135,16 @@ class Make(Logging):
             for target in context.default_targets:
                 self.active_targets[target.fullname] = target
 
-        self.debug(f'targets: {[name for name in self.active_targets.keys()]}')
+        
+        for t in self.active_targets.values():
+            self.targets.append(t())
 
-    @staticmethod
-    def all_options() -> list[Option]:
+        self.debug(f'targets: {[t.name for t in self.targets]}')
+
+    def all_options(self) -> list[Option]:
         from pymake.core.include import context
         opts = []
-        for target in context.all_targets:
+        for target in self.targets:
             for o in target.options:
                 opts.append(o)
         for makefile in context.all_makefiles:
@@ -147,7 +152,8 @@ class Make(Logging):
                 opts.append(o)
         return opts
 
-    def apply_options(self, *options):
+    async def apply_options(self, *options):
+        await self.initialize()
         all_opts = self.all_options()
         for option in options:
             name, value = option.split('=')
@@ -159,7 +165,8 @@ class Make(Logging):
                     break
             assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
 
-    def apply_settings(self, *settings):
+    async def apply_settings(self, *settings):
+        await self.initialize()
         for setting in settings:
             name, value = setting.split('=')
             parts = name.split('.')
@@ -235,9 +242,8 @@ class Make(Logging):
 
     async def build(self):
         await self.initialize()
-        targets = set(self.active_targets.values())
 
-        with self.progress('building', targets, lambda t: t.build(), self.no_progress) as tasks:
+        with self.progress('building', self.targets, lambda t: t.build(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
@@ -279,7 +285,7 @@ class Make(Logging):
 
     @property
     def executable_targets(self) -> list[Executable]:
-        return [exe for exe in self.active_targets.values() if isinstance(exe, Executable)]
+        return [exe for exe in self.targets if isinstance(exe, Executable)]
 
     async def scan_toolchains(self, script: Path = None):
         from pymake.cxx.detect import create_toolchains, load_env_toolchain
@@ -316,8 +322,6 @@ class Make(Logging):
         await self.initialize()
         from pymake.cxx import toolchain
         toolchain.scan = False
-        from pymake.core.target import Target
-        Target.clean_request = True
         await asyncio.gather(*[t.clean() for t in self.active_targets.values()])
         from pymake.cxx import target_toolchain
 

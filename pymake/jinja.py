@@ -1,3 +1,4 @@
+import aiofiles
 from pymake.core.pathlib import Path
 from pymake.core import asyncio
 from pymake.core.target import Target, TargetDependencyLike
@@ -13,26 +14,28 @@ class generator:
 
     def __call__(self, fn: Callable):
         class Generator(Target):
-            def __init__(self, output: Path, template: str, dependencies: list[TargetDependencyLike] = list()) -> None:
-                super().__init__(output.stem)
-                self.output = output
-                self.template = template
-                self.load_dependencies(dependencies)
-                self.load_dependency(template)
+            output = self.output
+            template = self.template
+            dependencies = [*self.dependencies, self.template]
 
-            def __build__(self):
+            async def __build__(self):
                 import jinja2
                 arg_spec = inspect.getfullargspec(fn)
-                args = list()
-                kwargs = dict()
                 if 'self' in arg_spec.args:
-                    args.append(self)
-
+                    data = fn(self)
+                elif not arg_spec.args:
+                    data = fn()
+                else:
+                    raise RuntimeError("Only 'self' is allowed as Generator argument")
+                if inspect.isawaitable(data):
+                    data = await data
+                self.output.parent.mkdir(parents=True, exist_ok=True)
                 env = jinja2.Environment(
                     loader=jinja2.FileSystemLoader(self.source_path))
                 template = env.get_template(self.template)
-                data = fn(*args, **kwargs)
-                self.output.parent.mkdir(parents=True, exist_ok=True)
-                print(template.render(data), file=open(self.output, 'w'))
+                async with aiofiles.open(self.output, 'w') as out:
+                    await out.write(template.render(data))
 
-        return Generator(self.output, self.template, self.dependencies)
+        # hack the module location (used for Makefile's Targets resolution)
+        Generator.__module__ = fn.__module__
+        return Generator

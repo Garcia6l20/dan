@@ -90,7 +90,9 @@ class UnresolvedPackage(Logging):
 class Package(CXXTarget):
     all: dict[str, 'Package'] = dict()
 
-    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None) -> None:
+    default = False
+
+    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, **kwargs) -> None:
         self.output = None
         self.config_path = config_path or find_pkg_config(name, search_paths)
         self.search_paths = search_paths
@@ -98,7 +100,7 @@ class Package(CXXTarget):
         if not self.config_path:
             raise MissingPackage(name)
         self.search_paths.insert(0, self.config_path.parent)
-        super().__init__(name, all=False)
+        super().__init__(name, **kwargs)
         self.all[name] = self
 
         pymake_plugin = self.config_path.parent.parent / \

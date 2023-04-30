@@ -8,34 +8,35 @@ requires('fmt')
 version = '1.11.0'
 description = 'Fast C++ logging library'
 
-gitspdlog = GitSources(
-    'gitspdlog', 'https://github.com/gabime/spdlog.git', f'v{version}')
 
-spdlog_src = gitspdlog.output / 'src'
-spdlog_inc = gitspdlog.output / 'include'
+class SpdLogSources(GitSources):
+    name = 'spdlog-source'
+    url = 'https://github.com/gabime/spdlog.git'
+    refspec = f'v{version}'
 
-spdlog = Library('spdlog',
-                 description=description,
-                 version=version,
-                 sources=[
-                     spdlog_src / 'async.cpp',
-                     spdlog_src / 'cfg.cpp',
-                     spdlog_src / 'color_sinks.cpp',
-                     spdlog_src / 'file_sinks.cpp',
-                     spdlog_src / 'stdout_sinks.cpp',
-                     spdlog_src / 'spdlog.cpp',
-                 ],
-                 includes=[spdlog_inc],
-                 compile_definitions=[
-                     'SPDLOG_COMPILED_LIB', 'SPDLOG_FMT_EXTERNAL'],
-                 preload_dependencies=[gitspdlog],
-                 dependencies=['fmt'],
-                 all=False)
 
-spdlog.header_match = r'^(?:(?!bundled).)*\.(h.?)$'
+class Fmt(Library):
+    name = 'spdlog'
+    preload_dependencies = SpdLogSources,
+    dependencies = 'fmt',
+    public_compile_definitions = 'SPDLOG_COMPILED_LIB', 'SPDLOG_FMT_EXTERNAL'
+    header_match = r'^(?:(?!bundled).)*\.(h.?)$'
+    
+    async def __initialize__(self):
+        spdlog_root = self.get_dependency(SpdLogSources).output
+        self.includes.add(spdlog_root  / 'include', public=True)
+        spdlog_src = spdlog_root / 'src'
+        self.sources = [
+            spdlog_src / 'async.cpp',
+            spdlog_src / 'cfg.cpp',
+            spdlog_src / 'color_sinks.cpp',
+            spdlog_src / 'file_sinks.cpp',
+            spdlog_src / 'stdout_sinks.cpp',
+            spdlog_src / 'spdlog.cpp',
+        ]
+        
+        if self.toolchain.type != 'msvc':
+            self.link_libraries.add('pthread', public=True)
 
-if os.name == 'posix':
-    spdlog.link_libraries.add('pthread', public=True)
+        await super().__initialize__()
 
-self.export(spdlog)
-self.install(spdlog)

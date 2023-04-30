@@ -102,6 +102,8 @@ class Logging:
     def __init__(self, name: str = None) -> None:
         if name is None:
             name = self.__class__.__name__
+        if name.startswith('root.'):
+            name = name.removeprefix('root.')
         self._logger = logging.getLogger(name)
         self.debug = self._logger.debug
         self.info = self._logger.info

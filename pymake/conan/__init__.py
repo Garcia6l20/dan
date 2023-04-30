@@ -1,1 +1,1 @@
-from .requirements import Requirements, Package
+from .requirements import Package

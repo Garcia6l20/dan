@@ -1,10 +1,15 @@
-from pymake import self
 from pymake.cxx import Executable
 
-simple = Executable(
-    'pymake-simple', sources=['test.cpp', 'main.cpp'], private_includes=['.'])
-greater = simple.options.add('greater', 'hello pymake')
-simple.compile_definitions.add(f'SIMPLE_GREATER="{greater.value}"')
+class Simple(Executable):
+    name = 'simple'
+    sources = 'test.cpp', 'main.cpp'
+    private_includes = '.',
+    options = {
+        'greater': 'hello_pymake'
+    }
+    is_test = True
+    install = True
 
-self.add_test(simple)
-self.install(simple)
+    async def __initialize__(self):
+        self.compile_definitions.add(f'SIMPLE_GREATER="{self.options["greater"]}"')
+        await super().__initialize__()

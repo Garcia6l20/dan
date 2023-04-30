@@ -1,11 +1,12 @@
-from pymake.conan import Requirements, Package
+from pymake.conan import Package
 
-boost = Package('boost', '1.81.0',
-                options={
-                    'header_only': True
-                })
+class Boost(Package):
+    name = 'boost'
+    version = '1.81.0'
+    options={
+        'header_only': True
+    }
 
-Requirements(
-    'zlib/1.2.11',
-    boost
-)
+class Zlib(Package):
+    name = 'zlib'
+    version = '1.2.11'

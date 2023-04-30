@@ -14,8 +14,8 @@ from pymake.core import asyncio
 
 
 class CXXObject(Target):
-    def __init__(self, name, parent: 'CXXTarget', source: str) -> None:
-        super().__init__(name, parent=parent, all=False)
+    def __init__(self, source:Path, parent: 'CXXTarget') -> None:
+        super().__init__(source.name, parent=parent, default=False)
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain
@@ -38,9 +38,9 @@ class CXXObject(Target):
 
         deps = self.cache.get('deps')
         if deps is not None:
-            self.load_dependencies(deps)
+            self.dependencies.update(deps)
 
-        self.load_dependency(self.source)
+        self.dependencies.add(self.source)
 
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
@@ -123,50 +123,51 @@ class OptionSet:
 
 
 class CXXTarget(Target):
+    public_includes: set[str] = set()
+    private_includes: set[str] = set()
+
+    public_compile_options: set[str] = set()
+    private_compile_options: set[str] = set()
+    
+    public_compile_definitions: set[str] = set()
+    private_compile_definitions: set[str] = set()
+
+    public_link_libraries: set[str] = set()
+    private_link_libraries: set[str] = set()
+
+    public_link_options: set[str] = set()
+    private_link_options: set[str] = set()
+
     def __init__(self,
-                 name: str,
-                 includes: set[str] = set(),
-                 private_includes: set[str] = set(),
-                 compile_options: set[str] = set(),
-                 private_compile_options: set[str] = set(),
-                 compile_definitions: set[str] = set(),
-                 private_compile_definitions: set[str] = set(),
-                 dependencies: set[TargetDependencyLike] = set(),
-                 link_libraries: set[str] = set(),
-                 private_link_libraries: set[str] = set(),
-                 link_options: set[str] = set(),
-                 private_link_options: set[str] = set(),
-                 preload_dependencies: set[TargetDependencyLike] = set(),
-                 **kw_args) -> None:
-        super().__init__(name, **kw_args)
+                 *args,
+                 **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         from . import target_toolchain
         self.toolchain = target_toolchain
 
-        self.dependencies = Dependencies(dependencies)
-        self.preload_dependencies = Dependencies(preload_dependencies)
-
         self.includes = OptionSet(self, 'includes',
+                                #   self.public_includes, self.private_includes,
                                   transform=self.toolchain.make_include_options)
 
         self.compile_options = OptionSet(self, 'compile_options',
-                                         compile_options, private_compile_options)
+                                         self.public_compile_options, self.private_compile_options)
 
         self.link_libraries = OptionSet(self, 'link_libraries',
-                                        link_libraries, private_link_libraries, transform=self.toolchain.make_link_options)
+                                        self.public_link_libraries, self.private_link_libraries, transform=self.toolchain.make_link_options)
 
         self.compile_definitions = OptionSet(self, 'compile_definitions',
-                                             compile_definitions, private_compile_definitions, transform=self.toolchain.make_compile_definitions)
+                                             self.public_compile_definitions, self.private_compile_definitions, transform=self.toolchain.make_compile_definitions)
 
         self.link_options = OptionSet(self, 'link_options',
-                                      link_options, private_link_options)
+                                      self.public_link_options, self.private_link_options)
 
-        for path in includes:
+        for path in self.public_includes:
             path = Path(path)
             self.includes.add(
                 path if path.is_absolute() else self.source_path / path,
                 public=True)
 
-        for path in private_includes:
+        for path in self.private_includes:
             path = Path(path)
             self.includes.add(
                 path if path.is_absolute() else self.source_path / path)
@@ -206,13 +207,15 @@ class CXXTarget(Target):
         flags.extend(self.compile_definitions.private)
         return unique(flags)
 
+StrOrPath = str|Path
+StrOrPathIterable = Iterable[StrOrPath]
 
 class CXXObjectsTarget(CXXTarget):
-    def __init__(self, name: str,
-                 sources: set[str] | Callable = set(), *args, **kwargs):
-        super().__init__(name, *args, **kwargs)
+    sources: StrOrPathIterable|Callable[[], StrOrPathIterable] = set()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.objs: list[CXXObject] = list()
-        self.sources = sources
 
     @cache.once_method
     def _init_sources(self):
@@ -226,7 +229,7 @@ class CXXObjectsTarget(CXXTarget):
             if not source.is_absolute():
                 source = self.source_path / source
             self.objs.append(
-                CXXObject(f'{self.name}.{Path(source).name}', self, source))
+                CXXObject(Path(source), self))
 
     @property
     def file_dependencies(self):
@@ -241,7 +244,7 @@ class CXXObjectsTarget(CXXTarget):
         async with asyncio.TaskGroup() as group:
             for obj in self.objs:
                 group.create_task(obj.initialize())
-                self.load_dependency(obj)
+                # self.load_dependency(obj)
 
     async def __build__(self):
         # compile objects
@@ -252,8 +255,8 @@ class CXXObjectsTarget(CXXTarget):
 
 class Executable(CXXObjectsTarget):
 
-    def __init__(self, name: str, sources: set[str] | Callable = set(), *args, **kwargs):
-        super().__init__(name, sources, *args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.output = self.build_path / \
             self.toolchain.make_executable_name(self.name)
@@ -311,10 +314,8 @@ class LibraryType(Enum):
 
 class Library(CXXObjectsTarget):
 
-    def __init__(self, *args, library_type: LibraryType = LibraryType.AUTO, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.library_type = library_type
-        self.header_match = r'.+'
+    header_match = r'.+'
+    library_type: LibraryType = LibraryType.AUTO
 
     @property
     def static(self) -> bool:
@@ -349,7 +350,7 @@ class Library(CXXObjectsTarget):
             self.compile_definitions.add(f'{self.name.upper()}_EXPORT=1')
 
         if self.library_type != LibraryType.INTERFACE:
-            self.load_dependencies(self.objs)
+            self.dependencies.update(self.objs)
             self.output = self.build_path / \
                 self.toolchain.make_library_name(self.name, self.shared)
         else:
@@ -357,17 +358,16 @@ class Library(CXXObjectsTarget):
         await super().__initialize__()
 
         previous_args = self.cache.get('generate_args')
-        if self.static:
+        generate = None
+        match self.library_type:
+            case LibraryType.STATIC:
+                generate = self.toolchain.static_lib
+            case LibraryType.SHARED:
+                generate = self.toolchain.shared_lib
+        if generate is not None:
             if previous_args and \
-                    previous_args != await self.toolchain.static_lib(
+                    previous_args != await generate(
                         [str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True):
-                self.__dirty = True
-            else:
-                self.__dirty = False
-        elif self.shared:
-            if previous_args and \
-                    previous_args != await self.toolchain.shared_lib(
-                        [str(obj.output) for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs}, dry_run=True):
                 self.__dirty = True
             else:
                 self.__dirty = False
@@ -448,8 +448,8 @@ class Library(CXXObjectsTarget):
 
 
 class Module(CXXObjectsTarget):
-    def __init__(self, sources: str, *args, **kwargs):
-        super().__init__(sources, *args, **kwargs)
+    def __init__(self, name: str, sources: list[str], *args, **kwargs):
+        super().__init__(name, sources, *args, **kwargs)
 
     @property
     def cxx_flags(self):

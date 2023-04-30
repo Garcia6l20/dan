@@ -8,83 +8,90 @@ from pymake.cmake import ConfigureFile
 version = '3.2.1'
 description = 'A modern, C++-native, test framework for unit-tests, TDD and BDD'
 
-git = GitSources(
-    'git-catch2',
-    url='https://github.com/catchorg/Catch2.git',
-    refspec=f'v{version}',
-    patches=['patches/0001-fix-add-missing-cstdint-includes.patch'])
-
-src = git.output / 'src'
-
-config = ConfigureFile('catch2.config', src / 'catch2/catch_user_config.hpp.in',
-                       output_file=self.build_path / 'generated/catch2/catch_user_config.hpp',
-                       dependencies=[git])
-
-catch2 = Library('catch2',
-                 description=description,
-                 version=version,
-                 sources=lambda: src.rglob('*.cpp'),
-                 includes=[src, self.build_path / 'generated'],
-                 preload_dependencies=[config],
-                 all=False)
-
-if target_toolchain.type == 'msvc':
-    catch2.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
-
-config.options = catch2.options
+class Catch2Source(GitSources):
+    name = 'catch2-source'
+    url = 'https://github.com/catchorg/Catch2.git'
+    refspec = f'v{version}'
+    patches = 'patches/0001-fix-add-missing-cstdint-includes.patch',
 
 
-def add_overridable_catch2_option(name: str, value: bool):
-    o = catch2.options.add(name, value)
-    config[f'CATCH_CONFIG_{name.upper()}'] = o.value
-    config[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
+class Config(ConfigureFile):
+    name = 'catch2-config'
+    dependencies = Catch2Source,
+    output = 'generated/catch2/catch_user_config.hpp'
+
+    async def __initialize__(self):
+        await super().__initialize__()
+        self.input = self.get_dependency('catch2-source').output / 'src/catch2/catch_user_config.hpp.in'
+
+class Catch2(Library):
+    name = 'catch2'
+    preload_dependencies = Config,
+        
+    def sources(self):
+        return (self.get_dependency('catch2-source').output / 'src').rglob('*.cpp')
 
 
-def add_catch2_option(name: str, value):
-    o = catch2.options.add(name, value)
-    config[f'CATCH_CONFIG_{name.upper()}'] = o.value
+    async def __initialize__(self):
+
+        src = self.get_dependency('catch2-source').output / 'src'      
+        self.config = self.get_dependency('catch2-config')
+        self.config.options = self.options
+        self.includes.add(src, public=True)
+        self.includes.add(self.build_path / 'generated', public=True)
+        if self.toolchain.type == 'msvc':
+            self.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
+            
+        self.add_overridable_catch2_option('counter', True)
+        self.add_overridable_catch2_option('android_logwrite', False)
+        self.add_overridable_catch2_option('colour_win32', os.name == 'nt')
+        self.add_overridable_catch2_option(
+            'cpp11_to_string', target_toolchain.cpp_std >= 11)
+        self.add_overridable_catch2_option('cpp17_byte', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option('cpp17_optional', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option(
+            'cpp17_string_view', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option(
+            'cpp17_uncaught_exceptions', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option('cpp17_variant', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option('global_nextafter', True)
+        self.add_overridable_catch2_option('posix_signals', os.name == 'posix')
+        self.add_overridable_catch2_option('getenv', True)
+        self.add_overridable_catch2_option('use_async', True)
+        # self.add_overridable_catch2_option('WCHAR', False)
+        self.add_overridable_catch2_option('windows_seh', os.name == 'nt')
+
+        self.add_catch2_option('bazel_support', False)
+        self.add_catch2_option('disable_exceptions', False)
+        self.add_catch2_option('disable', False)
+        self.add_catch2_option('disable_stringification', False)
+        self.add_catch2_option('all_stringmarkers', True)
+        self.add_catch2_option('optional_stringmaker', True)
+        self.add_catch2_option('pair_stringmaker', True)
+        self.add_catch2_option('tuple_stringmaker', True)
+        self.add_catch2_option('variant_stringmaker', False)
+        self.add_catch2_option('experimental_redirect', False)
+        self.add_catch2_option('fast_compile', False)
+        self.add_catch2_option('prefix_all', False)
+        self.add_catch2_option('windows_crtdbg', os.name == 'nt')
+        self.add_catch2_option('experimental_redirect', False)
+        self.add_catch2_option('default_reporter', 'console')
+        self.add_catch2_option('console_width', shutil.get_terminal_size().columns)
+        
+        await super().__initialize__()
+            
+    def add_overridable_catch2_option(self, name: str, value: bool):
+        o = self.options.add(name, value)
+        self.config[f'CATCH_CONFIG_{name.upper()}'] = o.value
+        self.config[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
 
 
-add_overridable_catch2_option('counter', True)
-add_overridable_catch2_option('android_logwrite', False)
-add_overridable_catch2_option('colour_win32', os.name == 'nt')
-add_overridable_catch2_option(
-    'cpp11_to_string', target_toolchain.cpp_std >= 11)
-add_overridable_catch2_option('cpp17_byte', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option('cpp17_optional', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option(
-    'cpp17_string_view', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option(
-    'cpp17_uncaught_exceptions', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option('cpp17_variant', target_toolchain.cpp_std >= 17)
-add_overridable_catch2_option('global_nextafter', True)
-add_overridable_catch2_option('posix_signals', os.name == 'posix')
-add_overridable_catch2_option('getenv', True)
-add_overridable_catch2_option('use_async', True)
-# add_overridable_catch2_option('WCHAR', False)
-add_overridable_catch2_option('windows_seh', os.name == 'nt')
+    def add_catch2_option(self, name: str, value):
+        o = self.options.add(name, value)
+        self.config[f'CATCH_CONFIG_{name.upper()}'] = o.value
 
-add_catch2_option('bazel_support', False)
-add_catch2_option('disable_exceptions', False)
-add_catch2_option('disable', False)
-add_catch2_option('disable_stringification', False)
-add_catch2_option('all_stringmarkers', True)
-add_catch2_option('optional_stringmaker', True)
-add_catch2_option('pair_stringmaker', True)
-add_catch2_option('tuple_stringmaker', True)
-add_catch2_option('variant_stringmaker', False)
-add_catch2_option('experimental_redirect', False)
-add_catch2_option('fast_compile', False)
-add_catch2_option('prefix_all', False)
-add_catch2_option('windows_crtdbg', os.name == 'nt')
-add_catch2_option('experimental_redirect', False)
-add_catch2_option('default_reporter', 'console')
-add_catch2_option('console_width', shutil.get_terminal_size().columns)
-
-# config['CATCH_CONFIG_FALLBACK_STRINGIFIER'] = "fallback ??"
-
-
-@catch2.utility
+# FIXME: this is actually associated to Target's utils
+@Catch2.utility
 def discover_tests(exe):
     from pymake import self as makefile
     import yaml
@@ -153,6 +160,3 @@ def discover_tests(exe):
             makefile.add_test(exe, name=title, args=[
                               title], file=data['filepath'], lineno=data['lineno'])
 
-
-self.export(catch2)
-self.install(catch2)

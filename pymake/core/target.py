@@ -1,7 +1,7 @@
 from functools import cached_property
 from pymake.core.pathlib import Path
 import time
-from typing import Callable, Union, TypeAlias
+from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
 from pymake.core import asyncio, aiofiles, utils
@@ -12,6 +12,48 @@ from pymake.logging import Logging
 
 
 class Dependencies(set):
+
+    def __init__(self, parent : 'Target', deps: Iterable = list()):
+        super().__init__()
+        self.parent = parent
+        self.unresolved = set()
+        for dep in deps:
+            self.add(dep)
+
+    
+    def add(self, dependency):
+        from pymake.pkgconfig.package import UnresolvedPackage
+        match dependency:
+            case Target() | FileDependency():
+                super().add(dependency)
+            case type():
+                assert issubclass(dependency, Target)
+                super().add(dependency())
+            case str():
+                from pymake.pkgconfig.package import Package
+                for pkg in Package.all.values():
+                    if pkg.name == dependency:
+                        self.add(pkg)
+                        break
+                else:
+                    if Path(self.parent.source_path / dependency).exists():
+                        super().add(FileDependency(
+                            self.parent.source_path / dependency))
+                    else:
+                        self.unresolved.add(UnresolvedPackage(dependency))
+            case Path():
+                dependency = FileDependency(self.parent.source_path / dependency)
+                super().add(dependency)
+            case UnresolvedPackage():
+                self.unresolved.add(dependency)
+            case _:
+                raise RuntimeError(
+                    f'Unhandled dependency {dependency} ({type(dependency)})')
+
+    def update(self, dependencies):
+        for dep in dependencies:
+            self.add(dep)
+
     def __getattr__(self, attr):
         for item in self:
             if item.name == attr:
@@ -81,10 +123,11 @@ class Option:
 
 
 class Options:
-    def __init__(self, parent: 'Target') -> None:
+    def __init__(self, parent: 'Target', default: dict[str, Any] = dict()) -> None:
         self.__parent = parent
         self.__cache = parent.cache
         self.__items: set[Option] = set()
+        self.update(default)
 
     def add(self, name: str, default_value):
         opt = Option(self.__parent, name, default_value)
@@ -126,55 +169,82 @@ class Options:
 
 
 class Target(Logging):
-    clean_request = False
+    name: str = None
+    fullname: str = None
+    description: str = None,
+    version: str = None
+    default: bool = True
+    install: bool = False
+    output: Path = None
+    options: dict[str, Any] = dict()
+    
+    dependencies: set[TargetDependencyLike] = set()
+    preload_dependencies: set[TargetDependencyLike] = set()
+
+    makefile = None
+    
+    _utils: list[Callable] = list()
 
     def __init__(self,
-                 name: str,
-                 description: str = None,
-                 version: str = None,
+                 name : str = None,
                  parent: 'Target' = None,
-                 all=True) -> None:
-        from pymake.core.include import context
-        self._name = name
-        self.default = all
-        self.description = description
-        self.version = Version(version) if version else None
+                 version: str = None,
+                 default: bool = None,
+                 makefile = None) -> None:
+        self.version = Version(self.version) if self.version else None
         self.parent = parent
         self.__cache: SubCache = None
-        self.__unresolved_dependencies = list()
-        if parent is None:
-            self.makefile = context.current
-            self.source_path = context.current.source_path
-            self.build_path = context.current.build_path
-            self.options = Options(self)
-        else:
-            self.source_path = parent.source_path
-            self.build_path = parent.build_path
-            self.makefile = parent.makefile
-            self.options = parent.options
 
-        if self.version is None and hasattr(self.makefile, 'version'):
+        if name is not None:
+            self.name = name
+
+        if version is not None:
+            self.version = version
+
+        if default is not None:
+            self.default = default
+
+        if parent is not None:
+            self.makefile = parent.makefile
+            self.fullname = f'{parent.fullname}.{name}'
+
+        if makefile is not None:
+            self.makefile = makefile
+        
+        if self.makefile is None:
+            from pymake.core.include import context
+            self.makefile = context.current
+
+        self.options = Options(self, self.options)
+
+        if self.version is None:
             self.version = self.makefile.version
 
-        if self.description is None and hasattr(self.makefile, 'description'):
+        if self.description is None:
             self.description = self.makefile.description
 
         self.other_generated_files: set[Path] = set()
-        self.dependencies: Dependencies[Target] = Dependencies()
-        self.preload_dependencies: Dependencies[Target] = Dependencies()
-        self._utils: list[Callable] = list()
-        self.output: Path = None
+        self.dependencies = Dependencies(self, self.dependencies)
+        self.preload_dependencies = Dependencies(self, self.preload_dependencies)
 
         super().__init__(self.fullname)
-        self.makefile.targets.add(self)
+
+        if self.output is not None:
+            self.output = Path(self.output)
+            if not self.output.is_absolute():
+                self.output = self.build_path / self.output
 
     @property
-    def name(self) -> str:
-        return self._name
+    def source_path(self) -> Path:
+        return self.makefile.source_path
 
+    @property
+    def build_path(self) -> Path:
+        return self.makefile.build_path
+    
     @cached_property
     def fullname(self) -> str:
-        return f'{self.makefile.fullname}.{self._name}'
+        return f'{self.makefile.fullname}.{self.name}'
 
     @property
     def cache(self) -> SubCache:
@@ -183,7 +253,7 @@ class Target(Logging):
         return self.__cache
 
     async def __load_unresolved_dependencies(self):
-        if len(self.__unresolved_dependencies) == 0:
+        if len(self.dependencies.unresolved) == 0:
             return
         deps_install_path = self.makefile.requirements.parent.build_path / 'pkgs'
         deps_settings = InstallSettings(deps_install_path)
@@ -191,25 +261,25 @@ class Target(Logging):
         if self.makefile.requirements is None:
             raise RuntimeError(
                 f'Unresolved dependencies maybe you should provide a requirements.py file')
-        for dep in self.__unresolved_dependencies:
+        for dep in self.dependencies.unresolved:
             t = self.makefile.requirements.find(dep.name)
             if not t:
                 raise RuntimeError(f'Unresolved dependency "{dep.name}"')
-            deps_installs.append(t.install(deps_settings, InstallMode.dev))
+            deps_installs.append(t().install(deps_settings, InstallMode.dev))
         await asyncio.gather(*deps_installs)
 
         from pymake.pkgconfig.package import Package
-        for dep in self.__unresolved_dependencies:
+        for dep in self.dependencies.unresolved:
             pkg = Package(dep.name, search_paths=[
-                deps_install_path])
-            self.load_dependency(pkg)
+                deps_install_path], makefile=self.makefile)
+            self.dependencies.add(pkg)
 
     @asyncio.cached
     async def preload(self):
         self.debug('preloading...')
-        deps = self.dependencies
-        self.dependencies = Dependencies()
-        self.load_dependencies(deps)
+        # deps = self.dependencies
+        # self.dependencies = Dependencies()
+        # self.load_dependencies(deps)
         
         async with asyncio.TaskGroup() as group:
             group.create_task(self.__load_unresolved_dependencies())
@@ -241,36 +311,6 @@ class Target(Logging):
         if inspect.iscoroutine(res):
             res = await res
         return res
-
-    def load_dependencies(self, dependencies):
-        for dependency in dependencies:
-            self.load_dependency(dependency)
-
-    def load_dependency(self, dependency):
-        from pymake.pkgconfig.package import UnresolvedPackage
-        match dependency:
-            case Target() | FileDependency():
-                self.dependencies.add(dependency)
-            case str():
-                from pymake.pkgconfig.package import Package
-                for pkg in Package.all.values():
-                    if pkg.name == dependency:
-                        self.load_dependency(pkg)
-                        break
-                else:
-                    if Path(self.source_path / dependency).exists():
-                        self.load_dependency(FileDependency(
-                            self.source_path / dependency))
-                    else:
-                        self.load_dependency(UnresolvedPackage(dependency))
-            case Path():
-                dependency = FileDependency(self.source_path / dependency)
-                self.dependencies.add(dependency)
-            case UnresolvedPackage():
-                self.__unresolved_dependencies.append(dependency)
-            case _:
-                raise RuntimeError(
-                    f'Unhandled dependency {dependency} ({type(dependency)})')
 
     @property
     def modification_time(self):
@@ -318,7 +358,7 @@ class Target(Logging):
 
     @property
     def target_dependencies(self):
-        return [t for t in self.dependencies if isinstance(t, Target)]
+        return [t for t in {*self.dependencies, *self.preload_dependencies} if isinstance(t, Target)]
 
     @property
     def file_dependencies(self):
@@ -360,24 +400,45 @@ class Target(Logging):
                     installed_files.append(filepath)
         return installed_files
 
-    def __preload__(self):
+    def get_dependency(self, dep:str|type, recursive=True) -> TargetDependencyLike:
+        """Search for dependency"""
+        if isinstance(dep, str):
+            check = lambda d: d.name == dep
+        else:
+            check = lambda d: isinstance(d, dep)
+        for dependency in self.dependencies:
+            if check(dependency):
+                return dependency
+        for dependency in self.preload_dependencies:
+            if check(dependency):
+                return dependency        
+        if recursive:
+            # not found... look for dependencies' dependencies
+            for target in self.target_dependencies:
+                dependency = target.get_dependency(dep)
+                if dependency is not None:
+                    return dependency
+
+    async def __preload__(self):
         ...
 
-    def __initialize__(self):
+    async def __initialize__(self):
         ...
 
-    def __prebuild__(self):
+    async def __prebuild__(self):
         ...
 
-    def __build__(self):
+    async def __build__(self):
         ...
 
-    def __install__(self):
+    async def __install__(self):
         ...
 
-    def __clean__(self):
+    async def __clean__(self):
         ...
 
-    def utility(self, fn: Callable):
-        self._utils.append(fn)
-        setattr(self, fn.__name__, fn)
+    # FIXME: this should not be class method
+    @classmethod
+    def utility(cls, fn: Callable):
+        cls._utils.append(fn)
+        setattr(cls, fn.__name__, fn)

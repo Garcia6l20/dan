@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 
 from pymake import generator
+from pymake.jinja import generator as jgenerator
 
 import aiofiles
-from jinja2 import Environment, FileSystemLoader
-
 
 #
 # sync generator definition with source dependency
 #
-@generator('hello.txt', dependencies=['source.jinja'])
-def hello(self):
-    env = Environment(loader=FileSystemLoader(self.source_path))
-    template = env.get_template('source.jinja')
-    print(template.render({'data': 'hello !!'}), file=open(self.output, 'w'))
+@jgenerator('hello.txt', 'source.jinja')
+def hello():
+    return {'data': 'hello !!'}
 
 #
 # async generator definition with target dependency

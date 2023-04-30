@@ -1,3 +1,4 @@
+from typing import Iterable
 from pymake.core.pathlib import Path
 from pymake.core import asyncio, aiofiles
 from pymake.core.target import Target
@@ -6,14 +7,16 @@ from pymake.logging import Logging
 
 
 class GitSources(Target, Logging):
-    def __init__(self, name: str, url: str, refspec: str = None, patches: list[str] = list()) -> None:
-        super().__init__(name, all=False)
-        self.url = url
-        self.refspec = refspec
+
+    url: str = None
+    refspec: str = None
+    patches: Iterable = list()
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.sha1 = None
         self.output: Path = self.build_path / 'sources'
         self.git_dir: Path = self.output / '.git'
-        self.patches = patches
 
     async def __build__(self):
         try:

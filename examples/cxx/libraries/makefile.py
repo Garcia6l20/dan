@@ -46,10 +46,16 @@ if target_toolchain.type in ['gcc', 'clang']:
         if target_toolchain.has_cxx_compile_options(opt):
             opts.append(opt)
 
-lib = Library('simplelib', sources=sources, includes=includes,
-              library_type=self.options.library_type, dependencies=[config])
-lib.compile_options.add(*opts, public=True)
+class SimpleLib(Library):
+    name = 'simplelib'
+    sources = sources
+    public_includes = includes
+    public_compile_options = opts
+    library_type = self.options.library_type
+    dependencies = [config]
 
-exe = Executable('pymake-simple-lib', sources=['main.cpp'], dependencies=[lib])
-
-self.install(exe, lib)
+class UseSimpleLib(Executable):
+    name = 'use-simple-lib'
+    sources = 'main.cpp',
+    dependencies = [SimpleLib]
+    install = True

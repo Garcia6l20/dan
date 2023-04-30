@@ -9,30 +9,15 @@ import aiofiles
 
 class ConfigureFile(Target):
 
+    input: Path = None
+    variables: dict[str, Any] = dict()
+
     _cmake_define_expr = re.compile(r'#\s?cmakedefine\s+(\w+)\s?(@\w+@)?')
     _define_expr = re.compile(r'#\s?define\s+(\w+)\s+"?(@(\w+)@)"?')
 
-    def __init__(self,
-                 name: str,
-                 input_file: str | Path,
-                 output_file: Path = None,
-                 variables: dict[str, Any] = dict(),
-                 dependencies: list = list(),
-                 preload_dependencies: list = list()) -> None:
-        self.input_file: Path = Path(input_file)
-        super().__init__(name, all=False)
-        if not self.input_file.is_absolute():
-            self.input_file = self.source_path / input_file
-        if output_file:
-            output_file = Path(output_file)
-            self.output = output_file if output_file.is_absolute() else self.build_path / output_file
-        else:
-            self.output = self.build_path / \
-                '.'.join(self.input_file.name.split('.')[:-1])
-        self.preload_dependencies = set(preload_dependencies)
-        self.load_dependencies(dependencies)
-        self.load_dependency(self.input_file)
-        self.__variables = variables
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.__variables = self.variables
 
     def __setitem__(self, key, value):
         self.__variables[key] = value
@@ -54,8 +39,7 @@ class ConfigureFile(Target):
             else:
                  return f'/* #undef {name} */\n'
         
-        async with aiofiles.open(self.input_file, 'r') as inf, aiofiles.open(self.output, 'w') as outf:
-            writes = list()
+        async with aiofiles.open(self.input, 'r') as inf, aiofiles.open(self.output, 'w') as outf:
             for line in await inf.readlines():                
                 m = self._cmake_define_expr.search(line)
                 if m:
@@ -64,6 +48,4 @@ class ConfigureFile(Target):
                 if m:
                     line = gen_define(m.group(1), m.group(2))
 
-                writes.append(outf.write(line))
-            await asyncio.gather(*writes)
-
+                await outf.write(line)

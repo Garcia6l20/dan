@@ -1,18 +1,16 @@
-from contextlib import contextmanager
 from functools import cached_property
 import importlib.util
+import inspect
 import os
 import sys
-from pymake.core import aiofiles, asyncio
 
 from pymake.core.pathlib import Path
 from pymake.core.cache import Cache
-from pymake.core.settings import InstallMode, InstallSettings
 
 from pymake.core.target import Options, Target
 from pymake.core.test import Test, AsyncExecutable
 from pymake.logging import Logging
-from pymake.pkgconfig.package import AbstractPackage, Package, UnresolvedPackage
+from pymake.pkgconfig.package import AbstractPackage, MissingPackage, Package, UnresolvedPackage
 
 
 class TargetNotFound(RuntimeError):
@@ -67,7 +65,7 @@ def requires(*names) -> list[AbstractPackage]:
                 try:
                     pkg = Package(name, search_paths=[
                         context.current.build_path / 'pkgs'])
-                except:
+                except MissingPackage:
                     pass
 
         res.append(pkg)
@@ -90,7 +88,6 @@ class MakeFile(sys.__class__):
         self.__requirements = requirements
         self.parent: MakeFile = self.parent if hasattr(
             self, 'parent') else None
-        self.targets: set[Target] = set()
         self.__exports: list[Target] = list()
         self.__installs: list[Target] = list()
         self.__cache: Cache = None
@@ -99,6 +96,26 @@ class MakeFile(sys.__class__):
         if self.name != 'requirements' and self.parent:
             self.parent.children.append(self)
         self.options = Options(self)
+        self.__targets = None
+    
+
+    def __get_classes(self, derived_from : type = None):
+        def __is_own_class(cls):
+            return inspect.isclass(cls) and self.fullname.endswith(cls.__module__) and (derived_from is None or issubclass(cls, derived_from))
+        return inspect.getmembers(self, __is_own_class)
+
+    @property
+    def targets(self):
+        if self.__targets is None:
+            self.__targets = set()
+            for name, target in self.__get_classes(Target):
+                target : Target = target
+                if target.name is None:                    
+                    target.name = name
+                target.makefile = self
+                target.fullname = f'{self.fullname}.{target.name}'
+                self.__targets.add(target)
+        return self.__targets
 
     @cached_property
     def fullname(self):
@@ -126,7 +143,7 @@ class MakeFile(sys.__class__):
         Returns:
             Target: The found target or None.
         """
-        for t in self.exported_targets:
+        for t in self.targets:
             if t.name == name:
                 return t
         for c in self.children:
@@ -275,10 +292,11 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
         requirements)
 
 
-def load_makefile(module_path: Path, name: str = None, build_path: Path = None) -> MakeFile:
+def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None) -> MakeFile:
     name = name or module_path.stem
+    module_name = module_name or name
     spec = importlib.util.spec_from_file_location(
-        f'{name}', module_path)
+        module_name, module_path)
     module = importlib.util.module_from_spec(spec)
     _init_makefile(module, name, build_path)
     spec.loader.exec_module(module)
@@ -317,7 +335,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     requirements_file = module_path.with_stem('requirements')
     if module_path.stem == 'makefile' and requirements_file.exists():
         context.current.requirements = load_makefile(
-            requirements_file, name='requirements')
+            requirements_file, name='requirements', module_name=f'{name}.requirements')
 
     exports = list()
     try:

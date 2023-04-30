@@ -3,14 +3,17 @@ from pymake.cxx import Executable
 
 zlib, boost = requires('zlib', 'boost')
 
-example = Executable('zlib-example',
-                     sources=[
-                         'zlib-example.c',
-                     ],
-                     dependencies=[zlib])
-self.add_test(example)
+class ZlibExample(Executable):
+    name = 'zlib-example'
+    sources= 'zlib-example.c',
+    dependencies=zlib,
+    test = True
 
-example = Executable('boost-example',
-                     sources=['boost-example.cpp'],
-                     dependencies=[boost])
-self.add_test(example, args=['42', '12'], expected_result=6)
+class BoostExample(Executable):
+    name = 'boost-example'
+    sources= 'boost-example.cpp',
+    dependencies= boost,
+    test = {
+        'args': [42, 12],
+        'result': 6
+    }

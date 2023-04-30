@@ -8,21 +8,20 @@ from pymake.smc import GitSources
 
 version = '2.1'
 description = 'Helpers to setup and teardown io_uring instances'
-git = GitSources(
-    'liburing', 'https://github.com/axboe/liburing.git', f'liburing-{version}')
 
-src = git.output / 'src'
-inc = src / 'include'
-
+class LibUringSources(GitSources):
+    name = 'liburing'
+    url = 'https://github.com/axboe/liburing.git'
+    refspec = f'liburing-{version}'
 
 def has_kernel_rwf_t():
     return tc.can_compile('''
         #include <linux/fs.h>
         int main(int argc, char **argv)
         {
-        __kernel_rwf_t x;
-        x = 0;
-        return x;
+            __kernel_rwf_t x;
+            x = 0;
+            return x;
         }
         ''')
 
@@ -33,10 +32,10 @@ def has_kernel_timespec():
         #include <linux/time_types.h>
         int main(int argc, char **argv)
         {
-        struct __kernel_timespec ts;
-        ts.tv_sec = 0;
-        ts.tv_nsec = 1;
-        return 0;
+            struct __kernel_timespec ts;
+            ts.tv_sec = 0;
+            ts.tv_nsec = 1;
+            return 0;
         }
         ''')
 
@@ -49,11 +48,11 @@ def has_open_how():
         #include <string.h>
         int main(int argc, char **argv)
         {
-        struct open_how how;
-        how.flags = 0;
-        how.mode = 0;
-        how.resolve = 0;
-        return 0;
+            struct open_how how;
+            how.flags = 0;
+            how.mode = 0;
+            how.resolve = 0;
+            return 0;
         }
         ''')
 
@@ -73,18 +72,17 @@ def host_config():
             #include <linux/stat.h>
             int main(int argc, char **argv)
             {
-            struct statx x;
-
-            return memset(&x, 0, sizeof(x)) != NULL;
+                struct statx x;
+                return memset(&x, 0, sizeof(x)) != NULL;
             }'''),
         'has_cxx': True,  # maybe not...
         'has_ucontext': tc.can_compile('''#include <ucontext.h>
             int main(int argc, char **argv)
             {
-            ucontext_t ctx;
-            getcontext(&ctx);
-            makecontext(&ctx, 0, 0);
-            return 0;
+                ucontext_t ctx;
+                getcontext(&ctx);
+                makecontext(&ctx, 0, 0);
+                return 0;
             }
             '''),
         'has_stringop_overflow': tc.has_cxx_compile_options('-Wstringop-overflow'),
@@ -100,33 +98,34 @@ def compat():
         'has_open_how': has_open_how(),
     }
 
+class LibUring(Library):
+    name = 'uring'
+    preload_dependencies = LibUringSources, compat,
+    private_compile_definitions = '_GNU_SOURCE',
 
-lib = Library('uring',
-              sources=lambda: src.rglob('*.c'),
-              description=description,
-              version=version,
-              includes=[inc, self.build_path],
-              preload_dependencies=[git, compat],
-              all=True)
-lib.compile_definitions.add('_GNU_SOURCE')
+    async def __initialize__(self):
+        uring_root = self.get_dependency(LibUringSources).output
+        self.sources = (uring_root / 'src').rglob('*.c')
+        self.includes = uring_root / 'include', self.build_path        
+        return await super().__initialize__()
 
-test_path = git.output / 'test'
-test_helpers = Library('uring-test-helpers',
-                       sources=[test_path / 'helpers.c'],
-                       includes=[inc, self.build_path],
-                       dependencies=[lib, host_config],
-                       all=False)
+# test_path = git.output / 'test'
+# test_helpers = Library('uring-test-helpers',
+#                        sources=[test_path / 'helpers.c'],
+#                        includes=[inc, self.build_path],
+#                        dependencies=[lib, host_config],
+#                        all=False)
 
-for test in test_path.glob('*.c'):
-    if test.stem == 'helpers':
-        continue
-    exe = Executable(test.stem,
-                     sources=[test],
-                     dependencies=[lib, test_helpers, host_config],
-                     all=False)
-    exe.compile_definitions.add('_GNU_SOURCE')
-    self.add_test(exe)
+# for test in test_path.glob('*.c'):
+#     if test.stem == 'helpers':
+#         continue
+#     exe = Executable(test.stem,
+#                      sources=[test],
+#                      dependencies=[lib, test_helpers, host_config],
+#                      all=False)
+#     exe.compile_definitions.add('_GNU_SOURCE')
+#     self.add_test(exe)
 
 
-self.export(lib)
-self.install(lib)
+# self.export(lib)
+# self.install(lib)
