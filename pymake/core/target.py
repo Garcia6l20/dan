@@ -83,9 +83,10 @@ PathImpl = type(Path())
 
 
 class FileDependency(PathImpl):
+    up_to_date = True
+
     def __init__(self, *args, **kwargs):
         super(PathImpl, self).__init__()
-        self.up_to_date = True
 
     @property
     def modification_time(self):
@@ -182,8 +183,6 @@ class Target(Logging):
     preload_dependencies: set[TargetDependencyLike] = set()
 
     makefile = None
-    
-    _utils: list[Callable] = list()
 
     def __init__(self,
                  name : str = None,
@@ -386,9 +385,9 @@ class Target(Logging):
         await self.build()
         installed_files = list()
         if mode == InstallMode.dev:
-            if len(self._utils) > 0:
+            if len(self.utils) > 0:
                 lines = list()
-                for fn in self._utils:
+                for fn in self.utils:
                     tmp = inspect.getsourcelines(fn)[0]
                     tmp[0] = f'\n\n@self.utility\n'
                     lines.extend(tmp)
@@ -437,8 +436,14 @@ class Target(Logging):
     async def __clean__(self):
         ...
 
-    # FIXME: this should not be class method
+    @utils.classproperty
+    def utils(cls) -> list:
+        utils_name = f'_{cls.__name__}_utils__'
+        if not hasattr(cls, utils_name):
+            setattr(cls, utils_name, list())
+        return getattr(cls, utils_name)
+
     @classmethod
     def utility(cls, fn: Callable):
-        cls._utils.append(fn)
+        cls.utils.append(fn)
         setattr(cls, fn.__name__, fn)
