@@ -1,13 +1,15 @@
+import os
+import re
+import typing as t
+
 from collections.abc import Iterable
 from enum import Enum
 from functools import cached_property
-import os
-import re
+
 from pymake.core.pathlib import Path
-from typing import Callable
 from pymake.core import aiofiles, cache
 from pymake.core.settings import InstallMode, InstallSettings
-from pymake.core.target import Dependencies, Target, TargetDependencyLike
+from pymake.core.target import Target
 from pymake.core.utils import unique
 from pymake.core.runners import async_run
 from pymake.core import asyncio
@@ -80,7 +82,7 @@ class OptionSet:
                  name: str,
                  public: list | set = set(),
                  private: list | set = set(),
-                 transform: Callable = None) -> None:
+                 transform: t.Callable = None) -> None:
         self._parent = parent
         self._name = name
         self._transform = transform or (lambda x: x)
@@ -211,7 +213,7 @@ StrOrPath = str|Path
 StrOrPathIterable = Iterable[StrOrPath]
 
 class CXXObjectsTarget(CXXTarget):
-    sources: StrOrPathIterable|Callable[[], StrOrPathIterable] = set()
+    sources: StrOrPathIterable|t.Callable[[], StrOrPathIterable] = set()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -251,58 +253,6 @@ class CXXObjectsTarget(CXXTarget):
         async with asyncio.TaskGroup() as group:
             for dep in self.objs:
                 group.create_task(dep.build())
-
-
-class Executable(CXXObjectsTarget):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.output = self.build_path / \
-            self.toolchain.make_executable_name(self.name)
-        self.__dirty = False
-
-    async def __initialize__(self):
-        await super().__initialize__()
-
-        previous_args = self.cache.get('link_args')
-        if previous_args:
-            args = self.toolchain.make_link_commands([str(obj.output) for obj in self.objs], self.output,
-                                                     [*self.libs, *self.link_options.public, *self.link_options.private])[0]
-            args = [str(a) for a in args]
-            if sorted(previous_args) != sorted(args):
-                self.__dirty = True
-
-    @property
-    def up_to_date(self):
-        if self.__dirty:
-            return False
-        return super().up_to_date
-
-    async def __build__(self):
-        await super().__build__()
-
-        # link
-        self.info(f'linking {self.output}...')
-        commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
-                                             [*self.libs, *self.link_options.public, *self.link_options.private])
-        self.cache.link_args = [str(a) for a in commands[0]]
-        self.debug(f'done')
-
-    @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
-        dest = settings.runtime_destination / self.output.name
-        if dest.exists() and dest.younger_than(self.output):
-            self.info(f'{dest} is up-to-date')
-        else:
-            self.info(f'installing {dest}')
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            await aiofiles.copy(self.output, dest)
-        return [dest]
-
-    async def execute(self, *args, **kwargs):
-        await self.build()
-        return await async_run([self.output, *args], logger=self, env=self.toolchain.env, **kwargs)
 
 
 class LibraryType(Enum):
@@ -457,3 +407,88 @@ class Module(CXXObjectsTarget):
 
     async def __build__(self):
         return await super().__build__()
+
+class Executable(CXXObjectsTarget):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.output = self.build_path / \
+            self.toolchain.make_executable_name(self.name)
+        self.__dirty = False
+
+    async def __initialize__(self):
+        await super().__initialize__()
+
+        previous_args = self.cache.get('link_args')
+        if previous_args:
+            args = self.toolchain.make_link_commands([str(obj.output) for obj in self.objs], self.output,
+                                                     [*self.libs, *self.link_options.public, *self.link_options.private])[0]
+            args = [str(a) for a in args]
+            if sorted(previous_args) != sorted(args):
+                self.__dirty = True
+
+    @property
+    def up_to_date(self):
+        if self.__dirty:
+            return False
+        return super().up_to_date
+
+    async def __build__(self):
+        await super().__build__()
+
+        # link
+        self.info(f'linking {self.output}...')
+        commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
+                                             [*self.libs, *self.link_options.public, *self.link_options.private])
+        self.cache.link_args = [str(a) for a in commands[0]]
+        self.debug(f'done')
+
+    @asyncio.cached
+    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
+        dest = settings.runtime_destination / self.output.name
+        if dest.exists() and dest.younger_than(self.output):
+            self.info(f'{dest} is up-to-date')
+        else:
+            self.info(f'installing {dest}')
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            await aiofiles.copy(self.output, dest)
+        return [dest]
+
+    async def execute(self, *args, **kwargs):
+        await self.build()
+        return await async_run([self.output, *args], logger=self, env=self.toolchain.env, **kwargs)
+
+# class Test(Executable):
+#     installed = False
+#     cases: t.Iterable[tuple[t.Iterable[t.Any], int]]  = [((), 0)]
+#     """Test cases
+    
+#     list of args giving a return value
+#     """
+
+#     async def _run_test(self, *args, expected_result=0):
+#         args = [str(a) for a in args]
+#         out, err, rc = await self.execute(*args, no_raise=True)
+#         if rc != expected_result:
+#             out = out.strip()
+#             err = err.strip()
+#             msg =  f'Test \'{self.name}\' failed (returned: {rc}, expected: {expected_result}) !'
+#             if out:
+#                 msg += '\nstdout: ' + out
+#             if err:
+#                 msg += '\nstderr: ' + err
+#             raise RuntimeError(msg)
+
+#     async def run_test(self):
+#         try:
+#             async with asyncio.TaskGroup() as tests:
+#                 for args, expected_result in self.cases:
+#                     # args, expected_result = case
+#                     tests.create_task(self._run_test(*args, expected_result=expected_result))
+#         except asyncio.ExceptionGroup as errors:
+#             for err in errors.errors:
+#                 self.error(err)
+#             return False
+#         return True
+

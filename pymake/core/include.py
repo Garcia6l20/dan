@@ -52,7 +52,7 @@ def requires(*names) -> list[AbstractPackage]:
     res = list()
     for name in names:
         pkg = UnresolvedPackage(name)
-        for t in context.exported_targets:
+        for t in context.root.all_targets:
             if t.name == name:
                 pkg = t
                 break
@@ -88,34 +88,19 @@ class MakeFile(sys.__class__):
         self.__requirements = requirements
         self.parent: MakeFile = self.parent if hasattr(
             self, 'parent') else None
-        self.__exports: list[Target] = list()
-        self.__installs: list[Target] = list()
         self.__cache: Cache = None
-        self.__tests: list[Test] = list()
         self.children: list[MakeFile] = list()
         if self.name != 'requirements' and self.parent:
             self.parent.children.append(self)
         self.options = Options(self)
-        self.__targets = None
+        self.__targets: set[Target] = set()
+        self.__tests: set[Test] = set()
     
 
     def __get_classes(self, derived_from : type = None):
         def __is_own_class(cls):
             return inspect.isclass(cls) and self.fullname.endswith(cls.__module__) and (derived_from is None or issubclass(cls, derived_from))
         return inspect.getmembers(self, __is_own_class)
-
-    @property
-    def targets(self):
-        if self.__targets is None:
-            self.__targets = set()
-            for name, target in self.__get_classes(Target):
-                target : Target = target
-                if target.name is None:                    
-                    target.name = name
-                target.makefile = self
-                target.fullname = f'{self.fullname}.{target.name}'
-                self.__targets.add(target)
-        return self.__targets
 
     @cached_property
     def fullname(self):
@@ -150,10 +135,6 @@ class MakeFile(sys.__class__):
             t = c.find(name)
             if t:
                 return t
-
-    def add_test(self, executable: AsyncExecutable, args: list[str] = list(), name: str = None, file: Path | str = None, lineno: int = None, expected_result = 0):
-        self.__tests.append(
-            Test(self, executable, name=name, args=args, file=file, lineno=lineno, expected_result=expected_result))
         
     @property
     def requirements(self):
@@ -167,36 +148,71 @@ class MakeFile(sys.__class__):
         self.__requirements = value
 
     @property
-    def tests(self):
-        tests = self.__tests
-        for c in self.children:
-            tests.extend(c.tests)
-        return tests
-
+    def targets(self):
+        # FIXME: all_targets is invoked by requires(), thus it needs to be reset after makefile include... find a better way to do it
+        if len(self.__targets) == 0:
+            for name, target in self.__get_classes(Target):
+                target : Target = target
+                if target.name is None:
+                    target.name = name
+                target.makefile = self
+                target.fullname = f'{self.fullname}.{target.name}'
+                self.__targets.add(target)
+        return self.__targets
+    
     @property
-    def exported_targets(self) -> list[Target]:
-        return self.__exports
-
-    @property
-    def installed_targets(self):
-        targets = self.__installs
-        for c in self.children:
-            targets.extend(c.installed_targets)
-        return targets
-
-    @property
-    def all_targets(self):
+    def all_targets(self) -> list[Target]:
         targets = self.targets
         for c in self.children:
             targets.update(c.all_targets)
         return targets
+    
+    @property
+    def tests(self):
+        if len(self.__tests) == 0:
+            for name, test in self.__get_classes(Test):
+                test : Test = test
+                if test.name is None:
+                    test.name = name
+                test.makefile = self
+                # test.fullname = f'{self.fullname}.{test.name}'
+                self.__tests.add(test)
+        return self.__tests
+    
+    @property
+    def all_tests(self):
+        tests = self.tests
+        for c in self.children:
+            tests.update(c.all_tests)
+        return tests
 
     @property
-    def default_targets(self):
-        targets = {t for t in self.targets if t.default == True}
+    def executables(self):
+        from pymake.cxx import Executable
+        return {target for target in self.targets if issubclass(target, Executable)}
+    
+    @property
+    def all_executables(self):
+        executables = self.executables
         for c in self.children:
-            targets.update(c.default_targets)
-        return targets
+            executables.update(c.all_executables)
+        return executables
+
+    @property
+    def installed(self):
+        return {target for target in self.targets if target.installed == True}
+    
+    @property
+    def all_installed(self):
+        return {target for target in self.all_targets if target.installed == True}
+
+    @property
+    def default(self):
+        return {target for target in self.targets if target.default == True}
+    
+    @property
+    def all_default(self):
+        return {target for target in self.all_targets if target.default == True}
 
 
 class Context(Logging):
@@ -217,22 +233,6 @@ class Context(Logging):
     @property
     def all_makefiles(self) -> set[MakeFile]:
         return self.__all_makefiles
-
-    @property
-    def all_targets(self) -> set[Target]:
-        return self.root.all_targets
-
-    @property
-    def exported_targets(self) -> set[Target]:
-        return self.root.exported_targets
-
-    @property
-    def default_targets(self) -> set[Target]:
-        return self.root.default_targets
-
-    @property
-    def installed_targets(self) -> set[Target]:
-        return self.root.installed_targets
 
     @current.setter
     def current(self, current: MakeFile):
@@ -337,17 +337,14 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         context.current.requirements = load_makefile(
             requirements_file, name='requirements', module_name=f'{name}.requirements')
 
-    exports = list()
     try:
         spec.loader.exec_module(module)
-        exports = context.exported_targets
     except LoadRequest as missing:
         context.missing.append(missing)
     except TargetNotFound as err:
         if len(context.missing) == 0:
             raise err
     context.up()
-    return exports
 
 
 def include(*names: str | Path) -> list[Target]:
@@ -356,7 +353,5 @@ def include(*names: str | Path) -> list[Target]:
     :param names: One (or more) subdirectory or makefile to include.
     :return: The list of targets exported by the included targets.
     """
-    result = list()
     for name in names:
-        result.extend(include_makefile(name))
-    return result
+        include_makefile(name)

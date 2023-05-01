@@ -1,6 +1,9 @@
 import asyncio
 import re
-from pymake.core import aiofiles
+import typing as t
+
+import aiofiles
+from pymake.core import asyncio
 from pymake.core.pathlib import Path
 from pymake.logging import Logging
 
@@ -9,36 +12,89 @@ class AsyncExecutable(Logging):
     async def execute(self, *args, **kwargs): ...
 
 
-class Test:
-    def __init__(self, makefile,
-                 executable: AsyncExecutable,
-                 name: str = None,
-                 args:list[str] = list(),
-                 expected_result = 0,
-                 file: Path | str = None,
-                 lineno: int = None,
-                 workingDir: Path = None):
-        self.name = name or executable.name
-        self.fullname = f'{makefile.fullname}.{self.name}'
-        self.executable = executable
-        self.file = Path(file) if file else None
-        self.lineno = lineno
-        self.workingDir = workingDir or makefile.build_path
-        log_basename = re.sub(r'[^\w_. -]', '_', self.name)
-        self.out = self.workingDir / f'{log_basename}.stdout'
-        self.err = self.workingDir / f'{log_basename}.stderr'
-        self.args = args
-        self.expected_result = expected_result
+class Test(Logging):
+    """Test definition
+    """
 
-    async def __call__(self):
-        out, err, rc = await self.executable.execute(*self.args, no_raise=True)
-        async with aiofiles.open(self.out, 'w') as outlog, \
-              aiofiles.open(self.err, 'w') as errlog:
-              await asyncio.gather(outlog.write(out), errlog.write(err))
-        if rc != self.expected_result:
-            self.executable.error(
-                f'Test \'{self.name}\' failed (returned: {rc}, expected: {self.expected_result}) !\nstdout: {out}\nstderr: {err}')
-            return False
+    name: str = None
+    fullname: str = None
+
+    cases: t.Iterable[tuple[t.Iterable[t.Any], int]]  = [((), 0)]
+    """Test cases
+    
+    list of args giving a return value
+    """
+
+    executable: type[AsyncExecutable] = None
+    
+    file: Path | str = None
+    lineno: int = None
+
+    makefile: None
+    
+    def __init__(self, *args, **kwargs):
+        # in case of inheritance usage, we must initialize the AsyncExecutable part
+        super().__init__(*args, **kwargs)
+        
+        if not self.executable:
+            if not hasattr(self, 'execute'):
+                raise RuntimeError(f'Test "{self.name}" does not have executable set, if you intent to use it through inheritance, make sure "Test" is the first derived class')
+            self.executable = self
         else:
-            self.executable.info(f'Test \'{self.name}\' succeed !')
-            return True
+            self.executable = self.executable()
+
+        self.name = self.name or self.executable.name
+        self.fullname = f'{self.executable.makefile.fullname}.{self.name}'
+        self.file = Path(self.file) if self.file else None
+        self.workingDir = self.executable.build_path
+        self._log_basename = re.sub(r'[^\w_. -]', '_', self.name)
+
+    def basename(self, args, expected_result):
+        if len(self) <= 1:
+            return self._log_basename
+        else:
+            base = self._log_basename
+            if len(args) > 0:
+                base += f'-{"-".join([str(a) for a in args])}'
+            if expected_result != 0:
+                base += f'-{expected_result}'
+            return base
+    
+    def outs(self, args, expected_result):
+        base = self.basename(args, expected_result)
+        out = self.workingDir / f'{base}.stdout'
+        err = self.workingDir / f'{base}.stderr'
+        return out, err
+
+    async def _run_test(self, args, expected_result=0):
+        args = [str(a) for a in args]
+        out, err, rc = await self.executable.execute(*args, no_raise=True, cwd=self.workingDir)
+        out_log, out_err = self.outs(args, expected_result)
+        async with aiofiles.open(out_log, 'w') as outlog, \
+                   aiofiles.open(out_err, 'w') as errlog:
+            async with asyncio.TaskGroup() as group:
+                group.create_task(outlog.write(out))
+                group.create_task(errlog.write(err))
+        if rc != expected_result:
+            out = out.strip()
+            err = err.strip()
+            msg =  f'Test \'{self.name}\' failed (returned: {rc}, expected: {expected_result}) !'
+            if out:
+                msg += '\nstdout: ' + out
+            if err:
+                msg += '\nstderr: ' + err
+            raise RuntimeError(msg)
+
+    async def run_test(self):
+        try:
+            async with asyncio.TaskGroup() as tests:
+                for args, expected_result in self.cases:
+                    tests.create_task(self._run_test(args, expected_result=expected_result))
+        except asyncio.ExceptionGroup as errors:
+            for err in errors.errors:
+                self.error(err)
+            return False
+        return True
+    
+    def __len__(self):
+        return len(self.cases)

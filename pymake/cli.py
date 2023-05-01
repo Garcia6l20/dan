@@ -214,7 +214,7 @@ async def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwarg
     await ctx.make.initialize()
     from pymake.core.include import context
     out = []
-    targets = context.all_targets if all else context.default_targets
+    targets = context.root.all_targets if all else context.root.all_default
     for target in targets:
         if show_type:
             out.append(target.fullname + ' - ' + type(target).__name__)
@@ -288,8 +288,9 @@ def get_targets(ctx: CommandsContext, **kwargs):
     asyncio.run(ctx.make.initialize())
     from pymake.core.include import context
     out = []
-    targets = context.all_targets
+    targets = context.root.all_targets
     for target in targets:
+        target = target()
         out.append({
             'name': target.name,
             'fullname': target.fullname,
@@ -327,15 +328,18 @@ def get_test_suites(ctx: CommandsContext, **kwargs):
     from pymake.core.include import context, MakeFile
     from pymake.core.test import Test
 
-    def make_test_info(test: Test):
+    def make_inner_test_info(test: Test, case):
+        args, expected_result = case
+        basename = test.basename(args, expected_result)
+        out, err = test.outs(args, expected_result)
         info = {
             'type': 'test',
-            'id': test.fullname,
-            'label': test.name,
+            'id': f'{test.fullname}-{basename}',
+            'label': basename,
             'debuggable': False,
             'target': test.executable.fullname,
-            'out': str(test.out),
-            'err': str(test.err),
+            'out': str(out),
+            'err': str(err),
         }
         if isinstance(test.executable, Executable):
             info['debuggable'] = True
@@ -353,31 +357,46 @@ def get_test_suites(ctx: CommandsContext, **kwargs):
             else:
                 info['workingDirectory'] = str(test.executable.build_path)
 
-            if len(test.args) > 0:
-                info['args'] = test.args
+            if len(args) > 0:
+                info['args'] = [str(a) for a in args]
 
         return info
+
+    def make_test_info(test: Test):
+        if len(test) == 0:
+            raise RuntimeError(f'Test: {test.name} has not test')
+        if len(test) == 1:
+            return make_inner_test_info(test, test.cases[0])
+        else:
+            return {
+                'type': 'suite',
+                'id': test.fullname,
+                'label': test.name,
+                'children': [make_inner_test_info(test, case) for case in test.cases]
+            }
+
+
 
     def make_suite_info(mf: MakeFile):
         if len(mf.tests) == 0 and mf.children == 0:
             return None
-
-        suite = {
-            'type': 'suite',
-            'id': mf.fullname,
-            'label': mf.name,
-            'children': list()
-        }
+        children = list()
         for test in mf.tests:
-            suite['children'].append(make_test_info(test))
+            test = test()
+            children.append(make_test_info(test))
 
         for child in mf.children:
             child_suite = make_suite_info(child)
             if child_suite is not None:
-                suite['children'].append(child_suite)
+                children.append(child_suite)
 
-        if len(suite['children']) > 0:
-            return suite
+        if len(children) > 0:
+            return {
+                'type': 'suite',
+                'id': mf.fullname,
+                'label': mf.name,
+                'children': children
+            }
 
     import json
     click.echo(json.dumps(make_suite_info(context.root)))

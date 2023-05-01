@@ -128,11 +128,11 @@ class Make(Logging):
         self.active_targets: dict[str, Target] = dict()
 
         if self.required_targets and len(self.required_targets) > 0:
-            for target in context.all_targets:
+            for target in context.root.all_targets:
                 if target.name in self.required_targets or target.fullname in self.required_targets:
                     self.active_targets[target.fullname] = target
         else:
-            for target in context.default_targets:
+            for target in context.root.all_default:
                 self.active_targets[target.fullname] = target
 
         
@@ -306,10 +306,10 @@ class Make(Logging):
         await self.initialize()
         tests = list()
         from pymake.core.include import context
-        for test in context.root.tests:
+        for test in context.root.all_tests:
             if len(self.required_targets) == 0 or test.fullname in self.required_targets:
-                tests.append(test)
-        with self.progress('testing', tests, lambda t: t.__call__(), self.no_progress) as tasks:
+                tests.append(test())
+        with self.progress('testing', tests, lambda t: t.run_test(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks)
             if all(results):
                 self.info('Success !')

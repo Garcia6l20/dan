@@ -175,7 +175,7 @@ class Target(Logging):
     description: str = None,
     version: str = None
     default: bool = True
-    install: bool = False
+    installed: bool = False
     output: Path = None
     options: dict[str, Any] = dict()
     

@@ -58,4 +58,4 @@ class UseSimpleLib(Executable):
     name = 'use-simple-lib'
     sources = 'main.cpp',
     dependencies = [SimpleLib]
-    install = True
+    installed = True

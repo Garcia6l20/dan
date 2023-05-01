@@ -63,8 +63,6 @@ export class PyMake implements vscode.Disposable {
 
 		await gExtension.registerCommands();
 		await gExtension.onLoaded();
-
-		vscode.commands.executeCommand("setContext", "inMesonProject", true);
 	}
 
 	/**
