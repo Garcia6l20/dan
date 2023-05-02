@@ -233,7 +233,7 @@ export class PyMakeTestAdapter implements TestAdapter {
                 throw Error(`Cannot find target ${info.target}`);
             }
             await commands.build(this.ext, [target]);
-            await debuggerModule.debug(this.ext.getConfig<string>('debuggerPath') ?? 'gdb', target, info.args);
+            await debuggerModule.debug(target, info.args);
         }
     }
     cancel(): void {

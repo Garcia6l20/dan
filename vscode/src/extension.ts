@@ -163,7 +163,7 @@ export class PyMake implements vscode.Disposable {
 			}
 			if (this.launchTarget && this.launchTarget.executable) {
 				await commands.build(this);
-				await debuggerModule.debug(this.getConfig<string>('debuggerPath') ?? 'gdb', this.launchTarget);
+				await debuggerModule.debug(this.launchTarget);
 			}
 		});
 		register('test', async () => commands.test(this));

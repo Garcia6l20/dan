@@ -1,3 +1,4 @@
+import { gExtension } from "../extension";
 import { Target } from "./targets";
 import * as vscode from 'vscode';
 
@@ -89,7 +90,7 @@ async function createGDBDebugConfiguration(debuggerPath: string, target: Target)
                 ignoreFailures: true
             }
         ],
-        program: target.output
+        program: target.output,
     };
 }
 
@@ -106,7 +107,7 @@ async function createLLDBDebugConfiguration(debuggerPath: string, target: Target
         args: [],
         MIMode: MIModes.lldb,
         miDebuggerPath: debuggerPath,
-        program: target.output
+        program: target.output,
     };
 }
 
@@ -117,28 +118,46 @@ function createMsvcDebugConfiguration(target: Target): VSCodeDebugConfiguration 
         request: 'launch',
         cwd: target.buildPath,
         args: [],
-        program: target.output
+        program: target.output,
     };
 }
 
-export async function debug(debuggerPath: string, target: Target, args: string[] = []) {
+export async function debug(target: Target, args: string[] = []) {    
+    let debuggerPath = undefined;
+    if (gExtension !== null) {
+        debuggerPath = gExtension.getConfig<string>('debuggerPath');
+        if (debuggerPath === '') {
+            debuggerPath = undefined;
+        }
+    }
+    if (debuggerPath === undefined) {
+        if (process.platform !== 'win32') {
+            debuggerPath = 'gdb';
+        }
+    }
+
     if (!target.executable) {
         throw Error(`Cannot debug "${target.name}, not an executable"`);
     }
     let debugConfig : VSCodeDebugConfiguration | null = null;
-    if (debuggerPath.includes('gdb')) {
+    if (debuggerPath?.includes('gdb')) {
         debugConfig = await createGDBDebugConfiguration(debuggerPath, target);
-    } else if (debuggerPath.includes('llvm')) {
+    } else if (debuggerPath?.includes('llvm')) {
         debugConfig = await createLLDBDebugConfiguration(debuggerPath, target);
     } else if (process.platform === 'win32') {
         // never tested !!!
         debugConfig = await createMsvcDebugConfiguration(target);
+    } else {
+        throw Error('Cannot resolve debugger path');
     }
     if (debugConfig) {
         if (args.length > 0) {
             debugConfig.args = args;
         }
-        await vscode.debug.startDebugging(undefined, debugConfig);
+        let folder = undefined;
+        if (gExtension) {
+            await vscode.debug.startDebugging(gExtension.workspaceFolder, debugConfig);
+        }
         return vscode.debug.activeDebugSession;
     } else {
         throw Error(`Cannot resolve debugger configuration for ${debuggerPath}`);
