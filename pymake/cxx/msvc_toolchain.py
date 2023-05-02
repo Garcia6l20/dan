@@ -4,7 +4,7 @@ import aiofiles
 from pymake.core.runners import sync_run
 from pymake.core.settings import BuildType
 from pymake.core.utils import unique
-from pymake.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency, scan
+from pymake.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
 from pymake.core.errors import InvalidConfiguration
 from pymake.core.pm import re_match
 
@@ -17,7 +17,7 @@ class MSVCToolchain(Toolchain):
         self.lnk = Path(data['link'])
         self.lib = Path(data['lib'])
         self.env = data['env']
-
+    
     @property
     def default_cflags(self):
         rt = '/MD' if self.runtime == RuntimeType.dynamic else '/MT'

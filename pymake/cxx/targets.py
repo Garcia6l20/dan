@@ -18,6 +18,7 @@ from pymake.core import asyncio
 class CXXObject(Target):
     def __init__(self, source:Path, parent: 'CXXTarget') -> None:
         super().__init__(source.stem, parent=parent, default=False)
+        self.parent = parent
         self.source = self.source_path / source
         from . import target_toolchain
         self.toolchain = target_toolchain
@@ -30,6 +31,14 @@ class CXXObject(Target):
     @property
     def private_cxx_flags(self):
         return self.parent.private_cxx_flags
+    
+    @property
+    def includes(self):
+        return self.parent.includes
+    
+    @property
+    def compile_definitions(self):
+        return self.parent.compile_definitions
 
     async def __initialize__(self):
         await self.parent.preload()
@@ -99,6 +108,22 @@ class OptionSet:
         for dep in self._parent.cxx_dependencies:
             items.extend(getattr(dep, self._name).public)
         return unique(items)
+    
+    def __recurse_public(self) -> list:
+        opts = list()
+        for dep in self._parent.cxx_dependencies:
+            opts.extend(getattr(dep, self._name).__recurse_public())
+        opts.extend(self.public)
+        return opts
+
+    @property
+    def all(self) -> list:
+        opts = list()
+        for dep in self._parent.cxx_dependencies:
+            opts.extend(getattr(dep, self._name).__recurse_public())
+        opts.extend(self.private)
+        opts.extend(self.public)
+        return unique(opts)
 
     @property
     def private_raw(self) -> list:
