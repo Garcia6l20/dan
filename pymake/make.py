@@ -334,7 +334,7 @@ class Make(Logging):
         await self.initialize()
         from pymake.cxx import toolchain
         toolchain.scan = False
-        await asyncio.gather(*[t.clean() for t in self.active_targets.values()])
+        await asyncio.gather(*[t.clean() for t in self.targets])
         from pymake.cxx import target_toolchain
 
         target_toolchain.compile_commands.clear()
