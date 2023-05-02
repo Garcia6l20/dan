@@ -152,6 +152,18 @@ class Make(Logging):
                 opts.append(o)
         return opts
 
+    async def target_of(self, source):
+        from pymake.core.include import context
+        from pymake.cxx.targets import CXXObjectsTarget
+
+        source = Path(source)
+        for target in [target for target in context.root.all_targets if issubclass(target, CXXObjectsTarget)]:
+            target = target()
+            await target.initialize()
+            for obj in target.objs:
+                if obj.source == source:
+                    return target
+    
     async def apply_options(self, *options):
         await self.initialize()
         all_opts = self.all_options()

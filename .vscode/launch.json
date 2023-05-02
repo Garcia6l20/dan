@@ -247,5 +247,35 @@
                 "PYTHONPATH": "${workspaceFolder}"
             }
         },
+        {
+            "name": "code-test",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "code", "get-source-configuration", "H:\\Projects\\g6-workspace\\pymake\\examples\\cxx\\smc\\spdlog\\test_spdlog.cpp"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "scan-toolchains",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "scan-toolchains"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
     ]
 }

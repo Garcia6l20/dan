@@ -16,6 +16,7 @@ from pymake.cxx.targets import Executable
 
 
 from pymake.make import InstallMode, Make
+from pymake.vscode import Code
 
 class AsyncContext(click.Context):
     def invoke(__self, __callback, *args, **kwargs):
@@ -32,15 +33,20 @@ click.BaseCommand.context_class = AsyncContext
 
 _logger = logging.getLogger('cli')
 
+_minimal_options = [
+    click.option('--build-path', '-B', 'path', help='Path where pymake has been initialized.',
+                 type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='PYMAKE_BUILD_PATH'),
+
+]
+
 _common_opts = [
+    *_minimal_options,
     click.option('--quiet', '-q', is_flag=True,
                  help='Dont print informations (errors only).', envvar='PYMAKE_QUIET'),
     click.option('--verbose', '-v', is_flag=True,
                  help='Pring debug informations.', envvar='PYMAKE_VERBOSE'),
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='PYMAKE_JOBS'),
-    click.option('--build-path', '-B', 'path', help='Path where pymake has been initialized.',
-                 type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='PYMAKE_BUILD_PATH'),
     click.option('--no-progress', is_flag=True, help='Disable progress bars', envvar='PYMAKE_NOPROGRESS'),
     click.argument('TARGETS', nargs=-1),
 ]
@@ -59,6 +65,7 @@ def add_options(options):
 
 
 common_opts = add_options(_common_opts)
+minimal_options = add_options(_minimal_options)
 
 
 class CommandsContext:
@@ -282,10 +289,10 @@ def code():
 @code.command()
 @common_opts
 @pass_context
-def get_targets(ctx: CommandsContext, **kwargs):
+async def get_targets(ctx: CommandsContext, **kwargs):
     kwargs['quiet'] = True
     ctx(**kwargs)
-    asyncio.run(ctx.make.initialize())
+    await ctx.make.initialize()
     from pymake.core.include import context
     out = []
     targets = context.root.all_targets
@@ -306,10 +313,10 @@ def get_targets(ctx: CommandsContext, **kwargs):
 @cli.command()
 @common_opts
 @pass_context
-def get_tests(ctx: CommandsContext, **kwargs):
+async def get_tests(ctx: CommandsContext, **kwargs):
     kwargs['quiet'] = True
     ctx(**kwargs)
-    asyncio.run(ctx.make.initialize())
+    await ctx.make.initialize()
     from pymake.core.include import context
     out = list()
     for test in context.root.tests:
@@ -317,95 +324,52 @@ def get_tests(ctx: CommandsContext, **kwargs):
     import json
     click.echo(json.dumps(out))
 
+# @cli.command()
+# @common_opts
+# @pass_context
+# async def shell(ctx: CommandsContext, **kwargs):
+#     ctx(**kwargs)
+#     make = ctx.make
+#     await make.initialize()
+#     import code
+#     code.interact(local={'make': make})
 
 @code.command()
 @common_opts
 @pass_context
-def get_test_suites(ctx: CommandsContext, **kwargs):
+async def get_test_suites(ctx: CommandsContext, **kwargs):
     kwargs['quiet'] = True
     ctx(**kwargs)
-    asyncio.run(ctx.make.initialize())
-    from pymake.core.include import context, MakeFile
-    from pymake.core.test import Test
-
-    def make_inner_test_info(test: Test, case):
-        args, expected_result = case
-        basename = test.basename(args, expected_result)
-        out, err = test.outs(args, expected_result)
-        info = {
-            'type': 'test',
-            'id': f'{test.fullname}-{basename}',
-            'label': basename,
-            'debuggable': False,
-            'target': test.executable.fullname,
-            'out': str(out),
-            'err': str(err),
-        }
-        if isinstance(test.executable, Executable):
-            info['debuggable'] = True
-            if test.file:
-                info['file'] = str(test.file)
-            else:
-                info['file'] = str(
-                    test.executable.source_path / test.executable.sources[0])
-
-            if test.lineno:
-                info['line'] = test.lineno
-
-            if test.workingDir:
-                info['workingDirectory'] = str(test.workingDir)
-            else:
-                info['workingDirectory'] = str(test.executable.build_path)
-
-            if len(args) > 0:
-                info['args'] = [str(a) for a in args]
-
-        return info
-
-    def make_test_info(test: Test):
-        if len(test) == 0:
-            raise RuntimeError(f'Test: {test.name} has not test')
-        if len(test) == 1:
-            return make_inner_test_info(test, test.cases[0])
-        else:
-            return {
-                'type': 'suite',
-                'id': test.fullname,
-                'label': test.name,
-                'children': [make_inner_test_info(test, case) for case in test.cases]
-            }
-
-
-
-    def make_suite_info(mf: MakeFile):
-        if len(mf.tests) == 0 and mf.children == 0:
-            return None
-        children = list()
-        for test in mf.tests:
-            test = test()
-            children.append(make_test_info(test))
-
-        for child in mf.children:
-            child_suite = make_suite_info(child)
-            if child_suite is not None:
-                children.append(child_suite)
-
-        if len(children) > 0:
-            return {
-                'type': 'suite',
-                'id': mf.fullname,
-                'label': mf.name,
-                'children': children
-            }
-
-    import json
-    click.echo(json.dumps(make_suite_info(context.root)))
+    await ctx.make.initialize()
+    code = Code(ctx.make)
+    click.echo(code.get_test_suites())
 
 
 @code.command()
 def get_toolchains(**kwargs):
     import json
     click.echo(json.dumps(list(Make.toolchains()['toolchains'].keys())))
+
+@code.command()
+@minimal_options
+@click.argument('SOURCES', nargs=-1)
+@pass_context
+async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    await ctx.make.initialize()
+    code = Code(ctx.make)
+    click.echo(await code.get_sources_configuration(sources))
+
+@code.command()
+@minimal_options
+@pass_context
+async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    await ctx.make.initialize()
+    code = Code(ctx.make)
+    click.echo(await code.get_workspace_browse_configuration())
 
 
 @cli.result_callback()

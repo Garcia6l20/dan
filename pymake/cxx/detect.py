@@ -16,9 +16,11 @@ from pymake.core.win import vswhere
 
 
 class CompilerId:
-    def __init__(self, name: str, version: Version) -> None:
+    def __init__(self, name: str, version: Version, arch: str, system: str) -> None:
         self.name = name
         self.version = version
+        self.arch = arch
+        self.system = system
 
     def __str__(self) -> str:
         return f'{self.name}-{self.version}'
@@ -69,8 +71,20 @@ MSVC_TO_VS_VERSION = {800: (1, 0),
                       1929: (16, 10),
                       1930: (17, 0)}
 
+_arm_defines = {
+    'arm2': ('__ARM_ARCH_2__'),
+    'arm3': ('__ARM_ARCH_3__', '__ARM_ARCH_3M__'),
+    'arm4': ('__ARM_ARCH_4T__', '__TARGET_ARM_4T'),
+    'arm5': ('__ARM_ARCH_5_', '__ARM_ARCH_5E_'),
+    'arm6': ('__ARM_ARCH_6T2_', '__ARM_ARCH_6T2_', '__ARM_ARCH_6__', '__ARM_ARCH_6J__', '__ARM_ARCH_6K__', '__ARM_ARCH_6Z__', '__ARM_ARCH_6ZK__'),
+    'arm7': ('__ARM_ARCH_7__', '__ARM_ARCH_7A__', '__ARM_ARCH_7R__', '__ARM_ARCH_7M__', '__ARM_ARCH_7S__'),
+    'arm7a': ('__ARM_ARCH_7A__', '__ARM_ARCH_7R__', '__ARM_ARCH_7M__', '__ARM_ARCH_7S__'),
+    'arm7r': ('__ARM_ARCH_7R__', '__ARM_ARCH_7M__', '__ARM_ARCH_7S__'),
+    'arm7m': ('__ARM_ARCH_7M__'),
+    'arm7s': ('__ARM_ARCH_7S__'),
+}
 
-def _parse_compiler_version(defines):
+def _parse_compiler_version(defines: dict[str, str|int]):
     try:
         if '__LCC__' in defines and '__e2k__' in defines:
             compiler = MCST_LCC
@@ -136,7 +150,55 @@ def _parse_compiler_version(defines):
             patch = int(defines['__GNUC_PATCHLEVEL__'])
         else:
             return None
-        return CompilerId(compiler, Version(major, minor, patch))
+        
+        def contains(*defs):
+            for d in defs:
+                if d in defines:
+                    return True
+            return False
+
+        arch = None
+        system = None
+        if contains('__x86_64__', '_M_X64'):
+            arch = 'x64'
+        elif contains('i386', '__i386__', '__i386', '_M_IX86'):
+            arch = 'x86'
+        elif contains('__aarch64__', '_M_ARM64'):
+            arch = 'arm64'
+        elif '_M_ARM' in defines:
+            arch = 'arm'
+        else:
+            for defs in _arm_defines:
+                if contains(*defs):
+                    arch = 'arm'
+                    break
+
+        if contains('_WIN32', '_WIN64'):
+            system = 'windows'
+        elif contains('__ANDROID__'):
+            system = 'android'
+        elif contains('__linux__'):
+            system = 'linux'
+        elif contains('__sun'):
+            system = 'sun'
+        elif contains('__hpux'):
+            system = 'hpux'
+        elif contains('__DragonFly__'):
+            system = 'dragonfly'
+        elif contains('__FreeBSD__'):
+            system = 'freebsd'
+        elif contains('__NetBSD__'):
+            system = 'netbsd'
+        elif contains('__OpenBSD__'):
+            system = 'openbsd'
+        elif contains('BSD'):
+            system = 'bsd'
+        elif contains('__unix__'):
+            system = 'unix'
+        elif contains('__MACH__', '__APPLE__'):
+            system = 'macos'
+
+        return CompilerId(compiler, Version(major, minor, patch), arch=arch, system=system)
     except KeyError:
         return None
     except ValueError:
@@ -212,28 +274,39 @@ def detect_compiler_id(executable, env=None):
 
 
 class Compiler:
-    def __init__(self, path: Path, arch: str = None, env: dict[str, str] = None, tools: dict[str, Path] = dict()) -> None:
+    def __init__(self, path: Path, env: dict[str, str] = None, tools: dict[str, Path] = dict()) -> None:
         self.path = path
         self.compiler_id = detect_compiler_id(path, env=env)
         if self.compiler_id is None:
             raise RuntimeError(f'Cannot detect compiler ID of {self.path}')
         self.name = self.compiler_id.name
-        self.arch = arch
         self.env = env
         self.tools = tools
 
-    @ property
+    @property
+    def arch(self):
+        return self.compiler_id.arch
+
+    @property
+    def system(self):
+        return self.compiler_id.system
+    
+    @property
     def version(self):
         return self.compiler_id.version
+    
+    @property
+    def defines(self):
+        return self.compiler_id.defines
 
     def __str__(self) -> str:
         return f'{self.compiler_id} {self.arch + " " if self.arch else ""}({self.path})'
 
     def __eq__(self, other: 'Compiler'):
-        return self.path == other.path
+        return self.path == other.path and self.arch == other.arch and self.system == other.system
 
     def __hash__(self):
-        return hash(self.path)
+        return hash(self.path) ^ hash(self.arch) ^ hash(self.system)
 
 
 def validate_pair(ob):
@@ -302,18 +375,21 @@ def get_compilers(logger: logging.Logger):
         for info in infos:
             logger.info(f'Loading Visual Studio: {info["displayName"]}')
             paths = [info['installationPath']]
-            cl = find_executable('cl', paths=paths, default_paths=False)
-            link = find_executable(
-                'link', paths=[cl.parent], default_paths=False)
-            lib = find_executable(
-                'lib', paths=[cl.parent], default_paths=False)
             vcvars = find_file(r'vcvarsall.bat', paths=paths)
             archs = [('x86_64', 'x64'), ('x86', 'x86')]
             for arch, vc_arch in archs:
                 env = get_environment_from_batch_command([vcvars, vc_arch])
+                paths = env['PATH'].split(';')
+                cl = find_executable('cl', paths=paths, default_paths=False)
+                link = find_executable(
+                    'link', paths=[cl.parent], default_paths=False)
+                lib = find_executable(
+                    'lib', paths=[cl.parent], default_paths=False)
                 if env:
-                    compilers.add(Compiler(cl, arch=arch, env=env,
-                                  tools={'link': link, 'lib': lib}))
+                    cc = Compiler(cl, env=env,
+                                  tools={'link': link, 'lib': lib})
+                    assert cc.arch == vc_arch
+                    compilers.add(cc)
                 else:
                     logger.warning(
                         f'Cannot load msvc with {arch} architecture')
@@ -353,8 +429,8 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         suffix = None
     base_path = compiler.path.parent
 
-    if compiler.arch:
-        data['arch'] = compiler.arch
+    data['arch'] = compiler.arch
+    data['system'] = compiler.system
 
     if compiler.env:
         data['env'] = compiler.env
@@ -472,7 +548,15 @@ def create_toolchains():
         if not k in toolchains.keys():
             logger.info(f'new toolchain \'{k}\' found')
         elif toolchains[k] != v:
-            logger.info(f'updating toolchain \'{k}\'')
+            if toolchains[k]['type'] == v['type'] and toolchains[k]['arch'] != v['arch']:                
+                # add arch suffix
+                old_arch = toolchains[k]['arch']
+                logger.info(f'renaming \'{k}\' -> \'{k}-{old_arch}\'')
+                toolchains[f'{k}-{old_arch}'] = toolchains.pop(k)
+                logger.info(f'new toolchain \'{k}-{v["arch"]}\' found')
+                toolchains[f'{k}-{v["arch"]}'] = v
+            else:
+                logger.info(f'updating toolchain \'{k}\'')
         else:
             logger.info(f'toolchain \'{k}\' unchanged')
             continue

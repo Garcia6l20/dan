@@ -8,6 +8,8 @@ import { StatusBar } from './status';
 import { PyMakeTestAdapter } from './pymake/testAdapter';
 import { TestHub, testExplorerExtensionId } from 'vscode-test-adapter-api';
 import { Log, TestAdapterRegistrar } from 'vscode-test-adapter-util';
+import { CppToolsApi, Version, getCppToolsApi } from 'vscode-cpptools';
+import { ConfigurationProvider as CppToolsConfigurationProvider } from './cpptools';
 
 
 class TargetPickItem {
@@ -170,13 +172,8 @@ export class PyMake implements vscode.Disposable {
 		register('selectTestTargets', async () => this.promptTests());
 	}
 
-	async onLoaded() {
-		this.toolchains = await commands.getToolchains(this);
-		this.targets = await commands.getTargets(this);
-
-		vscode.commands.executeCommand("setContext", "inPyMakeProject", true);
-
-		// get the Test Explorer extension
+	async initTestExplorer() {
+		// setup Test Explorer
 		const testExplorerExtension = vscode.extensions.getExtension<TestHub>(
 			testExplorerExtensionId
 		);
@@ -195,6 +192,46 @@ export class PyMake implements vscode.Disposable {
 				)
 			);
 		}
+	}
+
+	_cppToolsApi: CppToolsApi|undefined = undefined;
+	_cppToolsProvider: CppToolsConfigurationProvider|undefined = undefined;
+
+	async initCppTools() {
+		this._cppToolsApi = await getCppToolsApi(Version.v2);
+		this._cppToolsProvider = new CppToolsConfigurationProvider(this);
+		if (this._cppToolsApi) {
+			if (this._cppToolsApi.notifyReady) {
+				// Inform cpptools that a custom config provider will be able to service the current workspace.
+				this._cppToolsApi.registerCustomConfigurationProvider(this._cppToolsProvider);
+
+				// Do any required setup that the provider needs.
+				// await this._cppToolsProvider.refresh();
+
+				// Notify cpptools that the provider is ready to provide IntelliSense configurations.
+				this._cppToolsApi.notifyReady(this._cppToolsProvider);
+			} else {
+				// Running on a version of cpptools that doesn't support v2 yet.
+				
+				// Do any required setup that the provider needs.
+				// await this._cppToolsProvider.refresh();
+
+				// Inform cpptools that a custom config provider will be able to service the current workspace.
+				this._cppToolsApi.registerCustomConfigurationProvider(this._cppToolsProvider);
+				this._cppToolsApi.didChangeCustomConfiguration(this._cppToolsProvider);
+			}
+		}
+
+	}
+
+	async onLoaded() {
+		this.toolchains = await commands.getToolchains(this);
+		this.targets = await commands.getTargets(this);
+
+		vscode.commands.executeCommand("setContext", "inPyMakeProject", true);
+
+		await this.initCppTools();
+		await this.initTestExplorer();
 	}
 };
 

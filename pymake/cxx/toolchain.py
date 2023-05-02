@@ -22,10 +22,14 @@ class RuntimeType(Enum):
 
 class Toolchain(Logging):
     def __init__(self, data) -> None:
+        self.cc : Path = None
+        self.cxx : Path = None
         self._compile_commands: CompileCommands = None
         self.cxx_flags = set()
         self.cpp_std = 17
         self.type = data['type']
+        self.arch = data['arch']
+        self.system = data['system']
         self.version = Version(data['version'])
         Logging.__init__(self, f'{self.type}-{self.version}')
         self.env = None
@@ -39,7 +43,7 @@ class Toolchain(Logging):
     @property
     def build_type(self):
         return self._build_type
-
+    
     @property
     def compile_commands(self):
         if not self._compile_commands:

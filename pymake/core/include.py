@@ -161,7 +161,7 @@ class MakeFile(sys.__class__):
         return self.__targets
     
     @property
-    def all_targets(self) -> list[Target]:
+    def all_targets(self) -> list[type[Target]]:
         targets = self.targets
         for c in self.children:
             targets.update(c.all_targets)

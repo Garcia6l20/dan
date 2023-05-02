@@ -16,8 +16,8 @@ export async function scanToolchains(ext: PyMake) {
 const pymakeBaseArgs = ['python', '-m', 'pymake'];
 const codeInterfaceArgs = [...pymakeBaseArgs, 'code'];
 
-async function codeIterface<T>(ext: PyMake, fn: string): Promise<T> {
-    let stream = streamExec([...codeInterfaceArgs, fn], {
+export async function codeCommand<T>(ext: PyMake, fn: string, ...args: string[]): Promise<T> {
+    let stream = streamExec([...codeInterfaceArgs, fn, ...args], {
         env: {
             ...process.env,
             // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -37,20 +37,20 @@ async function codeIterface<T>(ext: PyMake, fn: string): Promise<T> {
 }
 
 export async function getToolchains(ext: PyMake): Promise<string[]> {
-    return codeIterface<string[]>(ext, 'get-toolchains');
+    return codeCommand<string[]>(ext, 'get-toolchains');
 }
 
 export async function getTargets(ext: PyMake): Promise<Target[]> {
-    return codeIterface<Target[]>(ext, 'get-targets');
+    return codeCommand<Target[]>(ext, 'get-targets');
 }
 
 
 export async function getTests(ext: PyMake): Promise<string[]> {
-    return codeIterface<string[]>(ext, 'get-tests');
+    return codeCommand<string[]>(ext, 'get-tests');
 }
 
 export async function getTestSuites(ext: PyMake): Promise<TestSuiteInfo> {
-    return codeIterface<TestSuiteInfo>(ext, 'get-test-suites');
+    return codeCommand<TestSuiteInfo>(ext, 'get-test-suites');
 }
 
 export async function configure(ext: PyMake) {
