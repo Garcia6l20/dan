@@ -19,6 +19,7 @@ import { promises as fsPromises } from 'fs';
 import { Log } from "vscode-test-adapter-util";
 import { PyMake } from "../extension";
 import { Target } from "./targets";
+import { existsSync as fileExists } from 'fs';
 
 export interface TestSuiteInfo extends APITestSuiteInfo {
     children: (TestSuiteInfo | TestInfo)[];
@@ -117,23 +118,33 @@ export class PyMakeTestAdapter implements TestAdapter {
 
     async runTest(test: TestInfo): Promise<void> {
         this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: test.id, state: "running" });
-        const stream = await run.streamExec(['python', '-m', 'pymake', 'test', '-q', this.ext.buildPath, test.id], { cwd: test.workingDirectory });
+        const stream = await run.streamExec(['python', '-m', 'pymake', 'test', '-B', this.ext.buildPath, '-q', test.id], { cwd: test.workingDirectory });
         let out: string = '';
         stream.onLine((line, isError) => {
             out += line;
         });
         const res = await stream.finished();
         let log: string = '';
-        log += await fsPromises.readFile(path.join(test.out), 'utf-8');
-        log += await fsPromises.readFile(path.join(test.err), 'utf-8');
+        let logFile = path.join(test.out);
+        if (fileExists(logFile)) {
+            log += await fsPromises.readFile(logFile, 'utf-8');
+        }
+        logFile = path.join(test.err);
+        if (fileExists(logFile)) {
+            log += await fsPromises.readFile(logFile, 'utf-8');
+        }
 
         let event = <TestEvent>{
             type: "test",
             test: test.id,
             file: test.file,
             line: test.line,
-            message: log,
         };
+        if (log.length > 0) {
+            event.message = log;
+        } else {
+            event.message = out;
+        }
         if (res !== 0) {
             event.state = 'failed';
         } else {
@@ -211,8 +222,13 @@ export class PyMakeTestAdapter implements TestAdapter {
                 promises.push(this.runSuite(info));
             }
         }
-        await Promise.all(promises);
-        this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
+        try {
+            await Promise.all(promises);
+            this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
+        } catch(err) {            
+            this.testStatesEmitter.fire(<TestRunFinishedEvent>{ type: 'finished' });
+            throw err;
+        }
     }
     async debug(tests: string[]): Promise<void> {
         for (const test of tests) {
