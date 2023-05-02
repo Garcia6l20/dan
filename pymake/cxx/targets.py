@@ -45,7 +45,7 @@ class CXXObject(Target):
 
         ext = 'o' if os.name != 'nt' else 'obj'
         self.output: Path = self.build_path / \
-            Path(f'{self.parent.name}.{self.source.name}.{ext}')
+            Path(f'{self.parent.name}.{self.source.stem}.{ext}')
 
         deps = self.cache.get('deps')
         if deps is not None:
