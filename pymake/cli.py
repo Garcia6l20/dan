@@ -336,13 +336,14 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 
 @code.command()
 @common_opts
+@click.option('--pretty', is_flag=True)
 @pass_context
-async def get_test_suites(ctx: CommandsContext, **kwargs):
+async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
     kwargs['quiet'] = True
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
-    click.echo(code.get_test_suites())
+    click.echo(code.get_test_suites(pretty))
 
 
 @code.command()

@@ -21,7 +21,7 @@ class Code:
     def __init__(self, make: Make) -> None:
         self.make = make
     
-    def get_test_suites(self):
+    def get_test_suites(self, pretty):
         from pymake.core.include import context, MakeFile
         from pymake.core.test import Test
         from pymake.cxx import Executable
@@ -32,7 +32,7 @@ class Code:
             out, err = test.outs(args, expected_result)
             info = {
                 'type': 'test',
-                'id': f'{test.fullname}-{basename}',
+                'id': f'{test.fullname}-{basename}' if not test.fullname.endswith(basename) else test.fullname,
                 'label': basename,
                 'debuggable': False,
                 'target': test.executable.fullname,
@@ -96,7 +96,7 @@ class Code:
                     'children': children
                 }
 
-        return json.dumps(make_suite_info(context.root))
+        return json.dumps(make_suite_info(context.root), indent=2 if pretty else None)
         
     def _make_source_configuration(self, target: CXXObject):
             import subprocess
