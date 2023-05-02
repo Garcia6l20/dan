@@ -95,6 +95,10 @@ class MakeFile(sys.__class__):
         self.options = Options(self)
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
+
+        # manual registration
+        self.__registered_targets: set[Target] = set()
+        self.__registered_tests: set[Test] = set()
     
 
     def __get_classes(self, derived_from : type = None):
@@ -118,6 +122,12 @@ class MakeFile(sys.__class__):
 
     def install(self, *targets: Target):
         self.__installs.extend(targets)
+    
+    def register(self, cls: type[Target|Test]):
+        if issubclass(cls, Target):
+            self.__registered_targets.add(cls)
+        if issubclass(cls, Test):
+            self.__registered_tests.add(cls)
 
     def find(self, name) -> Target:
         """Find a target.
@@ -158,6 +168,14 @@ class MakeFile(sys.__class__):
                 target.makefile = self
                 target.fullname = f'{self.fullname}.{target.name}'
                 self.__targets.add(target)
+
+            for target in self.__registered_targets:
+                if target.name is None:
+                    target.name = target.__name__
+                target.makefile = self
+                target.fullname = f'{self.fullname}.{target.name}'
+                self.__targets.add(target)
+                
         return self.__targets
     
     @property
@@ -174,6 +192,13 @@ class MakeFile(sys.__class__):
                 test : Test = test
                 if test.name is None:
                     test.name = name
+                test.makefile = self
+                # test.fullname = f'{self.fullname}.{test.name}'
+                self.__tests.add(test)
+                
+            for test in self.__registered_tests:
+                if test.name is None:
+                    test.name = test.__name__
                 test.makefile = self
                 # test.fullname = f'{self.fullname}.{test.name}'
                 self.__tests.add(test)
