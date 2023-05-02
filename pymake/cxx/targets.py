@@ -261,6 +261,13 @@ class CXXObjectsTarget(CXXTarget):
     @property
     def file_dependencies(self):
         return unique(super().file_dependencies, *[o.file_dependencies for o in self.objs])
+    
+    @property
+    def up_to_date(self):
+        for obj in self.objs:
+            if not obj.up_to_date:
+                return False
+        return super().up_to_date
 
     @property
     def headers(self):
