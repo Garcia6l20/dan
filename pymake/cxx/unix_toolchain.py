@@ -26,6 +26,15 @@ class UnixToolchain(Toolchain):
     @cached_property
     def default_cflags(self):
         flags = list()
+        match self.build_type:
+            case BuildType.debug:
+                flags.extend(('-g', ))
+            case BuildType.release:
+                flags.extend(('-O3', '-DNDEBUG'))
+            case BuildType.release_min_size:
+                flags.extend(('-Os', '-DNDEBUG'))
+            case BuildType.release_debug_infos:
+                flags.extend(('-O2', '-g', '-DNDEBUG'))
         if self.env:
             if 'SYSROOT' in self.env:
                 flags.append(f'--sysroot={self.env["SYSROOT"]}')
@@ -48,21 +57,6 @@ class UnixToolchain(Toolchain):
             if 'LDFLAGS' in self.env:
                 flags.extend(self.env["LDFLAGS"].strip().split(' '))
         return unique(flags)
-
-    @Toolchain.build_type.setter
-    def build_type(self, mode: BuildType):
-        self._build_type = mode
-        match mode:
-            case BuildType.debug:
-                self.default_cflags.extend(('-g', ))
-            case BuildType.release:
-                self.default_cflags.extend(('-O3', '-DNDEBUG'))
-            case BuildType.release_min_size:
-                self.default_cflags.extend(('-Os', '-DNDEBUG'))
-            case BuildType.release_debug_infos:
-                self.default_cflags.extend(('-O2', '-g', '-DNDEBUG'))
-            case _:
-                raise InvalidConfiguration(f'unknown build mode: {mode}')
 
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = sync_run([self.cxx, *opts], no_raise=True)

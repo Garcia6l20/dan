@@ -1,3 +1,4 @@
+from functools import cached_property
 import json
 
 import aiofiles
@@ -18,35 +19,44 @@ class MSVCToolchain(Toolchain):
         self.lib = Path(data['lib'])
         self.env = data['env']
     
-    @property
-    def default_cflags(self):
-        rt = '/MD' if self.runtime == RuntimeType.dynamic else '/MT'
-        if self.build_type == BuildType.debug:
-            rt += 'd'
-        return [
+    @cached_property
+    def common_flags(self):
+        flags = [
             '/nologo',
+        ]
+        if self.build_type in (BuildType.debug, BuildType.release_debug_infos):
+            flags.append('/DEBUG')
+
+        return flags
+
+    @cached_property
+    def default_cflags(self):
+        flags = [
             '/EHsc',
             '/GA',
-            rt,
         ]
+        rt = '/MD' if self.runtime == RuntimeType.dynamic else '/MT'
+        match self.build_type:
+            case BuildType.debug:
+                flags.extend([
+                    f'{rt}d',
+                    '/Gd',
+                    '/ZI',
+                    '/FS',
+                    '/DEBUG',
+                ])
+            case BuildType.release:
+                flags.extend((rt, '/O2', '/DNDEBUG'))
+            case BuildType.release_min_size:
+                flags.extend((rt, '/Os', '/DNDEBUG'))
+            case  BuildType.release_debug_infos:
+                flags.extend((rt, '/O2', '/DNDEBUG'))
+
+        return flags
 
     @property
     def default_cxxflags(self):
         return [f'/std:c++{self.cpp_std}']
-
-    @Toolchain.build_type.setter
-    def build_type(self, mode: BuildType):
-        self._build_type = mode
-        if mode == BuildType.debug:
-            pass
-        elif mode == BuildType.release:
-            self.default_cflags.extend(('/O2', '/DNDEBUG'))
-        elif mode == BuildType.release_min_size:
-            self.default_cflags.extend(('/Os', '/DNDEBUG'))
-        elif mode == BuildType.release_debug_infos:
-            self.default_cflags.extend(('/O2', '/DNDEBUG'))
-        else:
-            raise InvalidConfiguration(f'unknown build mode: {mode}')
 
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = sync_run([self.cxx, *opts], no_raise=True)
@@ -125,25 +135,25 @@ class MSVCToolchain(Toolchain):
 
     def make_compile_commands(self, sourcefile: Path, output: Path, options: list[str]) -> CommandArgsList:
         deps = output.parent / sourcefile.with_suffix(".json").name
-        args = [self.cc, *unique(self.default_cflags, self.default_cxxflags, options),
+        args = [self.cc, *unique(self.common_flags, self.default_cflags, self.default_cxxflags, options),
                 '/sourceDependencies', deps,
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
         return [args]
 
     def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
-        return [[self.lnk, '/nologo', *options, *objects, f'/OUT:{str(output)}']]
+        return [[self.lnk, *self.common_flags, *options, *objects, f'/OUT:{str(output)}']]
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         objects = list(objects)
         objs = [objects[0].name]
         for obj in objects[1:]:
             objs.append(obj.name)
-        return [[self.lib, '/nologo', *objs, f'/OUT:{output}']]
+        return [[self.lib, *self.common_flags, *objs, f'/OUT:{output}']]
 
     def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         objects = list(objects)
         objs = [objects[0].name]
         for obj in objects[1:]:
             objs.append(obj.name)
-        return [[self.lnk, '/nologo',
+        return [[self.lnk, *self.common_flags,
                 f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']]

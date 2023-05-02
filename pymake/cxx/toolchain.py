@@ -39,10 +39,8 @@ class Toolchain(Logging):
         self.link_options: list[str] = list()
         self.rpath = None
         self.runtime = RuntimeType.dynamic
+        self.build_type = BuildType.debug
 
-    @property
-    def build_type(self):
-        return self._build_type
     
     @property
     def compile_commands(self):
