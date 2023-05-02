@@ -111,7 +111,7 @@ class Code:
             #   - windowsSdkVersion?: string;
             includes = []
             defines = []
-            for flag in target.cxx_flags:
+            for flag in target.private_cxx_flags:
                 match re_match(flag):
                     case r'[/-]I:?(.+)' as m:
                         includes.append(os.path.normcase(m[1]))
