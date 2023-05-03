@@ -197,6 +197,9 @@ class Target(Logging):
         if name is not None:
             self.name = name
 
+        if self.name is None:
+            self.name = self.__class__.__name__
+
         if version is not None:
             self.version = version
 
@@ -213,6 +216,9 @@ class Target(Logging):
         if self.makefile is None:
             from pymake.core.include import context
             self.makefile = context.current
+        
+        if self.fullname is None:
+            self.fullname = f'{self.makefile.fullname}.{name}'
 
         self.options = Options(self, self.options)
 

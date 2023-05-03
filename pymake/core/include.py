@@ -162,18 +162,9 @@ class MakeFile(sys.__class__):
         # FIXME: all_targets is invoked by requires(), thus it needs to be reset after makefile include... find a better way to do it
         if len(self.__targets) == 0:
             for name, target in self.__get_classes(Target):
-                target : Target = target
-                if target.name is None:
-                    target.name = name
-                target.makefile = self
-                target.fullname = f'{self.fullname}.{target.name}'
                 self.__targets.add(target)
 
             for target in self.__registered_targets:
-                if target.name is None:
-                    target.name = target.__name__
-                target.makefile = self
-                target.fullname = f'{self.fullname}.{target.name}'
                 self.__targets.add(target)
                 
         return self.__targets
@@ -189,18 +180,9 @@ class MakeFile(sys.__class__):
     def tests(self):
         if len(self.__tests) == 0:
             for name, test in self.__get_classes(Test):
-                test : Test = test
-                if test.name is None:
-                    test.name = name
-                test.makefile = self
-                # test.fullname = f'{self.fullname}.{test.name}'
                 self.__tests.add(test)
                 
             for test in self.__registered_tests:
-                if test.name is None:
-                    test.name = test.__name__
-                test.makefile = self
-                # test.fullname = f'{self.fullname}.{test.name}'
                 self.__tests.add(test)
         return self.__tests
     

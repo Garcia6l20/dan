@@ -36,11 +36,19 @@ class Test(Logging):
         # in case of inheritance usage, we must initialize the AsyncExecutable part
         super().__init__(*args, **kwargs)
         
+        if self.name is None:
+            self.name = self.__class__.__name__
+        
+        # in case of inheritance usage, makefile may already exists 
+        if not hasattr(self, 'makefile'):
+            from pymake.core.include import context
+            self.makefile = context.current
+
         if not self.executable:
             if not hasattr(self, 'execute'):
                 raise RuntimeError(f'Test "{self.name}" does not have executable set, if you intent to use it through inheritance, make sure "Test" is the first derived class')
             self.executable = self
-        else:
+        elif isinstance(self.executable, type):
             self.executable = self.executable()
 
         self.name = self.name or self.executable.name
