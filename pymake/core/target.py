@@ -13,14 +13,13 @@ from pymake.logging import Logging
 
 class Dependencies(set):
 
-    def __init__(self, parent : 'Target', deps: Iterable = list()):
+    def __init__(self, parent: 'Target', deps: Iterable = list()):
         super().__init__()
         self.parent = parent
         self.unresolved = set()
         for dep in deps:
             self.add(dep)
 
-    
     def add(self, dependency):
         from pymake.pkgconfig.package import UnresolvedPackage
         match dependency:
@@ -42,7 +41,8 @@ class Dependencies(set):
                     else:
                         self.unresolved.add(UnresolvedPackage(dependency))
             case Path():
-                dependency = FileDependency(self.parent.source_path / dependency)
+                dependency = FileDependency(
+                    self.parent.source_path / dependency)
                 super().add(dependency)
             case UnresolvedPackage():
                 self.unresolved.add(dependency)
@@ -139,14 +139,14 @@ class Options:
         for o in self.__items:
             if name in {o.name, o.fullname}:
                 return o
-            
+
     def update(self, options: dict):
         for k, v in options.items():
             if self[k]:
                 self[k] = v
             else:
                 self.add(k, v)
-    
+
     def items(self):
         for o in self.__items:
             yield o.name, o.value
@@ -159,7 +159,7 @@ class Options:
         opt = self.get(name)
         if opt:
             return opt.value
-        
+
     def __getitem__(self, name):
         opt = self.get(name)
         if opt:
@@ -178,18 +178,18 @@ class Target(Logging):
     installed: bool = False
     output: Path = None
     options: dict[str, Any] = dict()
-    
+
     dependencies: set[TargetDependencyLike] = set()
     preload_dependencies: set[TargetDependencyLike] = set()
 
     makefile = None
 
     def __init__(self,
-                 name : str = None,
+                 name: str = None,
                  parent: 'Target' = None,
                  version: str = None,
                  default: bool = None,
-                 makefile = None) -> None:
+                 makefile=None) -> None:
         self.version = Version(self.version) if self.version else None
         self.parent = parent
         self.__cache: SubCache = None
@@ -208,17 +208,16 @@ class Target(Logging):
 
         if parent is not None:
             self.makefile = parent.makefile
-            self.fullname = f'{parent.fullname}.{name}'
+            self.fullname = f'{parent.fullname}.{self.name}'
 
-        if makefile is not None:
+        if makefile:
             self.makefile = makefile
-        
+
         if self.makefile is None:
-            from pymake.core.include import context
-            self.makefile = context.current
-        
+            raise RuntimeError('Makefile not resolved')
+
         if self.fullname is None:
-            self.fullname = f'{self.makefile.fullname}.{name}'
+            self.fullname = f'{self.makefile.fullname}.{self.name}'
 
         self.options = Options(self, self.options)
 
@@ -230,7 +229,8 @@ class Target(Logging):
 
         self.other_generated_files: set[Path] = set()
         self.dependencies = Dependencies(self, self.dependencies)
-        self.preload_dependencies = Dependencies(self, self.preload_dependencies)
+        self.preload_dependencies = Dependencies(
+            self, self.preload_dependencies)
 
         super().__init__(self.fullname)
 
@@ -246,7 +246,7 @@ class Target(Logging):
     @property
     def build_path(self) -> Path:
         return self.makefile.build_path
-    
+
     @cached_property
     def fullname(self) -> str:
         return f'{self.makefile.fullname}.{self.name}'
@@ -285,7 +285,7 @@ class Target(Logging):
         # deps = self.dependencies
         # self.dependencies = Dependencies()
         # self.load_dependencies(deps)
-        
+
         async with asyncio.TaskGroup() as group:
             group.create_task(self.__load_unresolved_dependencies())
             for dep in self.preload_dependencies:
@@ -294,7 +294,7 @@ class Target(Logging):
         async with asyncio.TaskGroup() as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.preload())
-        
+
         res = self.__preload__()
         if inspect.iscoroutine(res):
             res = await res
@@ -311,7 +311,7 @@ class Target(Logging):
 
         if self.output and not self.output.is_absolute():
             self.output = self.build_path / self.output
-        
+
         res = self.__initialize__()
         if inspect.iscoroutine(res):
             res = await res
@@ -332,7 +332,7 @@ class Target(Logging):
         elif self.modification_time < self.options.modification_date:
             return False
         return True
-    
+
     async def _build_dependencies(self):
         async with asyncio.TaskGroup() as group:
             for dep in self.target_dependencies:
@@ -341,7 +341,7 @@ class Target(Logging):
     @asyncio.cached
     async def build(self):
         await self.initialize()
-        
+
         await self._build_dependencies()
 
         result = self.__prebuild__()
@@ -387,7 +387,7 @@ class Target(Logging):
                 group.create_task(res)
 
     @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode):        
+    async def install(self, settings: InstallSettings, mode: InstallMode):
         await self.build()
         installed_files = list()
         if mode == InstallMode.dev:
@@ -405,18 +405,18 @@ class Target(Logging):
                     installed_files.append(filepath)
         return installed_files
 
-    def get_dependency(self, dep:str|type, recursive=True) -> TargetDependencyLike:
+    def get_dependency(self, dep: str | type, recursive=True) -> TargetDependencyLike:
         """Search for dependency"""
         if isinstance(dep, str):
-            check = lambda d: d.name == dep
+            def check(d): return d.name == dep
         else:
-            check = lambda d: isinstance(d, dep)
+            def check(d): return isinstance(d, dep)
         for dependency in self.dependencies:
             if check(dependency):
                 return dependency
         for dependency in self.preload_dependencies:
             if check(dependency):
-                return dependency        
+                return dependency
         if recursive:
             # not found... look for dependencies' dependencies
             for target in self.target_dependencies:
