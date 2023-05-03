@@ -129,7 +129,8 @@ class Package(CXXTarget):
                     if req in self.all:
                         dep = self.all[req]
                     else:
-                        dep = Package(req, self.search_paths)
+                        dep = Package(req, self.search_paths,
+                                      makefile=self.makefile)
                     group.create_task(dep.initialize())
                     deps.add(dep)
         self.includes.public.append(self.data.get('includedir'))
