@@ -12,6 +12,7 @@ class generator:
 
     def __call__(self, fn: Callable):
         class Generator(Target):
+            name = self.output.stem
             output = self.output
             dependencies = set(self.dependencies)
 
@@ -22,7 +23,8 @@ class generator:
                 elif not arg_spec.args:
                     return fn()
                 else:
-                    raise RuntimeError("Only 'self' is allowed as Generator argument")
+                    raise RuntimeError(
+                        "Only 'self' is allowed as Generator argument")
 
         # hack the module location (used for Makefile's Targets resolution)
         Generator.__module__ = fn.__module__

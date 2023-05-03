@@ -13,7 +13,8 @@ class generator:
         self.template = template
 
     def __call__(self, fn: Callable):
-        class Generator(Target):
+        class JinjaGenerator(Target):
+            name = self.output.stem
             output = self.output
             template = self.template
             dependencies = [*self.dependencies, self.template]
@@ -26,7 +27,8 @@ class generator:
                 elif not arg_spec.args:
                     data = fn()
                 else:
-                    raise RuntimeError("Only 'self' is allowed as Generator argument")
+                    raise RuntimeError(
+                        "Only 'self' is allowed as Generator argument")
                 if inspect.isawaitable(data):
                     data = await data
                 self.output.parent.mkdir(parents=True, exist_ok=True)
@@ -37,5 +39,5 @@ class generator:
                     await out.write(template.render(data))
 
         # hack the module location (used for Makefile's Targets resolution)
-        Generator.__module__ = fn.__module__
-        return Generator
+        JinjaGenerator.__module__ = fn.__module__
+        return JinjaGenerator
