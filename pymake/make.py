@@ -2,6 +2,7 @@
 import functools
 import logging
 import os
+import fnmatch
 from pymake.core.pathlib import Path
 import sys
 import tqdm
@@ -10,6 +11,7 @@ from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
 from pymake.core.settings import InstallMode, Settings, safe_load
+from pymake.core.test import Test
 from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
 from pymake.logging import Logging
@@ -35,7 +37,7 @@ class Make(Logging):
     _config_name = 'pymake.config.yaml'
     _cache_name = 'pymake.cache.yaml'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress = False):
+    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
 
         from pymake.core.include import context_reset
         context_reset()
@@ -88,8 +90,6 @@ class Make(Logging):
                 'makefile.py').exists(), f'no makefile in {self.source_path}'
         assert (self.source_path !=
                 self.build_path), f'in-source build are not allowed'
-        
-        self.targets = list()
 
     def configure(self, toolchain):
         self.config.source_path = str(self.source_path)
@@ -117,7 +117,6 @@ class Make(Logging):
 
         include_makefile(self.source_path, self.build_path)
 
-        from pymake.core.include import context
         from pymake.cxx import target_toolchain
         target_toolchain.build_type = build_type
         if self.for_install:
@@ -125,21 +124,39 @@ class Make(Logging):
                 self.settings.install.libraries_prefix
             target_toolchain.rpath = str(library_dest.absolute())
 
-        self.active_targets: dict[str, Target] = dict()
+        self.debug(f'targets: {[t.name for t in self.targets]}')
 
+    def __matches(self, target: Target | Test):
+        for required in self.required_targets:
+            if fnmatch.fnmatch(target.fullname, f'*{required}*'):
+                return True
+        return False
+
+    @functools.cached_property
+    def targets(self) -> list[Target]:
+        from pymake.core.include import context
+        items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for target in context.root.all_targets:
-                if target.name in self.required_targets or target.fullname in self.required_targets:
-                    self.active_targets[target.fullname] = target
+                target = target()
+                if self.__matches(target):
+                    items.append(target)
         else:
-            for target in context.root.all_default:
-                self.active_targets[target.fullname] = target
+            items = [target() for target in context.root.all_default]
+        return items
 
-        
-        for t in self.active_targets.values():
-            self.targets.append(t())
-
-        self.debug(f'targets: {[t.name for t in self.targets]}')
+    @functools.cached_property
+    def tests(self) -> list[Test]:
+        from pymake.core.include import context
+        items = list()
+        if self.required_targets and len(self.required_targets) > 0:
+            for test in context.root.all_tests:
+                test = test()
+                if self.__matches(test):
+                    items.append(test)
+        else:
+            items = [test() for test in context.root.all_tests]
+        return items
 
     def all_options(self) -> list[Option]:
         from pymake.core.include import context
@@ -163,7 +180,7 @@ class Make(Logging):
             for obj in target.objs:
                 if obj.source == source:
                     return target
-    
+
     async def apply_options(self, *options):
         await self.initialize()
         all_opts = self.all_options()
@@ -193,21 +210,6 @@ class Make(Logging):
             setattr(setting, parts[-1], value)
 
     @staticmethod
-    def get(*names) -> list['Target']:
-        from pymake.core.include import context
-        targets = list()
-        for name in names:
-            found = False
-            for target in context.all_targets:
-                if name in [target.fullname, target.name]:
-                    found = True
-                    targets.append(target)
-                    break
-            if not found:
-                raise RuntimeError(f'target not found: {name}')
-        return targets
-
-    @staticmethod
     def toolchains():
         from pymake.cxx.detect import get_toolchains
         return get_toolchains()
@@ -221,7 +223,8 @@ class Make(Logging):
             import shutil
             term_cols = shutil.get_terminal_size().columns
             self.max_desc_width = int(term_cols * 0.25)
-            self.pbar = tqdm.tqdm(total=len(targets), desc='building', disable=disable)
+            self.pbar = tqdm.tqdm(total=len(targets),
+                                  desc='building', disable=disable)
             self.pbar.unit = ' targets'
 
         def __enter__(self):
@@ -278,13 +281,12 @@ class Make(Logging):
             self.settings.install.destination = str(Path.cwd() / destination)
 
         await self.initialize()
-        self.active_targets = dict()
-        for target in context.installed_targets:
-            self.active_targets[target.fullname] = target
+        targets = list()
+        for target in context.root.all_installed:
+            targets.append(target())
 
         await self.build()
 
-        targets = list(self.active_targets.values())
         with self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
@@ -318,10 +320,11 @@ class Make(Logging):
         await self.initialize()
         tests = list()
         from pymake.core.include import context
-        for test in context.root.all_tests:
-            if len(self.required_targets) == 0 or test.fullname in self.required_targets:
-                tests.append(test())
-        with self.progress('testing', tests, lambda t: t.run_test(), self.no_progress) as tasks:
+        # for test in context.root.all_tests:
+        #     test = test()
+        #     if len(self.required_targets) == 0 or test.fullname in self.required_targets:
+        #         tests.append(test)
+        with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks)
             if all(results):
                 self.info('Success !')

@@ -18,16 +18,19 @@ from pymake.cxx.targets import Executable
 from pymake.make import InstallMode, Make
 from pymake.vscode import Code
 
+
 class AsyncContext(click.Context):
     def invoke(__self, __callback, *args, **kwargs):
         ret = super().invoke(__callback, *args, **kwargs)
         if inspect.isawaitable(ret):
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                return ret # must be awaited
+                return ret  # must be awaited
             return loop.run_until_complete(ret)
         else:
             return ret
+
+
 click.BaseCommand.context_class = AsyncContext
 
 
@@ -47,7 +50,8 @@ _common_opts = [
                  help='Pring debug informations.', envvar='PYMAKE_VERBOSE'),
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='PYMAKE_JOBS'),
-    click.option('--no-progress', is_flag=True, help='Disable progress bars', envvar='PYMAKE_NOPROGRESS'),
+    click.option('--no-progress', is_flag=True,
+                 help='Disable progress bars', envvar='PYMAKE_NOPROGRESS'),
     click.argument('TARGETS', nargs=-1),
 ]
 _base_help_ = '''
@@ -219,10 +223,8 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
 async def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
     ctx(**kwargs)
     await ctx.make.initialize()
-    from pymake.core.include import context
     out = []
-    targets = context.root.all_targets if all else context.root.all_default
-    for target in targets:
+    for target in ctx.make.targets:
         if show_type:
             out.append(target.fullname + ' - ' + type(target).__name__)
         else:
@@ -236,9 +238,8 @@ async def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwarg
 async def list_tests(ctx: CommandsContext, **kwargs):
     ctx(**kwargs)
     await ctx.make.initialize()
-    from pymake.core.include import context
-    for test in context.root.tests:
-        click.echo(test.fullname)
+    for t in ctx.make.tests:
+        click.echo(t.fullname)
 
 
 @cli.command()
@@ -334,6 +335,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 #     import code
 #     code.interact(local={'make': make})
 
+
 @code.command()
 @common_opts
 @click.option('--pretty', is_flag=True)
@@ -351,6 +353,7 @@ def get_toolchains(**kwargs):
     import json
     click.echo(json.dumps(list(Make.toolchains()['toolchains'].keys())))
 
+
 @code.command()
 @minimal_options
 @click.argument('SOURCES', nargs=-1)
@@ -361,6 +364,7 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
     await ctx.make.initialize()
     code = Code(ctx.make)
     click.echo(await code.get_sources_configuration(sources))
+
 
 @code.command()
 @minimal_options
