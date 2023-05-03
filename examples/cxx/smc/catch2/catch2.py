@@ -8,6 +8,7 @@ from pymake.cmake import ConfigureFile
 version = '3.2.1'
 description = 'A modern, C++-native, test framework for unit-tests, TDD and BDD'
 
+
 class Catch2Source(GitSources):
     name = 'catch2-source'
     url = 'https://github.com/catchorg/Catch2.git'
@@ -22,38 +23,42 @@ class Config(ConfigureFile):
 
     async def __initialize__(self):
         await super().__initialize__()
-        self.input = self.get_dependency('catch2-source').output / 'src/catch2/catch_user_config.hpp.in'
+        self.input = self.get_dependency(
+            'catch2-source').output / 'src/catch2/catch_user_config.hpp.in'
+
 
 class Catch2(Library):
     name = 'catch2'
     preload_dependencies = Config,
-        
+
     def sources(self):
         return (self.get_dependency('catch2-source').output / 'src').rglob('*.cpp')
 
-
     async def __initialize__(self):
 
-        src = self.get_dependency('catch2-source').output / 'src'      
+        src = self.get_dependency('catch2-source').output / 'src'
         self.config = self.get_dependency('catch2-config')
         self.config.options = self.options
         self.includes.add(src, public=True)
         self.includes.add(self.build_path / 'generated', public=True)
         if self.toolchain.type == 'msvc':
             self.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
-            
+
         self.add_overridable_catch2_option('counter', True)
         self.add_overridable_catch2_option('android_logwrite', False)
         self.add_overridable_catch2_option('colour_win32', os.name == 'nt')
         self.add_overridable_catch2_option(
             'cpp11_to_string', target_toolchain.cpp_std >= 11)
-        self.add_overridable_catch2_option('cpp17_byte', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option('cpp17_optional', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option(
+            'cpp17_byte', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option(
+            'cpp17_optional', target_toolchain.cpp_std >= 17)
         self.add_overridable_catch2_option(
             'cpp17_string_view', target_toolchain.cpp_std >= 17)
         self.add_overridable_catch2_option(
             'cpp17_uncaught_exceptions', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option('cpp17_variant', target_toolchain.cpp_std >= 17)
+        self.add_overridable_catch2_option(
+            'cpp17_variant', target_toolchain.cpp_std >= 17)
         self.add_overridable_catch2_option('global_nextafter', True)
         self.add_overridable_catch2_option('posix_signals', os.name == 'posix')
         self.add_overridable_catch2_option('getenv', True)
@@ -76,29 +81,32 @@ class Catch2(Library):
         self.add_catch2_option('windows_crtdbg', os.name == 'nt')
         self.add_catch2_option('experimental_redirect', False)
         self.add_catch2_option('default_reporter', 'console')
-        self.add_catch2_option('console_width', shutil.get_terminal_size().columns)
-        
+        self.add_catch2_option(
+            'console_width', shutil.get_terminal_size().columns)
+
         await super().__initialize__()
-            
+
     def add_overridable_catch2_option(self, name: str, value: bool):
         o = self.options.add(name, value)
         self.config[f'CATCH_CONFIG_{name.upper()}'] = o.value
         self.config[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
-
 
     def add_catch2_option(self, name: str, value):
         o = self.options.add(name, value)
         self.config[f'CATCH_CONFIG_{name.upper()}'] = o.value
 
 # FIXME: this is actually associated to Target's utils
+
+
 @Catch2.utility
 def discover_tests(self, exe):
     from pymake import self as makefile
     from pymake.cxx import Executable
     if not issubclass(exe, Executable):
-        raise RuntimeError(f'catch2.discover_tests requires an Executable class, not a {exe.__name__}')
+        raise RuntimeError(
+            f'catch2.discover_tests requires an Executable class, not a {exe.__name__}')
     import yaml
-    exe : Executable = exe()
+    exe: Executable = exe(makefile=makefile)
     output = exe.build_path / f'{exe.name}-tests.yaml'
     filepath = exe.source_path / exe.sources[0]
     if not output.exists() or output.older_than(filepath):
@@ -165,6 +173,7 @@ def discover_tests(self, exe):
             class Catch2Test(Test):
                 name = title
                 executable = exe
-                file=data['filepath']
-                lineno=data['lineno']
+                file = data['filepath']
+                lineno = data['lineno']
+                cases = [((title, ), 0),]
             makefile.register(Catch2Test)
