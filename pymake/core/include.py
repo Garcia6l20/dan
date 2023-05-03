@@ -64,7 +64,7 @@ def requires(*names) -> list[AbstractPackage]:
             else:
                 try:
                     pkg = Package(name, search_paths=[
-                        context.current.build_path / 'pkgs'])
+                        context.current.build_path / 'pkgs'], makefile=context.current)
                 except MissingPackage:
                     pass
 
@@ -99,9 +99,8 @@ class MakeFile(sys.__class__):
         # manual registration
         self.__registered_targets: set[Target] = set()
         self.__registered_tests: set[Test] = set()
-    
 
-    def __get_classes(self, derived_from : type = None):
+    def __get_classes(self, derived_from: type = None):
         def __is_own_class(cls):
             return inspect.isclass(cls) and self.fullname.endswith(cls.__module__) and (derived_from is None or issubclass(cls, derived_from))
         return inspect.getmembers(self, __is_own_class)
@@ -122,8 +121,8 @@ class MakeFile(sys.__class__):
 
     def install(self, *targets: Target):
         self.__installs.extend(targets)
-    
-    def register(self, cls: type[Target|Test]):
+
+    def register(self, cls: type[Target | Test]):
         if issubclass(cls, Target):
             self.__registered_targets.add(cls)
         if issubclass(cls, Test):
@@ -145,16 +144,16 @@ class MakeFile(sys.__class__):
             t = c.find(name)
             if t:
                 return t
-        
+
     @property
     def requirements(self):
         if self.__requirements is not None:
             return self.__requirements
         elif self.parent is not None:
             return self.parent.requirements
-    
+
     @requirements.setter
-    def requirements(self, value : 'MakeFile'):
+    def requirements(self, value: 'MakeFile'):
         self.__requirements = value
 
     @property
@@ -162,30 +161,34 @@ class MakeFile(sys.__class__):
         # FIXME: all_targets is invoked by requires(), thus it needs to be reset after makefile include... find a better way to do it
         if len(self.__targets) == 0:
             for name, target in self.__get_classes(Target):
+                target.makefile = self
                 self.__targets.add(target)
 
             for target in self.__registered_targets:
+                target.makefile = self
                 self.__targets.add(target)
-                
+
         return self.__targets
-    
+
     @property
     def all_targets(self) -> list[type[Target]]:
         targets = self.targets
         for c in self.children:
             targets.update(c.all_targets)
         return targets
-    
+
     @property
     def tests(self):
         if len(self.__tests) == 0:
             for name, test in self.__get_classes(Test):
+                test.makefile = self
                 self.__tests.add(test)
-                
+
             for test in self.__registered_tests:
+                test.makefile = self
                 self.__tests.add(test)
         return self.__tests
-    
+
     @property
     def all_tests(self):
         tests = self.tests
@@ -197,7 +200,7 @@ class MakeFile(sys.__class__):
     def executables(self):
         from pymake.cxx import Executable
         return {target for target in self.targets if issubclass(target, Executable)}
-    
+
     @property
     def all_executables(self):
         executables = self.executables
@@ -208,7 +211,7 @@ class MakeFile(sys.__class__):
     @property
     def installed(self):
         return {target for target in self.targets if target.installed == True}
-    
+
     @property
     def all_installed(self):
         return {target for target in self.all_targets if target.installed == True}
@@ -216,7 +219,7 @@ class MakeFile(sys.__class__):
     @property
     def default(self):
         return {target for target in self.targets if target.default == True}
-    
+
     @property
     def all_default(self):
         return {target for target in self.all_targets if target.default == True}
