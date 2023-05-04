@@ -170,12 +170,12 @@ def discover_tests(self, exe):
         from pymake.testing import Test
         tests: dict = yaml.load(f.read(), yaml.Loader)
         for title, data in tests.items():
+            @makefile.register
             class Catch2Test(Test):
                 name = title
                 executable = exe
                 file = data['filepath']
                 lineno = data['lineno']
                 cases = [((title, ), 0),]
-            makefile.register(Catch2Test)
     
     return type[exe]

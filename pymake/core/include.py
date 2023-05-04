@@ -96,12 +96,6 @@ class MakeFile(sys.__class__):
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
 
-
-    def __get_classes(self, derived_from: type = None):
-        def __is_own_class(cls):
-            return inspect.isclass(cls) and self.fullname.endswith(cls.__module__) and (derived_from is None or issubclass(cls, derived_from))
-        return inspect.getmembers(self, __is_own_class)
-
     @cached_property
     def fullname(self):
         return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
@@ -124,6 +118,17 @@ class MakeFile(sys.__class__):
             self.__targets.add(cls)
         if issubclass(cls, Test):
             self.__tests.add(cls)
+        cls.makefile = self
+        return cls
+    
+    def __get_classes(self, derived_from: type|tuple[type, ...] = None):
+        def __is_own_class(cls):
+            return inspect.isclass(cls) and self.fullname.endswith(cls.__module__) and (derived_from is None or issubclass(cls, derived_from))
+        return inspect.getmembers(self, __is_own_class)
+    
+    def _load(self):
+        for name, target in self.__get_classes((Target, Test)):
+            self.register(target)
 
     def find(self, name) -> Target:
         """Find a target.
@@ -152,15 +157,6 @@ class MakeFile(sys.__class__):
     @requirements.setter
     def requirements(self, value: 'MakeFile'):
         self.__requirements = value
-
-    def _load(self):
-        for name, target in self.__get_classes(Target):
-            target.makefile = self
-            self.__targets.add(target)
-
-        for name, test in self.__get_classes(Test):
-            test.makefile = self
-            self.__tests.add(test)
 
     @property
     def targets(self):
