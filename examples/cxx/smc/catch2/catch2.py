@@ -177,3 +177,5 @@ def discover_tests(self, exe):
                 lineno = data['lineno']
                 cases = [((title, ), 0),]
             makefile.register(Catch2Test)
+    
+    return type[exe]
