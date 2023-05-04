@@ -96,9 +96,6 @@ class MakeFile(sys.__class__):
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
 
-        # manual registration
-        self.__registered_targets: set[Target] = set()
-        self.__registered_tests: set[Test] = set()
 
     def __get_classes(self, derived_from: type = None):
         def __is_own_class(cls):
@@ -124,9 +121,9 @@ class MakeFile(sys.__class__):
 
     def register(self, cls: type[Target | Test]):
         if issubclass(cls, Target):
-            self.__registered_targets.add(cls)
+            self.__targets.add(cls)
         if issubclass(cls, Test):
-            self.__registered_tests.add(cls)
+            self.__tests.add(cls)
 
     def find(self, name) -> Target:
         """Find a target.
@@ -156,18 +153,17 @@ class MakeFile(sys.__class__):
     def requirements(self, value: 'MakeFile'):
         self.__requirements = value
 
+    def _load(self):
+        for name, target in self.__get_classes(Target):
+            target.makefile = self
+            self.__targets.add(target)
+
+        for name, test in self.__get_classes(Test):
+            test.makefile = self
+            self.__tests.add(test)
+
     @property
     def targets(self):
-        # FIXME: all_targets is invoked by requires(), thus it needs to be reset after makefile include... find a better way to do it
-        if len(self.__targets) == 0:
-            for name, target in self.__get_classes(Target):
-                target.makefile = self
-                self.__targets.add(target)
-
-            for target in self.__registered_targets:
-                target.makefile = self
-                self.__targets.add(target)
-
         return self.__targets
 
     @property
@@ -179,14 +175,6 @@ class MakeFile(sys.__class__):
 
     @property
     def tests(self):
-        if len(self.__tests) == 0:
-            for name, test in self.__get_classes(Test):
-                test.makefile = self
-                self.__tests.add(test)
-
-            for test in self.__registered_tests:
-                test.makefile = self
-                self.__tests.add(test)
         return self.__tests
 
     @property
@@ -310,6 +298,7 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
     module = importlib.util.module_from_spec(spec)
     _init_makefile(module, name, build_path)
     spec.loader.exec_module(module)
+    module._load()
     context.up()
     return module
 
@@ -349,6 +338,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
 
     try:
         spec.loader.exec_module(module)
+        module._load()
     except LoadRequest as missing:
         context.missing.append(missing)
     except TargetNotFound as err:
