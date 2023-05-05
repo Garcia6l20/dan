@@ -87,7 +87,7 @@ class UnresolvedPackage(Logging):
         return functools.partial(self.__skipped_method_call, name)
 
 
-class Package(CXXTarget):
+class Package(CXXTarget, internal=True):
     all: dict[str, 'Package'] = dict()
 
     default = False

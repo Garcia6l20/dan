@@ -1,5 +1,5 @@
+from dataclasses import dataclass, field
 from enum import Enum
-from pymake.core.cache import SubCache
 
 from pymake.core.pathlib import Path
 
@@ -15,15 +15,14 @@ class BuildType(Enum):
     release_min_size = 2
     release_debug_infos = 2
 
-
-class InstallSettings(SubCache):
-    def __init__(self, destination: str | Path = '/usr/local'):
-        self.destination = str(destination)
-        self.runtime_prefix = 'bin'
-        self.libraries_prefix = 'lib'
-        self.includes_prefix = 'include'
-        self.data_prefix = 'share'
-        self.create_pkg_config = True
+@dataclass(eq=True, frozen=True)
+class InstallSettings:
+    destination: str = '/usr/local'
+    runtime_prefix: str = 'bin'
+    libraries_prefix: str = 'lib'
+    includes_prefix: str = 'include'
+    data_prefix:str = 'share'
+    create_pkg_config: bool = True
 
     @property
     def runtime_destination(self):
@@ -42,11 +41,10 @@ class InstallSettings(SubCache):
         return Path(self.destination).absolute() / self.includes_prefix
 
 
-class Settings(SubCache):
-
-    def __init__(self):
-        self.build_type = BuildType.debug
-        self.install = InstallSettings()
+@dataclass
+class Settings:
+    build_type: BuildType = BuildType.debug
+    install: InstallSettings = field(default_factory=lambda: InstallSettings())
 
 
 def safe_load(name: str, value,  t: type):

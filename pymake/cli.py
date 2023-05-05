@@ -15,7 +15,7 @@ from pymake.core.settings import Settings
 from pymake.cxx.targets import Executable
 
 
-from pymake.make import InstallMode, Make
+from pymake.make import ConfigCache, InstallMode, Make
 from pymake.vscode import Code
 
 
@@ -126,20 +126,15 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
 async def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
-    config = Cache(build_path / Make._config_name)
-    config.source_path = config.source_path if hasattr(
+    config = ConfigCache(build_path / Make._config_name, )
+    config.data.source_path = config.data.source_path if hasattr(
         config, 'source_path') else str(source_path)
-    config.build_path = str(build_path)
-    _logger.info(f'source path: {config.source_path}')
-    _logger.info(f'build path: {config.build_path}')
-    config.toolchain = toolchain or config.get(
-        'toolchain') or click.prompt('Toolchain', type=_toolchain_choice, default='default')
-    if not hasattr(config, 'settings'):
-        config.settings = Settings()
+    config.data.build_path = str(build_path)
+    _logger.info(f'source path: {config.data.source_path}')
+    _logger.info(f'build path: {config.data.build_path}')
+    config.data.toolchain = toolchain or config.data.toolchain or click.prompt('Toolchain', type=_toolchain_choice, default='default')
     await config.save()
-    from pymake.core.include import context
-    caches = context.get('_caches')
-    caches.remove(config)
+    Cache.ignore(config)
     del config
 
     if len(settings) or len(options):
@@ -152,7 +147,7 @@ async def configure(verbose: bool, toolchain: str, settings: tuple[str], options
         if len(settings):
             await make.apply_settings(*settings)
 
-        await make.config.save()
+        await make.cache.save()
 
 
 @cli.command()

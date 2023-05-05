@@ -76,14 +76,13 @@ class CXXObject(Target, internal=True):
     async def __build__(self):
         self.info(f'generating {self.output}...')
         commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
-        self.cache.compile_args = [str(a) for a in commands[0]]
-
+        self.cache['compile_args'] = [str(a) for a in commands[0]]
         self.info(f'scanning dependencies of {self.source}')
         deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
         deps = [d for d in deps
                 if self.source_path in Path(d).parents
                 or self.build_path in Path(d).parents]
-        self.cache.deps = deps
+        self.cache['deps'] = deps
 
 
 class OptionSet:
@@ -473,7 +472,7 @@ class Executable(CXXObjectsTarget, internal=True):
         self.info(f'linking {self.output}...')
         commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
                                              [*self.libs, *self.link_options.public, *self.link_options.private])
-        self.cache.link_args = [str(a) for a in commands[0]]
+        self.cache['link_args'] = [str(a) for a in commands[0]]
         self.debug(f'done')
 
     @asyncio.cached

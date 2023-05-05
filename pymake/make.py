@@ -1,4 +1,5 @@
 
+from dataclasses import dataclass, field
 import functools
 import logging
 import os
@@ -32,6 +33,15 @@ def flatten(list_of_lists):
         return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
     return list_of_lists[:1] + flatten(list_of_lists[1:])
 
+@dataclass
+class Config:
+    source_path: Path = None
+    build_path: Path = None
+    toolchain: str = None
+    settings: Settings = field(default_factory=lambda: Settings())
+
+class ConfigCache(Cache[Config]): ...
+
 
 class Make(Logging):
     _config_name = 'pymake.config.yaml'
@@ -56,8 +66,6 @@ class Make(Logging):
 
         super().__init__('make')
 
-        self.config = None
-        self.cache = None
         self.no_progress = no_progress
         self.for_install = for_install
         path = Path(path)
@@ -74,13 +82,13 @@ class Make(Logging):
         self.required_targets = targets
         self.build_path.mkdir(exist_ok=True, parents=True)
         sys.pycache_prefix = str(self.build_path / '__pycache__')
-        self.config = Cache(self.config_path)
+        self._config = ConfigCache(self.config_path)
         self.cache = Cache(self.cache_path)
 
-        self.settings: Settings = self.config.get('settings', Settings())
+        # self.settings: Settings = self.config.get('settings', Settings())
 
-        self.source_path = Path(self.config.get(
-            'source_path', self.source_path))
+        # self.source_path = Path(self.config.get(
+        #     'source_path', self.source_path))
 
         self.debug(f'source path: {self.source_path}')
         self.debug(f'build path: {self.build_path}')
@@ -90,6 +98,14 @@ class Make(Logging):
                 'makefile.py').exists(), f'no makefile in {self.source_path}'
         assert (self.source_path !=
                 self.build_path), f'in-source build are not allowed'
+        
+    @property
+    def config(self) -> Config:
+        return self._config.data
+    
+    @property
+    def settings(self) -> Settings:
+        return self._config.data.settings
 
     def configure(self, toolchain):
         self.config.source_path = str(self.source_path)

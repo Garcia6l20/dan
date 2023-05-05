@@ -6,7 +6,6 @@ from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
 from pymake.core import asyncio, aiofiles, utils
-from pymake.core.cache import SubCache
 from pymake.core.settings import InstallMode, InstallSettings, safe_load
 from pymake.core.version import Version
 from pymake.logging import Logging
@@ -95,16 +94,12 @@ class FileDependency(PathImpl):
 
 
 class Option:
-    def __init__(self, parent: 'Target', name: str, default) -> None:
-        self.__parent = parent
-        self.__cache = parent.cache
-        self.fullname = f'{parent.name}.{name}'
-        self.name = name
+    def __init__(self, parent: 'Options', fullname: str, default) -> None:
+        self.fullname = fullname
+        self.name = fullname.split('.')[-1]
+        self.__cache = parent._cache
         self.__default = default
-        if name == 'console_width':
-            pass
-        self.__value = getattr(self.__cache, self.fullname) if hasattr(
-            self.__cache, self.fullname) else default
+        self.__value = self.__cache.get(self.name, default)
         self.__value_type = type(default)
 
     def reset(self):
@@ -119,20 +114,27 @@ class Option:
         value = safe_load(self.fullname, value, self.__value_type)
         if self.__value != value:
             self.__value = value
-            setattr(self.__cache, self.fullname, value)
-            setattr(self.__cache,
-                    f'{self.__parent.fullname}.options.timestamp', time.time())
+            self.__cache[self.name] = value
 
 
 class Options:
     def __init__(self, parent: 'Target', default: dict[str, Any] = dict()) -> None:
         self.__parent = parent
-        self.__cache = parent.cache
+        cache = parent.cache
+        if isinstance(parent.cache, dict):
+            if not parent.name in cache:
+                cache[parent.name] = dict()
+            cache = cache[parent.name]
+        else:
+            cache = parent.cache.data
+        if not 'options' in cache:
+            cache['options'] = dict()
+        self._cache = cache['options']    
         self.__items: set[Option] = set()
         self.update(default)
 
-    def add(self, name: str, default_value):
-        opt = Option(self.__parent, name, default_value)
+    def add(self, name: str, default_value):                
+        opt = Option(self, f'{self.__parent.name}.{name}', default_value)
         self.__items.add(opt)
         return opt
 
@@ -151,10 +153,6 @@ class Options:
     def items(self):
         for o in self.__items:
             yield o.name, o.value
-
-    @cached_property
-    def modification_date(self):
-        return self.__cache.get(f'{self.__parent.fullname}.options.timestamp', 0.0)
 
     def __getattr__(self, name):
         opt = self.get(name)
@@ -191,7 +189,7 @@ class Target(Logging, MakefileRegister, internal=True):
                  makefile=None) -> None:
         self.version = Version(self.version) if self.version else None
         self.parent = parent
-        self.__cache: SubCache = None
+        self.__cache: dict = None
 
         if name is not None:
             self.name = name
@@ -251,9 +249,12 @@ class Target(Logging, MakefileRegister, internal=True):
         return f'{self.makefile.fullname}.{self.name}'
 
     @property
-    def cache(self) -> SubCache:
+    def cache(self) -> dict:
         if not self.__cache:
-            self.__cache = self.makefile.cache.subcache(self.fullname)
+            name = self.fullname.removeprefix(self.makefile.fullname + '.')
+            if not name in self.makefile.cache.data:
+                self.makefile.cache.data[name] = dict()
+            self.__cache = self.makefile.cache.data[name]
         return self.__cache
 
     async def __load_unresolved_dependencies(self):
@@ -327,8 +328,6 @@ class Target(Logging, MakefileRegister, internal=True):
         elif not self.dependencies.up_to_date:
             return False
         elif self.dependencies.modification_time > self.modification_time:
-            return False
-        elif self.modification_time < self.options.modification_date:
             return False
         return True
 

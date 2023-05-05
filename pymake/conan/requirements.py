@@ -23,7 +23,7 @@ PkgConfigDeps
 """
 
 
-class ConanFile(Target):
+class ConanFile(Target, internal=True):
     def __init__(self, makefile) -> None:
         super().__init__('conanfile', makefile=makefile)
         self.__reqs = list()
@@ -40,7 +40,7 @@ class ConanFile(Target):
             await out.write(content)
 
 
-class Requirements(Target):
+class Requirements(Target, internal=True):
 
     def __init__(self, makefile) -> None:
         super().__init__('conan', makefile=makefile)
@@ -79,7 +79,7 @@ class Requirements(Target):
             '--build=missing'],
             logger=self._logger, cwd=self.build_path)
 
-class Package(Target):
+class Package(Target, internal=True):
     def __get_requirements(self) -> Requirements:
         if not hasattr(self.makefile, '__conan_requirements__'):
             setattr(self.makefile, '__conan_requirements__', Requirements(makefile=self.makefile))
