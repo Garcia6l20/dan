@@ -97,6 +97,7 @@ class Option:
     def __init__(self, parent: 'Options', fullname: str, default) -> None:
         self.fullname = fullname
         self.name = fullname.split('.')[-1]
+        self.__parent = parent
         self.__cache = parent._cache
         self.__default = default
         self.__value = self.__cache.get(self.name, default)
@@ -105,6 +106,18 @@ class Option:
     def reset(self):
         self.value = self.__default
 
+    @property
+    def parent(self):
+        return self.__parent
+
+    @property
+    def cache(self):
+        return self.__cache
+
+    @property
+    def type(self):
+        return self.__value_type
+    
     @property
     def value(self):
         return self.__value

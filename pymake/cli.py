@@ -1,9 +1,7 @@
 import inspect
 import os
 import sys
-import typing as t
 
-from click.core import Command
 from pymake.core.find import find_file
 from pymake.core.pathlib import Path
 import click
@@ -11,7 +9,6 @@ import click
 import logging
 import asyncio
 from pymake.core.cache import Cache
-from pymake.core.settings import Settings
 from pymake.cxx.targets import Executable
 
 

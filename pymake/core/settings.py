@@ -13,7 +13,7 @@ class BuildType(Enum):
     debug = 0
     release = 1
     release_min_size = 2
-    release_debug_infos = 2
+    release_debug_infos = 3
 
 @dataclass(eq=True, frozen=True)
 class InstallSettings:
@@ -40,11 +40,15 @@ class InstallSettings:
     def includes_destination(self):
         return Path(self.destination).absolute() / self.includes_prefix
 
+@dataclass
+class ToolchainSettings:
+    cxx_flags: set[str] = field(default_factory=lambda: set())
 
 @dataclass
 class Settings:
     build_type: BuildType = BuildType.debug
     install: InstallSettings = field(default_factory=lambda: InstallSettings())
+    target: ToolchainSettings = field(default_factory=lambda: ToolchainSettings())
 
 
 def safe_load(name: str, value,  t: type):

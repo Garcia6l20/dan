@@ -87,6 +87,28 @@
             }
         },
         {
+            "name": "configure-test",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "configure",
+                "-t", "default",
+                "-s", "target.cxx_flags=-Wall",
+                "-s", "target.cxx_flags+=-Wextra;-Werror",
+                "-s", "target.cxx_flags-=-Wextra",
+                "-s", "target.cxx_flags-=*",
+                "-s", "build_type=release",
+                "-o", "simple.greater=wonderfull !"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
+        {
             "name": "simple",
             "type": "python",
             "request": "launch",

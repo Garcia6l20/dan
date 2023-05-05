@@ -1,17 +1,20 @@
 
 from dataclasses import dataclass, field
+from enum import Enum
 import functools
 import logging
 import os
 import fnmatch
+import re
 from pymake.core.pathlib import Path
 import sys
 import tqdm
+import typing as t
 
 from pymake.core.cache import Cache
 from pymake.core.include import include_makefile
 from pymake.core import aiofiles, asyncio
-from pymake.core.settings import InstallMode, Settings, safe_load
+from pymake.core.settings import InstallMode, Settings
 from pymake.core.test import Test
 from pymake.core.utils import unique
 from pymake.cxx import init_toolchains
@@ -197,23 +200,85 @@ class Make(Logging):
                 if obj.source == source:
                     return target
 
+
+    @classmethod
+    def _parse_str_value(cls, name, value: str, orig: type, tp: type = None):
+        if issubclass(orig, str):
+            return value
+        elif issubclass(orig, Enum):
+            names = [n.lower()
+                        for n in orig._member_names_]
+            value = value.lower()
+            if value in names:
+                return orig(names.index(value))
+            else:
+                raise RuntimeError(f'{name} should be one of {names}')
+        elif issubclass(orig, (set, list)):
+            assert tp is not None
+            result = list()
+            for sub in value.split(';'):
+                result.append(cls._parse_str_value(name, sub, tp))
+            return orig(result)
+        else:
+            raise TypeError(f'unhandled type {orig}')
+
+    
+    @classmethod
+    def _apply_inputs(self, inputs: list[str], get_item: t.Callable[[str], tuple[t.Any, t.Any, t.Any]], info: t.Callable[[t.Any], t.Any]):
+        for input in inputs:
+            m = re.match(r'(.+?)([+-])?="?(.+)"?', input)
+            if m:
+                name = m[1]
+                op = m[2]
+                value = m[3]
+                input, out_value, orig = get_item(name)
+                sname = name.split('.')[-1]
+                if orig is None:
+                    orig = type(input)
+                if hasattr(orig, '__annotations__') and sname in orig.__annotations__:
+                    tp = orig.__annotations__[sname]
+                    orig = t.get_origin(tp)
+                    if orig is None:
+                        orig = tp
+                    else:
+                        args = t.get_args(tp)
+                        if args:
+                            tp = args[0]
+                else:
+                    tp = None
+                in_value = self._parse_str_value(name, value, orig, tp)
+                match (out_value, op, in_value):
+                    case (list()|set(), '-', list()|set()) if len(in_value) == 1 and list(in_value)[0] == '*':
+                        out_value.clear()
+                    case (set(), '+', set()):
+                        out_value.update(in_value)
+                    case (set(), '-', set()):
+                        out_value = out_value - in_value
+                    case (list(), '+', set()):
+                        out_value.insert(in_value)
+                    case (list(), '-', set()):
+                        for v in in_value:
+                            out_value.remove(v)
+                    case (_, '+' | '-', _):
+                        raise TypeError(f'unhandled "{op}=" operator on type {type(out_value)} ({name})')
+                    case _:
+                        out_value = in_value
+                info(name, out_value)
+            else:
+                raise RuntimeError(f'cannot process given input: {input}')
+
     async def apply_options(self, *options):
         await self.initialize()
         all_opts = self.all_options()
-        for option in options:
-            name, value = option.split('=')
-            found = False
+        def get_option(name):
             for opt in all_opts:
                 if opt.fullname == name:
-                    found = True
-                    opt.value = value
-                    break
-            assert found, f'No such option \'{name}\', available options: {[o.fullname for o in all_opts]}'
+                    return opt.cache, opt.value, opt.type
+        self._apply_inputs(options, get_option, lambda k, v: self.info(f'option: {k} = {v}'))
 
     async def apply_settings(self, *settings):
         await self.initialize()
-        for setting in settings:
-            name, value = setting.split('=')
+        def get_setting(name):
             parts = name.split('.')
             setting = self.settings
             for part in parts[:-1]:
@@ -222,8 +287,10 @@ class Make(Logging):
                 setting = getattr(setting, part)
             if not hasattr(setting, parts[-1]):
                 raise RuntimeError(f'no such setting: {name}')
-            value = safe_load(name, value, type(getattr(setting, parts[-1])))
-            setattr(setting, parts[-1], value)
+            value = getattr(setting, parts[-1])
+            return setting, value, type(setting)
+        self._apply_inputs(settings, get_setting, lambda k, v: self.info(f'setting: {k} = {v}'))
+
 
     @staticmethod
     def toolchains():
