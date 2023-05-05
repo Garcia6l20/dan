@@ -5,6 +5,7 @@ import typing as t
 import aiofiles
 from pymake.core import asyncio
 from pymake.core.pathlib import Path
+from pymake.core.register import MakefileRegister
 from pymake.logging import Logging
 
 
@@ -12,7 +13,7 @@ class AsyncExecutable(Logging):
     async def execute(self, *args, **kwargs): ...
 
 
-class Test(Logging):
+class Test(Logging, MakefileRegister, internal=True):
     """Test definition
     """
 
@@ -29,8 +30,6 @@ class Test(Logging):
 
     file: Path | str = None
     lineno: int = None
-
-    makefile: None
 
     def __init__(self, *args, **kwargs):
         # in case of inheritance usage, we must initialize the AsyncExecutable part

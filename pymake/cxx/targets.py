@@ -15,7 +15,7 @@ from pymake.core.runners import async_run
 from pymake.core import asyncio
 
 
-class CXXObject(Target):
+class CXXObject(Target, internal=True):
     def __init__(self, source:Path, parent: 'CXXTarget') -> None:
         super().__init__(source.stem, parent=parent, default=False)
         self.parent = parent
@@ -149,7 +149,7 @@ class OptionSet:
             self._private = values._private
 
 
-class CXXTarget(Target):
+class CXXTarget(Target, internal=True):
     public_includes: set[str] = set()
     private_includes: set[str] = set()
 
@@ -237,7 +237,7 @@ class CXXTarget(Target):
 StrOrPath = str|Path
 StrOrPathIterable = Iterable[StrOrPath]
 
-class CXXObjectsTarget(CXXTarget):
+class CXXObjectsTarget(CXXTarget, internal=True):
     sources: StrOrPathIterable|t.Callable[[], StrOrPathIterable] = set()
 
     def __init__(self, *args, **kwargs):
@@ -294,7 +294,7 @@ class LibraryType(Enum):
     INTERFACE = 3
 
 
-class Library(CXXObjectsTarget):
+class Library(CXXObjectsTarget, internal=True):
 
     header_match = r'.+'
     library_type: LibraryType = LibraryType.AUTO
@@ -429,7 +429,7 @@ class Library(CXXObjectsTarget):
         return await asyncio.gather(super().install(settings, mode), *tasks)
 
 
-class Module(CXXObjectsTarget):
+class Module(CXXObjectsTarget, internal=True):
     def __init__(self, name: str, sources: list[str], *args, **kwargs):
         super().__init__(name, sources, *args, **kwargs)
 
@@ -440,7 +440,7 @@ class Module(CXXObjectsTarget):
     async def __build__(self):
         return await super().__build__()
 
-class Executable(CXXObjectsTarget):
+class Executable(CXXObjectsTarget, internal=True):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -490,37 +490,3 @@ class Executable(CXXObjectsTarget):
     async def execute(self, *args, **kwargs):
         await self.build()
         return await async_run([self.output, *args], logger=self, env=self.toolchain.env, **kwargs)
-
-# class Test(Executable):
-#     installed = False
-#     cases: t.Iterable[tuple[t.Iterable[t.Any], int]]  = [((), 0)]
-#     """Test cases
-    
-#     list of args giving a return value
-#     """
-
-#     async def _run_test(self, *args, expected_result=0):
-#         args = [str(a) for a in args]
-#         out, err, rc = await self.execute(*args, no_raise=True)
-#         if rc != expected_result:
-#             out = out.strip()
-#             err = err.strip()
-#             msg =  f'Test \'{self.name}\' failed (returned: {rc}, expected: {expected_result}) !'
-#             if out:
-#                 msg += '\nstdout: ' + out
-#             if err:
-#                 msg += '\nstderr: ' + err
-#             raise RuntimeError(msg)
-
-#     async def run_test(self):
-#         try:
-#             async with asyncio.TaskGroup() as tests:
-#                 for args, expected_result in self.cases:
-#                     # args, expected_result = case
-#                     tests.create_task(self._run_test(*args, expected_result=expected_result))
-#         except asyncio.ExceptionGroup as errors:
-#             for err in errors.errors:
-#                 self.error(err)
-#             return False
-#         return True
-

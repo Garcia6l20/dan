@@ -1,4 +1,5 @@
 from functools import cached_property
+from pymake.core.register import MakefileRegister
 from pymake.core.pathlib import Path
 import time
 from typing import Any, Callable, Iterable, Union, TypeAlias
@@ -169,7 +170,7 @@ class Options:
         return iter(self.__items)
 
 
-class Target(Logging):
+class Target(Logging, MakefileRegister, internal=True):
     name: str = None
     fullname: str = None
     description: str = None,
@@ -181,8 +182,6 @@ class Target(Logging):
 
     dependencies: set[TargetDependencyLike] = set()
     preload_dependencies: set[TargetDependencyLike] = set()
-
-    makefile = None
 
     def __init__(self,
                  name: str = None,

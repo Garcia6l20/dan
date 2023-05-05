@@ -67,13 +67,13 @@ class _QtMoccer:
         await super().__build__()
 
 
-class QtExecutable(_QtMoccer, Executable):
+class QtExecutable(_QtMoccer, Executable, internal=True):
     def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
         Executable.__init__(self, name, *args, **kwargs)
         self.qt_modules = qt_modules
 
 
-class QtLibrary(_QtMoccer, Library):
+class QtLibrary(_QtMoccer, Library, internal=True):
     def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
         Library.__init__(self, name, *args, **kwargs)
         self.qt_modules = qt_modules

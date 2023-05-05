@@ -1,14 +1,10 @@
-from functools import cached_property
 import importlib.util
-import inspect
 import os
-import sys
+from pymake.core.makefile import MakeFile
 
 from pymake.core.pathlib import Path
-from pymake.core.cache import Cache
 
-from pymake.core.target import Options, Target
-from pymake.core.test import Test, AsyncExecutable
+from pymake.core.target import Target
 from pymake.logging import Logging
 from pymake.pkgconfig.package import AbstractPackage, MissingPackage, Package, UnresolvedPackage
 
@@ -71,142 +67,6 @@ def requires(*names) -> list[AbstractPackage]:
         res.append(pkg)
 
     return res
-
-
-class MakeFile(sys.__class__):
-
-    def _setup(self,
-               name: str,
-               source_path: Path,
-               build_path: Path,
-               requirements: 'MakeFile' = None) -> None:
-        self.name = name
-        self.description = None
-        self.version = None
-        self.source_path = source_path
-        self.build_path = build_path
-        self.__requirements = requirements
-        self.parent: MakeFile = self.parent if hasattr(
-            self, 'parent') else None
-        self.__cache: Cache = None
-        self.children: list[MakeFile] = list()
-        if self.name != 'requirements' and self.parent:
-            self.parent.children.append(self)
-        self.options = Options(self)
-        self.__targets: set[Target] = set()
-        self.__tests: set[Test] = set()
-
-    @cached_property
-    def fullname(self):
-        return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
-
-    @property
-    def cache(self) -> Cache:
-        if not self.__cache:
-            self.__cache = Cache(self.build_path / f'{self.name}.cache.yaml')
-        return self.__cache
-
-    def export(self, *targets: Target):
-        for target in targets:
-            self.__exports.append(target)
-
-    def install(self, *targets: Target):
-        self.__installs.extend(targets)
-
-    def register(self, cls: type[Target | Test]):
-        if issubclass(cls, Target):
-            self.__targets.add(cls)
-        if issubclass(cls, Test):
-            self.__tests.add(cls)
-        cls.makefile = self
-        return cls
-    
-    def __get_classes(self, derived_from: type|tuple[type, ...] = None):
-        def __is_own_class(cls):
-            return inspect.isclass(cls) and self.fullname.endswith(cls.__module__) and (derived_from is None or issubclass(cls, derived_from))
-        return inspect.getmembers(self, __is_own_class)
-    
-    def _load(self):
-        for name, target in self.__get_classes((Target, Test)):
-            self.register(target)
-
-    def find(self, name) -> Target:
-        """Find a target.
-
-        Args:
-            name (str): The target name to find.
-
-        Returns:
-            Target: The found target or None.
-        """
-        for t in self.targets:
-            if t.name == name:
-                return t
-        for c in self.children:
-            t = c.find(name)
-            if t:
-                return t
-
-    @property
-    def requirements(self):
-        if self.__requirements is not None:
-            return self.__requirements
-        elif self.parent is not None:
-            return self.parent.requirements
-
-    @requirements.setter
-    def requirements(self, value: 'MakeFile'):
-        self.__requirements = value
-
-    @property
-    def targets(self):
-        return self.__targets
-
-    @property
-    def all_targets(self) -> list[type[Target]]:
-        targets = self.targets
-        for c in self.children:
-            targets.update(c.all_targets)
-        return targets
-
-    @property
-    def tests(self):
-        return self.__tests
-
-    @property
-    def all_tests(self):
-        tests = self.tests
-        for c in self.children:
-            tests.update(c.all_tests)
-        return tests
-
-    @property
-    def executables(self):
-        from pymake.cxx import Executable
-        return {target for target in self.targets if issubclass(target, Executable)}
-
-    @property
-    def all_executables(self):
-        executables = self.executables
-        for c in self.children:
-            executables.update(c.all_executables)
-        return executables
-
-    @property
-    def installed(self):
-        return {target for target in self.targets if target.installed == True}
-
-    @property
-    def all_installed(self):
-        return {target for target in self.all_targets if target.installed == True}
-
-    @property
-    def default(self):
-        return {target for target in self.targets if target.default == True}
-
-    @property
-    def all_default(self):
-        return {target for target in self.all_targets if target.default == True}
 
 
 class Context(Logging):
@@ -294,7 +154,6 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
     module = importlib.util.module_from_spec(spec)
     _init_makefile(module, name, build_path)
     spec.loader.exec_module(module)
-    module._load()
     context.up()
     return module
 
@@ -334,7 +193,6 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
 
     try:
         spec.loader.exec_module(module)
-        module._load()
     except LoadRequest as missing:
         context.missing.append(missing)
     except TargetNotFound as err:

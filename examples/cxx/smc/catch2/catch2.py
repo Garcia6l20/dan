@@ -100,13 +100,12 @@ class Catch2(Library):
 
 @Catch2.utility
 def discover_tests(self, exe):
-    from pymake import self as makefile
     from pymake.cxx import Executable
     if not issubclass(exe, Executable):
         raise RuntimeError(
             f'catch2.discover_tests requires an Executable class, not a {exe.__name__}')
     import yaml
-    exe: Executable = exe(makefile=makefile)
+    exe: Executable = exe()
     output = exe.build_path / f'{exe.name}-tests.yaml'
     filepath = exe.source_path / exe.sources[0]
     if not output.exists() or output.older_than(filepath):
@@ -170,7 +169,6 @@ def discover_tests(self, exe):
         from pymake.testing import Test
         tests: dict = yaml.load(f.read(), yaml.Loader)
         for title, data in tests.items():
-            @makefile.register
             class Catch2Test(Test):
                 name = title
                 executable = exe
