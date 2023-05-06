@@ -15,7 +15,7 @@ class BuildType(Enum):
     release_min_size = 2
     release_debug_infos = 3
 
-@dataclass(eq=True, frozen=True)
+@dataclass(eq=True, unsafe_hash=True)
 class InstallSettings:
     destination: str = '/usr/local'
     runtime_prefix: str = 'bin'
