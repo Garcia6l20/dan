@@ -132,7 +132,7 @@ class Make(Logging):
         context_reset()
         gc.collect()
 
-        init_toolchains(toolchain)
+        init_toolchains(toolchain, self.settings)
 
         include_makefile(self.source_path, self.build_path)
 
@@ -263,6 +263,7 @@ class Make(Logging):
                         raise TypeError(f'unhandled "{op}=" operator on type {type(out_value)} ({name})')
                     case _:
                         out_value = in_value
+                setattr(input, sname, out_value)
                 info(name, out_value)
             else:
                 raise RuntimeError(f'cannot process given input: {input}')
@@ -290,6 +291,7 @@ class Make(Logging):
             value = getattr(setting, parts[-1])
             return setting, value, type(setting)
         self._apply_inputs(settings, get_setting, lambda k, v: self.info(f'setting: {k} = {v}'))
+        pass
 
 
     @staticmethod
@@ -401,12 +403,6 @@ class Make(Logging):
 
     async def test(self):
         await self.initialize()
-        tests = list()
-        from pymake.core.include import context
-        # for test in context.root.all_tests:
-        #     test = test()
-        #     if len(self.required_targets) == 0 or test.fullname in self.required_targets:
-        #         tests.append(test)
         with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks)
             if all(results):
@@ -416,11 +412,8 @@ class Make(Logging):
                 self.error('Failed !')
                 return 255
 
-    async def clean(self, target: str = None):
+    async def clean(self):
         await self.initialize()
-        from pymake.cxx import toolchain
-        toolchain.scan = False
         await asyncio.gather(*[t.clean() for t in self.targets])
         from pymake.cxx import target_toolchain
-
         target_toolchain.compile_commands.clear()

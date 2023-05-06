@@ -1,6 +1,7 @@
 import sys
 
 from pymake.core.errors import InvalidConfiguration
+from pymake.core.settings import Settings
 from pymake.cxx.toolchain import Toolchain
 from pymake.cxx.detect import get_toolchains
 
@@ -29,7 +30,7 @@ def get_default_toolchain(data = None):
     return data['default']
 
 
-def init_toolchains(name: str = None):
+def init_toolchains(name: str = None, settings: Settings = None):
     data = get_toolchains()
     if name is None or name == 'default':
         name = get_default_toolchain(data)
@@ -46,7 +47,8 @@ def init_toolchains(name: str = None):
             tc_type = MSVCToolchain
         case _:
             raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
-    target_toolchain = tc_type(toolchain_data, data['tools'])
+    target_settings = settings.target
+    target_toolchain = tc_type(toolchain_data, data['tools'], target_settings)
     host_toolchain = target_toolchain
 
     from pymake.core.include import context

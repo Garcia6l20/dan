@@ -1,18 +1,17 @@
 from functools import cached_property
-from pymake.core.settings import BuildType
+from pymake.core.settings import BuildType, ToolchainSettings
 from pymake.core.utils import unique
-from pymake.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, scan
-from pymake.core.errors import InvalidConfiguration
+from pymake.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency
 from pymake.cxx import auto_fpic
-from pymake.core.runners import sync_run, async_run
+from pymake.core.runners import sync_run
 
 cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
 
 
 class UnixToolchain(Toolchain):
-    def __init__(self, data, tools):
-        Toolchain.__init__(self, data)
+    def __init__(self, data, tools, settings: ToolchainSettings):
+        Toolchain.__init__(self, data, settings)
         self.cc = data['cc']
         self.cxx = data['cxx']
         self.ar = data['ar'] if 'ar' in data else tools['ar']
@@ -44,7 +43,7 @@ class UnixToolchain(Toolchain):
 
     @cached_property
     def default_cxxflags(self):
-        flags = [f'-std=c++{self.cpp_std}']
+        flags = [f'-std=c++{self.cpp_std}', *self.settings.cxx_flags]
         if self.env:
             if 'CXXFLAGS' in self.env:
                 flags.extend(self.env["CXXFLAGS"].strip().split(' '))
@@ -101,8 +100,6 @@ class UnixToolchain(Toolchain):
                     f'Unhandled source file extention: {sourcefile.suffix}')
 
     async def scan_dependencies(self, sourcefile: Path, options: list[str], build_path: Path) -> set[FileDependency]:
-        if not scan:
-            return set()
         args = self.get_base_compile_args(sourcefile)
         args.extend(['-M', str(sourcefile), *options])
 

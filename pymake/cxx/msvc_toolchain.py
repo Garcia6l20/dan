@@ -3,7 +3,7 @@ import json
 
 import aiofiles
 from pymake.core.runners import sync_run
-from pymake.core.settings import BuildType
+from pymake.core.settings import BuildType, ToolchainSettings
 from pymake.core.utils import unique
 from pymake.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
 from pymake.core.errors import InvalidConfiguration
@@ -11,8 +11,8 @@ from pymake.core.pm import re_match
 
 
 class MSVCToolchain(Toolchain):
-    def __init__(self, data, tools):
-        Toolchain.__init__(self, data)
+    def __init__(self, data, tools, settings : ToolchainSettings):
+        Toolchain.__init__(self, data, settings)
         self.cc = Path(data['cc'])
         self.cxx = self.cc
         self.lnk = Path(data['link'])
@@ -24,9 +24,6 @@ class MSVCToolchain(Toolchain):
         flags = [
             '/nologo',
         ]
-        if self.build_type in (BuildType.debug, BuildType.release_debug_infos):
-            flags.append('/DEBUG')
-
         return flags
 
     @cached_property
@@ -56,7 +53,7 @@ class MSVCToolchain(Toolchain):
 
     @property
     def default_cxxflags(self):
-        return [f'/std:c++{self.cpp_std}']
+        return [f'/std:c++{self.cpp_std}', *self.settings.cxx_flags]
 
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = sync_run([self.cxx, *opts], no_raise=True)

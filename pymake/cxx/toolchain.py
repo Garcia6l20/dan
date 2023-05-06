@@ -1,7 +1,7 @@
 from enum import Enum
 from pymake.core.asyncio import sync_wait
 from pymake.core.pathlib import Path
-from pymake.core.settings import BuildType
+from pymake.core.settings import BuildType, ToolchainSettings
 from pymake.core.target import FileDependency
 from pymake.core.runners import async_run, sync_run, CommandError
 from pymake.core.version import Version
@@ -9,9 +9,6 @@ from pymake.logging import Logging
 from pymake.cxx.compile_commands import CompileCommands
 
 import tempfile
-
-
-scan = True
 
 CommandArgs = list[str|Path]
 CommandArgsList = list[CommandArgs]
@@ -21,7 +18,7 @@ class RuntimeType(Enum):
     dynamic = 1
 
 class Toolchain(Logging):
-    def __init__(self, data) -> None:
+    def __init__(self, data: dict[str,str], settings: ToolchainSettings) -> None:
         self.cc : Path = None
         self.cxx : Path = None
         self._compile_commands: CompileCommands = None
@@ -31,6 +28,7 @@ class Toolchain(Logging):
         self.arch = data['arch']
         self.system = data['system']
         self.version = Version(data['version'])
+        self.settings = settings
         Logging.__init__(self, f'{self.type}-{self.version}')
         self.env = None
         self.rpath = None
