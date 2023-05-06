@@ -1,7 +1,6 @@
 from click import Path
-from pymake.core import asyncio, aiofiles
+from pymake.core import aiofiles
 from pymake.core.target import Target
-from pymake.logging import Logging
 import aiohttp
 import tarfile
 
@@ -9,8 +8,9 @@ import tarfile
 async def fetch_file(url, dest):
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
-            assert resp.status == 200
             data = await resp.read()
+            if resp.status != 200:
+                raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
 
     async with aiofiles.open(
         dest, "wb"
@@ -18,11 +18,13 @@ async def fetch_file(url, dest):
         await outfile.write(data)
 
 
-class TarSources(Target, Logging):
-    def __init__(self, name: str, url: str, version: str = None) -> None:
-        super().__init__(name, version=version, all=False)
-        self.url = url
-        self.archive_name = url.split("/")[-1]
+class TarSources(Target, internal=True):
+
+    url: str
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.archive_name = self.url.split("/")[-1]
         self.output: Path = self.build_path / 'sources'
 
     async def __build__(self):

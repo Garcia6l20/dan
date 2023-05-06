@@ -1,12 +1,11 @@
 from typing import Iterable
 from pymake.core.pathlib import Path
-from pymake.core import asyncio, aiofiles
+from pymake.core import aiofiles
 from pymake.core.target import Target
 from pymake.core.runners import async_run
-from pymake.logging import Logging
 
 
-class GitSources(Target, Logging):
+class GitSources(Target, internal=True):
 
     url: str = None
     refspec: str = None
