@@ -2,6 +2,8 @@ from functools import cached_property
 from pathlib import Path
 import sys
 
+import typing as t
+
 from pymake.core.cache import Cache
 from pymake.core.target import Options, Target
 from pymake.core.test import Test
@@ -41,13 +43,14 @@ class MakeFile(sys.__class__):
         return self.__cache
 
     def register(self, cls: type[Target | Test]):
+        """Register Target/Test class"""
         if issubclass(cls, Target):
-            self.__targets.add(cls)
+            self.__targets.add(cls())
         if issubclass(cls, Test):
-            self.__tests.add(cls)
+            self.__tests.add(cls())
         return cls
     
-    def find(self, name) -> Target:
+    def find(self, name_or_class) -> Target:
         """Find a target.
 
         Args:
@@ -56,13 +59,20 @@ class MakeFile(sys.__class__):
         Returns:
             Target: The found target or None.
         """
+        if isinstance(name_or_class, type):
+            def check(t: Target):
+                return type(t) == name_or_class
+        else:
+            def check(t: Target):
+                return t.name == name_or_class
         for t in self.targets:
-            if t.name == name:
+            if check(t):
                 return t
         for c in self.children:
-            t = c.find(name)
+            t = c.find(name_or_class)
             if t:
                 return t
+        raise RuntimeError(f'Cannot find target {name_or_class}')
 
     @property
     def requirements(self):
@@ -76,22 +86,22 @@ class MakeFile(sys.__class__):
         self.__requirements = value
 
     @property
-    def targets(self):
+    def targets(self) -> set[Target]:
         return self.__targets
 
     @property
-    def all_targets(self) -> list[type[Target]]:
+    def all_targets(self) -> set[Target]:
         targets = self.targets
         for c in self.children:
             targets.update(c.all_targets)
         return targets
 
     @property
-    def tests(self):
+    def tests(self) -> set[Test]:
         return self.__tests
 
     @property
-    def all_tests(self):
+    def all_tests(self) -> set[Test]:
         tests = self.tests
         for c in self.children:
             tests.update(c.all_tests)

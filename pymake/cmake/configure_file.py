@@ -1,13 +1,12 @@
 from pymake.core.pathlib import Path
 import re
 from typing import Any
-from pymake.core import asyncio
 from pymake.core.target import Target
 
 import aiofiles
 
 
-class ConfigureFile(Target):
+class ConfigureFile(Target, internal=True):
 
     input: Path = None
     variables: dict[str, Any] = dict()

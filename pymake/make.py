@@ -157,11 +157,10 @@ class Make(Logging):
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for target in context.root.all_targets:
-                target = target()
                 if self.__matches(target):
                     items.append(target)
         else:
-            items = [target() for target in context.root.all_default]
+            items = context.root.all_default
         return items
 
     @functools.cached_property
@@ -170,11 +169,10 @@ class Make(Logging):
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for test in context.root.all_tests:
-                test = test()
                 if self.__matches(test):
                     items.append(test)
         else:
-            items = [test() for test in context.root.all_tests]
+            items = context.root.all_tests
         return items
 
     def all_options(self) -> list[Option]:
@@ -193,8 +191,7 @@ class Make(Logging):
         from pymake.cxx.targets import CXXObjectsTarget
 
         source = Path(source)
-        for target in [target for target in context.root.all_targets if issubclass(target, CXXObjectsTarget)]:
-            target = target()
+        for target in [target for target in context.root.all_targets if isinstance(target, CXXObjectsTarget)]:
             await target.initialize()
             for obj in target.objs:
                 if obj.source == source:
@@ -366,9 +363,7 @@ class Make(Logging):
             self.settings.install.destination = str(Path.cwd() / destination)
 
         await self.initialize()
-        targets = list()
-        for target in context.root.all_installed:
-            targets.append(target())
+        targets = context.root.all_installed
 
         await self.build()
 

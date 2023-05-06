@@ -19,6 +19,10 @@ class Dependencies(set):
         for dep in deps:
             self.add(dep)
 
+    @property
+    def makefile(self):
+        return self.parent.makefile
+
     def add(self, dependency):
         from pymake.pkgconfig.package import UnresolvedPackage
         match dependency:
@@ -26,7 +30,7 @@ class Dependencies(set):
                 super().add(dependency)
             case type():
                 assert issubclass(dependency, Target)
-                super().add(dependency())
+                super().add(self.makefile.find(dependency))
             case str():
                 from pymake.pkgconfig.package import Package
                 for pkg in Package.all.values():

@@ -44,7 +44,7 @@ class Test(Logging, MakefileRegister, internal=True):
                     f'Test "{self.name}" does not have executable set, if you intent to use it through inheritance, make sure "Test" is the first derived class')
             self.executable = self
         elif isinstance(self.executable, type):
-            self.executable = self.executable()
+            self.executable = self.makefile.find(self.executable)
 
         self.name = self.name or self.executable.name
         self.fullname = f'{self.executable.makefile.fullname}.{self.name}'

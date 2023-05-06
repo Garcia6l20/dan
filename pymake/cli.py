@@ -290,7 +290,6 @@ async def get_targets(ctx: CommandsContext, **kwargs):
     out = []
     targets = context.root.all_targets
     for target in targets:
-        target = target()
         out.append({
             'name': target.name,
             'fullname': target.fullname,
