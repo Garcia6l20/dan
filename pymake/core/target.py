@@ -1,7 +1,6 @@
 from functools import cached_property
 from pymake.core.register import MakefileRegister
 from pymake.core.pathlib import Path
-import time
 from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
@@ -295,9 +294,6 @@ class Target(Logging, MakefileRegister, internal=True):
     @asyncio.cached
     async def preload(self):
         self.debug('preloading...')
-        # deps = self.dependencies
-        # self.dependencies = Dependencies()
-        # self.load_dependencies(deps)
 
         async with asyncio.TaskGroup() as group:
             group.create_task(self.__load_unresolved_dependencies())
