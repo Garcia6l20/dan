@@ -11,8 +11,14 @@ class GitSources(Target, internal=True):
     refspec: str = None
     patches: Iterable = list()
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, url=None, refspec=None, patches=None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        if url is not None:
+            self.url = url
+        if refspec is not None:
+            self.refspec = refspec
+        if patches is not None:
+            self.patches = patches
         self.sha1 = None
         self.output: Path = self.build_path / 'sources'
         self.git_dir: Path = self.output / '.git'
