@@ -358,10 +358,6 @@ class Make(Logging):
         from pymake.core.include import context
 
         self.for_install = True
-        destination = Path(self.settings.install.destination)
-        if not destination.is_absolute():
-            self.settings.install.destination = str(Path.cwd() / destination)
-
         await self.initialize()
         targets = context.root.all_installed
 

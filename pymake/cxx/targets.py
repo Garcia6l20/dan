@@ -205,6 +205,11 @@ class CXXTarget(Target, internal=True):
     @property
     def library_dependencies(self) -> set['Library']:
         return {dep for dep in self.dependencies if isinstance(dep, Library)}
+    
+    # @property
+    # def requires(self):
+    #     from pymake.pkgconfig.package import RequiredPackage
+    #     return {dep for dep in self.dependencies if isinstance(dep, RequiredPackage)}
 
     @property
     def libs(self) -> list[str]:

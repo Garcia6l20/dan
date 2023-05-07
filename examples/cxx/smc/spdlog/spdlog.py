@@ -1,9 +1,5 @@
-import os
-from pymake import self, requires
 from pymake.cxx import Library
 from pymake.smc import GitSources
-
-requires('fmt')
 
 version = '1.11.0'
 description = 'Fast C++ logging library'
@@ -21,6 +17,7 @@ class Fmt(Library):
     dependencies = 'fmt',
     public_compile_definitions = 'SPDLOG_COMPILED_LIB', 'SPDLOG_FMT_EXTERNAL'
     header_match = r'^(?:(?!bundled).)*\.(h.?)$'
+    dependencies = 'fmt = 9',
     
     async def __initialize__(self):
         spdlog_root = self.get_dependency(SpdLogSources).output

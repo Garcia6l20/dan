@@ -111,7 +111,7 @@ class Logging:
         self.error = self._logger.error
 
 
-def __get_makefile_logger():
+def _get_makefile_logger():
     from pymake.core.include import context
     if not hasattr(context.current, '_logger'):
         makefile_logger = logging.getLogger(context.current.name)
@@ -124,20 +124,20 @@ def __get_makefile_logger():
 
 
 def debug(*args, **kwds):
-    return __get_makefile_logger().debug(*args, **kwds)
+    return _get_makefile_logger().debug(*args, **kwds)
 
 
 def info(*args, **kwds):
-    return __get_makefile_logger().info(*args, **kwds)
+    return _get_makefile_logger().info(*args, **kwds)
 
 
 def warning(*args, **kwds):
-    return __get_makefile_logger().warning(*args, **kwds)
+    return _get_makefile_logger().warning(*args, **kwds)
 
 
 def error(*args, **kwds):
-    return __get_makefile_logger().error(*args, **kwds)
+    return _get_makefile_logger().error(*args, **kwds)
 
 
 def critical(*args, **kwds):
-    return __get_makefile_logger().critical(*args, **kwds)
+    return _get_makefile_logger().critical(*args, **kwds)

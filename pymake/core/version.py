@@ -35,10 +35,15 @@ class Version:
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.major == other.major \
-            and (self.minor or 0) == (other.minor or 0) \
-            and (self.patch or 0) == (other.patch or 0) \
-            and (self.build or 0) == (other.build or 0)
+        if self.major != other.major:
+            return False
+        if self.minor and other.minor and self.minor != other.minor:
+            return False
+        if self.patch and other.patch and self.patch != other.patch:
+            return False
+        if self.build and other.build and self.build != other.build:
+            return False
+        return True
 
     def __gt__(self, other: 'Version'):
         if isinstance(other, str):
@@ -90,3 +95,26 @@ class Version:
                     res += f'.{self.build}'
         return res
 
+
+class VersionSpec:
+    def __init__(self, version: Version, op: str) -> None:
+        self.version = version
+        self.op = op
+        
+    def is_compatible(self, version: Version):
+        match self.op:
+            case '==' | '=':
+                return version == self.version
+            case '>':
+                return version > self.version
+            case '>=':
+                return version >= self.version
+            case '<':
+                return version < self.version
+            case '<=':
+                return version <= self.version
+            case _:
+                return False
+            
+    def __str__(self) -> str:
+        return f'{self.op} {self.version}'

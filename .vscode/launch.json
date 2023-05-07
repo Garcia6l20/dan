@@ -30,6 +30,10 @@
                     "value": "list-targets"
                 },
                 {
+                    "label": "Install",
+                    "value": "install"
+                },
+                {
                     "label": "Configure",
                     "value": "configure"
                 },
@@ -103,6 +107,22 @@
                 "-o", "simple.greater=wonderfull !"
             ],
             "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "PYMAKE_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "pymake.io",
+            "type": "python",
+            "request": "launch",
+            "module": "pymake",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/pymake.io",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
                 "PYMAKE_BUILD_PATH": "./build"

@@ -83,7 +83,7 @@ class TaskGroup:
     a task will cancel all remaining tasks and wait for them to exit.
     The exceptions are then combined and raised as an `ExceptionGroup`.
     """
-    def __init__(self):
+    def __init__(self, name='a TaskGroup'):
         self._entered = False
         self._exiting = False
         self._aborting = False
@@ -94,6 +94,7 @@ class TaskGroup:
         self._errors = []
         self._base_error = None
         self._on_completed_fut = None
+        self._name = name
 
     def __repr__(self):
         info = ['']
@@ -201,7 +202,7 @@ class TaskGroup:
             # cycles (bad for GC); let's not keep a reference to
             # a bunch of them.
             try:
-                me = ExceptionGroup('unhandled errors in a TaskGroup', self._errors)
+                me = ExceptionGroup(f'unhandled errors in {self._name}', self._errors)
                 raise me from None
             finally:
                 self._errors = None

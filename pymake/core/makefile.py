@@ -2,8 +2,6 @@ from functools import cached_property
 from pathlib import Path
 import sys
 
-import typing as t
-
 from pymake.core.cache import Cache
 from pymake.core.target import Options, Target
 from pymake.core.test import Test
@@ -72,14 +70,22 @@ class MakeFile(sys.__class__):
             t = c.find(name_or_class)
             if t:
                 return t
-        raise RuntimeError(f'Cannot find target {name_or_class}')
 
     @property
     def requirements(self):
+        if self.name == 'requirements':
+            return self
         if self.__requirements is not None:
             return self.__requirements
         elif self.parent is not None:
             return self.parent.requirements
+
+    @property
+    def pkgs_path(self):
+        if self.requirements:
+            return self.requirements.parent.build_path / 'pkgs'
+        else:
+            return self.build_path / 'pkgs'
 
     @requirements.setter
     def requirements(self, value: 'MakeFile'):

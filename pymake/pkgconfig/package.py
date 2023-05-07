@@ -6,10 +6,13 @@ from pymake.core.pathlib import Path
 import re
 import importlib.util
 
-from pymake.core.find import find_file, library_paths_lookup
+from pymake.core.find import find_file, find_files, library_paths_lookup
+from pymake.core.requirements import RequiredPackage, parse_requirement
 from pymake.core.runners import cmdline2list
 from pymake.core.settings import InstallMode, InstallSettings
+from pymake.core.target import Target
 from pymake.core.utils import unique
+from pymake.core.version import Version, VersionSpec
 from pymake.cxx.targets import CXXTarget, Library
 from pymake.logging import Logging
 
@@ -22,27 +25,32 @@ class MissingPackage(RuntimeError):
 def find_pkg_config(name, paths=list()) -> Path:
     return find_file(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
 
+def find_pkg_configs(name, paths=list()) -> Path:
+    return find_files(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+
 
 def has_package(name,  paths=list()):
     return find_pkg_config(name,  paths) is not None
 
 
+
 class Data:
-    def __init__(self) -> None:
+    def __init__(self, path) -> None:
+        self._path = Path(path)
         self._items = dict()
-
-    __split_expr = re.compile(r'(.+?)[:=](.+)')
-
-    async def load(self, config):
-        async with aiofiles.open(config) as f:
+        with open(self._path) as f:
             lines = [l for l in [l.strip().removesuffix('\n')
-                                 for l in await f.readlines()] if len(l)]
+                                 for l in f.readlines()] if len(l)]
             for line in lines:
                 m = Data.__split_expr.match(line)
                 if m:
                     k = m.group(1).lower()
                     v = m.group(2)
                     self._items[k] = v
+        self.__requires = None
+        self.__version = None
+
+    __split_expr = re.compile(r'(.+?)[:=](.+)')
 
     def get(self, name: str, default=None):
         if not name in self._items:
@@ -58,33 +66,29 @@ class Data:
                 else:
                     break
         return value
-
-
-class AbstractPackage:
-
+    
     @property
-    def found(self) -> bool:
-        """Check if the package has been found or not
-
-        :retun: True if package has been found
-        """
-        ...
-
-
-class UnresolvedPackage(Logging):
-    def __init__(self, name: str):
-        self.name = name
-        super().__init__(name)
-
+    def path(self) -> Path:
+        return self._path
+    
     @property
-    def found(self):
-        return False
-
-    def __skipped_method_call(self, name, *args, **kwargs):
-        self.debug('call to %s skipped (unresolved)', name)
-
-    def __getattr__(self, name):
-        return functools.partial(self.__skipped_method_call, name)
+    def requires(self) -> list[RequiredPackage]:
+        if self.__requires is None:
+            self.__requires = list()
+            reqs = self.get('requires')
+            if reqs is not None:
+                for req in reqs.split(','):
+                    req = parse_requirement(req)
+                    self.__requires.append(req)
+        return self.__requires
+    
+    @property
+    def version(self) -> Version:
+        if self.__version is None:
+            v = self.get('version')
+            if v:
+                self.__version = Version(v)
+        return self.__version
 
 
 class Package(CXXTarget, internal=True):
@@ -92,16 +96,21 @@ class Package(CXXTarget, internal=True):
 
     default = False
 
-    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, **kwargs) -> None:
+    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, data: Data = None, **kwargs) -> None:
         self.output = None
-        self.config_path = config_path or find_pkg_config(name, search_paths)
+        if data is not None:
+            self.config_path = data.path
+            self.data = data
+        else:
+            self.config_path = config_path or find_pkg_config(name, search_paths)
+            self.data: Data = None
         self.search_paths = search_paths
-        self.data: Data = None
         if not self.config_path:
             raise MissingPackage(name)
         self.search_paths.insert(0, self.config_path.parent)
-        super().__init__(name, **kwargs)
         self.all[name] = self
+
+        super().__init__(name, **kwargs)
 
         pymake_plugin = self.config_path.parent.parent / \
             'pymake' / f'{self.name}.py'
@@ -113,23 +122,30 @@ class Package(CXXTarget, internal=True):
             spec.loader.exec_module(module)
         self.__cflags = None
         self.__libs = None
+        if not data:
+            self.data = Data(self.config_path)
+
+
+        self.version = self.data.version
+
+    @property
+    def modification_time(self):
+        return 0.0
 
     @property
     def found(self):
         return True
 
     async def __initialize__(self):
-        self.data = Data()
-        await self.data.load(self.config_path)
         deps = set()
-        requires = self.data.get('requires')
-        if requires:
+        reqs = self.data.requires
+        if reqs:
             async with asyncio.TaskGroup() as group:
-                for req in requires.split():
-                    if req in self.all:
-                        dep = self.all[req]
+                for req in reqs:
+                    if req.name in self.all:
+                        dep = self.all[req.name]
                     else:
-                        dep = Package(req, self.search_paths,
+                        dep = Package(req.name, self.search_paths,
                                       makefile=self.makefile)
                     group.create_task(dep.initialize())
                     deps.add(dep)
@@ -184,8 +200,8 @@ class Package(CXXTarget, internal=True):
     def modification_time(self):
         return self.config_path.modification_time
 
-    def __getattr__(self, name):
-        value = self.data.get(name)
+    def __getattr__(self, name):        
+        value = self.data.get(name) if self.data is not None else None
         if value is None:
             raise AttributeError(name)
         return value
@@ -194,9 +210,18 @@ class Package(CXXTarget, internal=True):
 _jinja_env: jinja2.Environment = None
 
 
-def find_package(name):
-    from pymake.core.include import context
-    return Package(name, search_paths=[context.root.build_path / 'pkgs'])
+def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
+    if makefile is None:
+        from pymake.core.include import context
+        makefile = context.current
+    search_paths = search_paths or makefile.pkgs_path
+    for config in find_pkg_configs(name, search_paths):
+        if spec is not None:
+            data = Data(config)
+            if spec.is_compatible(data.version):
+                return Package(name, data=data, makefile=makefile)
+        else:
+            return Package(name, config_path=config, makefile=makefile)
 
 
 def _get_jinja_env():
@@ -211,15 +236,24 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     from pymake.cxx import target_toolchain
     dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
-    requires = [dep for dep in lib.dependencies if isinstance(dep, Package)]
+
+    requires = list()
+    for req in lib.requires:
+        if req.version_spec:
+            requires.append(f'{req.name} {req.version_spec.op} {req.version_spec.version}')
+        else:
+            requires.append(req.name)
+
     libs = target_toolchain.make_link_options(
         [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
     libs = target_toolchain.to_unix_flags(libs)
+
     cflags = lib.compile_definitions.public
     cflags.extend(target_toolchain.make_include_options(['${includedir}']))
     cflags = target_toolchain.to_unix_flags(cflags)
+
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\
         .render({

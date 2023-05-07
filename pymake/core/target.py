@@ -5,6 +5,7 @@ from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
 from pymake.core import asyncio, aiofiles, utils
+from pymake.core.requirements import load_requirements
 from pymake.core.settings import InstallMode, InstallSettings, safe_load
 from pymake.core.version import Version
 from pymake.logging import Logging
@@ -15,7 +16,6 @@ class Dependencies(set):
     def __init__(self, parent: 'Target', deps: Iterable = list()):
         super().__init__()
         self.parent = parent
-        self.unresolved = set()
         for dep in deps:
             self.add(dep)
 
@@ -24,7 +24,7 @@ class Dependencies(set):
         return self.parent.makefile
 
     def add(self, dependency):
-        from pymake.pkgconfig.package import UnresolvedPackage
+        from pymake.pkgconfig.package import RequiredPackage
         match dependency:
             case Target() | FileDependency():
                 super().add(dependency)
@@ -42,13 +42,14 @@ class Dependencies(set):
                         super().add(FileDependency(
                             self.parent.source_path / dependency))
                     else:
-                        self.unresolved.add(UnresolvedPackage(dependency))
+                        from pymake.pkgconfig.package import parse_requirement
+                        super().add(parse_requirement(dependency))
             case Path():
                 dependency = FileDependency(
                     self.parent.source_path / dependency)
                 super().add(dependency)
-            case UnresolvedPackage():
-                self.unresolved.add(dependency)
+            case RequiredPackage():
+                super().add(dependency)
             case _:
                 raise RuntimeError(
                     f'Unhandled dependency {dependency} ({type(dependency)})')
@@ -196,13 +197,14 @@ class Target(Logging, MakefileRegister, internal=True):
 
     dependencies: set[TargetDependencyLike] = set()
     preload_dependencies: set[TargetDependencyLike] = set()
-
+    
     def __init__(self,
                  name: str = None,
                  parent: 'Target' = None,
                  version: str = None,
                  default: bool = None,
-                 makefile=None) -> None:
+                 makefile=None,
+                 build_path: Path = None) -> None:
         self.version = Version(self.version) if self.version else None
         self.parent = parent
         self.__cache: dict = None
@@ -228,6 +230,11 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.makefile is None:
             raise RuntimeError('Makefile not resolved')
+                
+        if build_path is None:
+            self.__build_path = self.makefile.build_path
+        else:
+            self.__build_path = build_path
 
         if self.fullname is None:
             self.fullname = f'{self.makefile.fullname}.{self.name}'
@@ -258,7 +265,12 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def build_path(self) -> Path:
-        return self.makefile.build_path
+        return self.__build_path
+    
+    @property
+    def requires(self):
+        from pymake.pkgconfig.package import RequiredPackage
+        return {dep for dep in self.dependencies if isinstance(dep, RequiredPackage)}
 
     @cached_property
     def fullname(self) -> str:
@@ -274,26 +286,8 @@ class Target(Logging, MakefileRegister, internal=True):
         return self.__cache
 
     async def __load_unresolved_dependencies(self):
-        if len(self.dependencies.unresolved) == 0:
-            return
-        deps_install_path = self.makefile.requirements.parent.build_path / 'pkgs'
-        deps_settings = InstallSettings(deps_install_path)
-        deps_installs = list()
-        if self.makefile.requirements is None:
-            raise RuntimeError(
-                f'Unresolved dependencies maybe you should provide a requirements.py file')
-        for dep in self.dependencies.unresolved:
-            t = self.makefile.requirements.find(dep.name)
-            if not t:
-                raise RuntimeError(f'Unresolved dependency "{dep.name}"')
-            deps_installs.append(t().install(deps_settings, InstallMode.dev))
-        await asyncio.gather(*deps_installs)
-
-        from pymake.pkgconfig.package import Package
-        for dep in self.dependencies.unresolved:
-            pkg = Package(dep.name, search_paths=[
-                deps_install_path], makefile=self.makefile)
-            self.dependencies.add(pkg)
+        if len(self.requires) > 0:
+            self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self))
 
     @asyncio.cached
     async def preload(self):

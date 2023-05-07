@@ -471,7 +471,7 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
 _home_var = 'USERPROFILE' if os.name == 'nt' else 'HOME'
 
 
-@ functools.cache
+@functools.cache
 def get_pymake_path():
     path = Path(os.getenv('PYMAKE_DATA', os.getenv(_home_var))) / '.pymake'
     path.mkdir(exist_ok=True, parents=False)

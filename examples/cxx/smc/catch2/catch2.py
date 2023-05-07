@@ -105,7 +105,7 @@ def discover_tests(self, exe):
         raise RuntimeError(
             f'catch2.discover_tests requires an Executable class, not a {exe.__name__}')
     import yaml
-    exe: Executable = exe()
+    exe: Executable = self.makefile.find(exe)
     output = exe.build_path / f'{exe.name}-tests.yaml'
     filepath = exe.source_path / exe.sources[0]
     if not output.exists() or output.older_than(filepath):

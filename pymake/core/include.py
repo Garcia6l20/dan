@@ -1,12 +1,15 @@
 import importlib.util
 import os
+import re
+from pymake.core.asyncio import sync_wait
 from pymake.core.makefile import MakeFile
 
 from pymake.core.pathlib import Path
+from pymake.core.requirements import load_requirements
 
 from pymake.core.target import Target
 from pymake.logging import Logging
-from pymake.pkgconfig.package import AbstractPackage, MissingPackage, Package, UnresolvedPackage
+from pymake.pkgconfig.package import MissingPackage, Package, RequiredPackage, parse_requirement
 
 
 class TargetNotFound(RuntimeError):
@@ -14,59 +17,20 @@ class TargetNotFound(RuntimeError):
         super().__init__(f'package {name} not found')
 
 
-class LoadRequest(Exception):
-    def __init__(self, recipes: list[str]) -> None:
-        super().__init__(f'Unloaded recipes: {", ".join(recipes)}')
-        self.recipes = recipes
-        self.makefile = context.current
-
-
-def load(*recipes: str):
-    packages_root = context.root.build_path / 'pkgs-build'
-    missing_recipes = list()
-    for recipe in recipes:
-        if not (packages_root / recipe / 'done').exists():
-            missing_recipes.append(recipe)
-    if len(missing_recipes) > 0:
-        raise LoadRequest(missing_recipes)
-
-
-def requires(*names) -> list[AbstractPackage]:
+def requires(*requirements) -> list[Target]:
     ''' Requirement lookup
 
     1. Searches for a target exported by a previously included makefile
     2. Searches for pkg-config library
-    3. Raises LoadRequest exception, that should trig a package lookup/installation,
-        then reload the makefile requiring the package
-        (that should be resolved by its locally installed pkg-config)
 
     :param names: One (or more) requirement(s).
     :return: The list of found targets.
-    :raises LoadRequest: Unfound requirements to resolve.
     '''
+    # return [parse_requirement(req) for req in requirements]
     global context
-    res = list()
-    for name in names:
-        pkg = UnresolvedPackage(name)
-        for t in context.root.all_targets:
-            if t.name == name:
-                pkg = t
-                break
-        else:
-            for t in Package.all.values():
-                if t.name == name:
-                    pkg = t
-                    break
-            else:
-                try:
-                    pkg = Package(name, search_paths=[
-                        context.current.build_path / 'pkgs'], makefile=context.current)
-                except MissingPackage:
-                    pass
-
-        res.append(pkg)
-
-    return res
+    requirements = [parse_requirement(req) for req in requirements]
+    sync_wait(load_requirements(requirements, makefile=context.current, install=False))
+    return requirements
 
 
 class Context(Logging):
@@ -146,13 +110,13 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
         requirements)
 
 
-def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None) -> MakeFile:
+def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None, requirements: MakeFile = None) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
     spec = importlib.util.spec_from_file_location(
         module_name, module_path)
     module = importlib.util.module_from_spec(spec)
-    _init_makefile(module, name, build_path)
+    _init_makefile(module, name, build_path, requirements)
     spec.loader.exec_module(module)
     context.up()
     return module
@@ -193,8 +157,6 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
 
     try:
         spec.loader.exec_module(module)
-    except LoadRequest as missing:
-        context.missing.append(missing)
     except TargetNotFound as err:
         if len(context.missing) == 0:
             raise err
