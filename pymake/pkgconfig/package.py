@@ -77,9 +77,20 @@ class Data:
             self.__requires = list()
             reqs = self.get('requires')
             if reqs is not None:
-                for req in reqs.split(','):
-                    req = parse_requirement(req)
-                    self.__requires.append(req)
+                reqs = reqs.strip()
+                # conan generates invalid requires clause
+                # it should be 'comma separated values but it is not'
+                #  eg.: 'boost-headers boost-_cmake'
+                if any([c in reqs for c in ',=']):
+                    # the right way
+                    for req in reqs.split(','):
+                        req = parse_requirement(req)
+                        self.__requires.append(req)
+                else:
+                    # conan's way
+                    for req in reqs.split(' '):
+                        req = parse_requirement(req)
+                        self.__requires.append(req)
         return self.__requires
     
     @property

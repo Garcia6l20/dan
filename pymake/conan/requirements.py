@@ -45,7 +45,7 @@ class Requirements(Target, internal=True):
     def __init__(self, makefile) -> None:
         super().__init__('conan', makefile=makefile)
 
-        self.output = self.makefile.parent.build_path / 'pkgs' / 'conanrun'
+        self.output = self.makefile.pkgs_path / 'lib' / 'pkgconfig' / 'conanrun'
         if platform.system() == 'Windows':
             self.output = self.output.with_suffix('.bat')
         else:
