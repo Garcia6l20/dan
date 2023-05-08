@@ -16,9 +16,10 @@ class Cache(t.Generic[T]):
         cls.dataclass = t.get_args(cls.__orig_bases__[0])[0]
         return super().__init_subclass__()
 
-    def __init__(self, path : Path|str, *args, **kwargs):
-        self.__path = Path(path)        
-        assert not self.__path in self.__caches, 'a cache type should be unique'
+    def __init__(self, path: Path|str, *args, cache_name:str = None, **kwargs):
+        self.__path = Path(path)     
+        self.__name = cache_name or path.stem   
+        assert not self.name in self.__caches, 'a cache type should be unique'
         if self.path.exists():
             with open(self.path, 'r') as f:
                 self.__data = self.dataclass(**yaml.load(f, Loader=yaml.Loader))
@@ -26,7 +27,7 @@ class Cache(t.Generic[T]):
         else:
             self.__data = self.dataclass(*args, **kwargs)
             self.__modification_date = 0.0
-        self.__caches[self.__path] = self
+        self.__caches[self.name] = self
     
     @property
     def path(self):
@@ -34,7 +35,7 @@ class Cache(t.Generic[T]):
     
     @property
     def name(self):
-        return self.__path.stem
+        return self.__name
     
     @property
     def data(self) -> T|dict:
@@ -58,8 +59,13 @@ class Cache(t.Generic[T]):
             for c in cls.__caches.values():
                 group.create_task(c.save())
 
+    @classmethod
+    def get(cls, name) -> 'Cache':
+        if name in cls.__caches:
+            return cls.__caches[name]
+
     def ignore(self):
-        del self.__caches[self.__path]
+        del self.__caches[self.name]
 
 
 def once_method(fn):    

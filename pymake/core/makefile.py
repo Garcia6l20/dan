@@ -37,7 +37,7 @@ class MakeFile(sys.__class__):
     @property
     def cache(self) -> Cache:
         if not self.__cache:
-            self.__cache = Cache(self.build_path / f'{self.name}.cache.yaml')
+            self.__cache = Cache(self.build_path / f'{self.name}.cache.yaml', cache_name=self.fullname)
         return self.__cache
 
     def register(self, cls: type[Target | Test]):
