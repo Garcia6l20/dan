@@ -80,7 +80,6 @@ class Code:
                 return None
             children = list()
             for test in mf.tests:
-                test = test()
                 children.append(make_test_info(test))
 
             for child in mf.children:

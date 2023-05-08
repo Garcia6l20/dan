@@ -191,11 +191,12 @@ class Make(Logging):
         from pymake.cxx.targets import CXXObjectsTarget
 
         source = Path(source)
-        for target in [target for target in context.root.all_targets if isinstance(target, CXXObjectsTarget)]:
-            await target.initialize()
-            for obj in target.objs:
-                if obj.source == source:
-                    return target
+        for target in [target for target in context.root.all_targets if isinstance(target, CXXObjectsTarget)]:            
+            if target.source_path not in source.parents:
+                continue
+            target._init_sources()
+            if source.name in target.sources:
+                return target
 
 
     @classmethod
