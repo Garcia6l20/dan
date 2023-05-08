@@ -180,7 +180,8 @@
   },
   "dependencies": {
     "vscode-test-adapter-api": "^1.9.0",
-    "vscode-test-adapter-util": "^0.7.1"
+    "vscode-test-adapter-util": "^0.7.1",
+    "vscode-cpptools": "^5.0.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.74.0",
@@ -199,6 +200,7 @@
     "@vscode/test-electron": "^2.2.0"
   },
   "extensionDependencies": [
-    "hbenl.vscode-test-explorer"
+    "hbenl.vscode-test-explorer",
+    "ms-vscode.cpptools"
   ]
 }
