@@ -57,6 +57,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
 
     from pymake.pkgconfig.package import find_package
     from pymake.logging import _get_makefile_logger
+    from pymake.core.include import context
 
     if logger is None:
         logger = _get_makefile_logger()
@@ -71,6 +72,11 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
         for req in requirements:
             if req.found:
                 result.append(req.target)
+                continue
+
+            t = context.root.find(req.name)
+            if t and req.is_compatible(t):
+                req.target = t
                 continue
 
             t = find_package(req.name, req.version_spec, search_paths=[deps_install_path], makefile=makefile)
