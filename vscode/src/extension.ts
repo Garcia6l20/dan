@@ -3,6 +3,7 @@
 import * as vscode from 'vscode';
 import * as commands from './pymake/commands';
 import * as debuggerModule from './pymake/debugger';
+import * as path from 'path'
 import { Target } from './pymake/targets';
 import { StatusBar } from './status';
 import { PyMakeTestAdapter } from './pymake/testAdapter';
@@ -10,6 +11,7 @@ import { TestHub, testExplorerExtensionId } from 'vscode-test-adapter-api';
 import { Log, TestAdapterRegistrar } from 'vscode-test-adapter-util';
 import { CppToolsApi, Version, getCppToolsApi } from 'vscode-cpptools';
 import { ConfigurationProvider as CppToolsConfigurationProvider } from './cpptools';
+import { existsSync } from 'fs';
 
 
 class TargetPickItem {
@@ -137,6 +139,16 @@ export class PyMake implements vscode.Disposable {
 		return this.tests;
 	}
 
+	configured() {
+		return existsSync(path.join(this.buildPath, 'pymake.config.yaml'));
+	}
+
+	async ensureConfigured() {
+		if (!this.configured()) {
+			await commands.configure(this);
+		}
+	}
+
 	async registerCommands() {
 		const register = (id: string, callback: (...args: any[]) => any, thisArg?: any) => {
 			this.extensionContext.subscriptions.push(
@@ -146,10 +158,21 @@ export class PyMake implements vscode.Disposable {
 
 		register('scanToolchains', async () => commands.scanToolchains(this));
 		register('configure', async () => commands.configure(this));
-		register('build', async () => commands.build(this, this.buildTargets));
-		register('debugBuild', async () => commands.build(this, this.buildTargets, true));
-		register('clean', async () => commands.clean(this));
+		register('build', async () => {
+			await this.ensureConfigured();
+			await commands.build(this, this.buildTargets);
+		});
+		register('debugBuild', async () => {
+			await this.ensureConfigured();
+			await commands.build(this, this.buildTargets, true);
+		});
+		register('clean', async () => {
+			if (this.configured()) {
+				await commands.clean(this);
+			}
+		});
 		register('run', async () => {
+			await this.ensureConfigured();
 			if (!this.launchTarget || !this.launchTarget.executable) {
 				await this.promptLaunchTarget();
 			}
@@ -158,6 +181,7 @@ export class PyMake implements vscode.Disposable {
 			}
 		});
 		register('debug', async () => {
+			await this.ensureConfigured();
 			if (!this.launchTarget || !this.launchTarget.executable) {
 				await this.promptLaunchTarget();
 			}
@@ -166,7 +190,10 @@ export class PyMake implements vscode.Disposable {
 				await debuggerModule.debug(this.launchTarget);
 			}
 		});
-		register('test', async () => commands.test(this));
+		register('test', async () => {
+			await this.ensureConfigured();
+			await commands.test(this);
+		});
 		register('selectLaunchTarget', async () => this.promptLaunchTarget());
 		register('selectBuildTargets', async () => this.promptBuildTargets());
 		register('selectTestTargets', async () => this.promptTests());
@@ -226,6 +253,7 @@ export class PyMake implements vscode.Disposable {
 
 	async onLoaded() {
 		this.toolchains = await commands.getToolchains(this);
+		await this.ensureConfigured();
 		this.targets = await commands.getTargets(this);
 
 		vscode.commands.executeCommand("setContext", "inPyMakeProject", true);
