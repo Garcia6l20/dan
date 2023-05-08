@@ -122,6 +122,7 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
 async def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
+    """Configure pymake project"""
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     config = ConfigCache(build_path / Make._config_name, )
     config.data.source_path = config.data.source_path if hasattr(
@@ -152,6 +153,7 @@ async def configure(verbose: bool, toolchain: str, settings: tuple[str], options
 @common_opts
 @pass_context
 async def build(ctx: CommandsContext, **kwds):
+    """Build targets"""
     ctx(**kwds)  # update kwds
     await ctx.make.build()
     from pymake.cxx import target_toolchain
@@ -163,6 +165,7 @@ async def build(ctx: CommandsContext, **kwds):
 @click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
 @pass_context
 async def install(ctx: CommandsContext, mode: str, **kwargs):
+    """Install targets"""
     ctx(**kwargs)
     mode = InstallMode[mode]
     await ctx.make.install(mode)
@@ -175,6 +178,7 @@ async def install(ctx: CommandsContext, mode: str, **kwargs):
 @click.option('--root', '-r', help='Root path to search for installation manifest', type=click.Path(exists=True, file_okay=False))
 @click.argument('NAME')
 def uninstall(verbose: bool, yes: bool, root: str, name: str):
+    """Uninstall previous installation"""
     logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     if root:
         paths = [root]
@@ -206,13 +210,20 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
         os.remove(manifest)
         rm_empty(manifest.parent)
 
+@cli.group()
+@pass_context
+def ls(ctx: CommandsContext):
+    """Inspect stuff"""
+    pass
 
-@cli.command()
+@ls.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
 @pass_context
-async def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
+async def targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
+    """List targets"""
+    kwargs['quiet'] = True
     ctx(**kwargs)
     await ctx.make.initialize()
     out = []
@@ -224,18 +235,22 @@ async def list_targets(ctx: CommandsContext, all: bool, show_type: bool, **kwarg
     click.echo('\n'.join(out))
 
 
-@cli.command()
+@ls.command()
 @common_opts
 @pass_context
-async def list_tests(ctx: CommandsContext, **kwargs):
+async def tests(ctx: CommandsContext, **kwargs):
+    """List tests"""
+    kwargs['quiet'] = True
     ctx(**kwargs)
     await ctx.make.initialize()
     for t in ctx.make.tests:
         click.echo(t.fullname)
 
 
-@cli.command()
-def list_toolchains(**kwargs):
+@ls.command()
+def toolchains(**kwargs):
+    """List toolchains"""
+    kwargs['quiet'] = True
     for name, _ in Make.toolchains()['toolchains'].items():
         click.echo(name)
 
@@ -243,12 +258,14 @@ def list_toolchains(**kwargs):
 @cli.command()
 @common_opts
 async def clean(**kwargs):
+    """Clean generated stuff"""
     await Make(**kwargs).clean()
 
 
 @cli.command()
 @common_opts
 async def run(**kwargs):
+    """Run executable(s)"""
     make = Make(**kwargs)
     rc = await make.run()
     sys.exit(rc)
@@ -257,6 +274,7 @@ async def run(**kwargs):
 @cli.command()
 @common_opts
 async def test(**kwargs):
+    """Run tests"""
     make = Make(**kwargs)
     rc = await make.test()
     sys.exit(rc)
@@ -265,6 +283,7 @@ async def test(**kwargs):
 @cli.command()
 @click.option('-s', '--script', help='Use a source script to resolve compilation environment')
 def scan_toolchains(script: str, **kwargs):
+    """Scan system toolchains"""
     from pymake.cxx.detect import create_toolchains, load_env_toolchain
     if script:
         load_env_toolchain(script)
@@ -274,8 +293,7 @@ def scan_toolchains(script: str, **kwargs):
 
 @cli.group()
 def code():
-    ''' vscode specific commands
-    '''
+    """VS-Code specific commands"""
     pass
 
 
@@ -300,31 +318,6 @@ async def get_targets(ctx: CommandsContext, **kwargs):
         })
     import json
     click.echo(json.dumps(out))
-
-
-@cli.command()
-@common_opts
-@pass_context
-async def get_tests(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    from pymake.core.include import context
-    out = list()
-    for test in context.root.tests:
-        out.append(test.fullname)
-    import json
-    click.echo(json.dumps(out))
-
-# @cli.command()
-# @common_opts
-# @pass_context
-# async def shell(ctx: CommandsContext, **kwargs):
-#     ctx(**kwargs)
-#     make = ctx.make
-#     await make.initialize()
-#     import code
-#     code.interact(local={'make': make})
 
 
 @code.command()
