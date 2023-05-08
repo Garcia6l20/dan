@@ -22,7 +22,8 @@ export async function codeCommand<T>(ext: PyMake, fn: string, ...args: string[])
             ...process.env,
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'PYMAKE_BUILD_PATH': ext.buildPath,
-        }
+        },
+        cwd: ext.projectRoot,
     });
     let data = '';
     stream.onLine((line, isError) => {
@@ -32,7 +33,11 @@ export async function codeCommand<T>(ext: PyMake, fn: string, ...args: string[])
     if (rc !== 0) {
         throw Error(`PyMake: ${fn} failed: ${data}`);
     } else {
-        return JSON.parse(data) as T;
+        try {
+            return JSON.parse(data) as T;
+        } catch (e) {
+            throw Error(`PyMake: ${fn} failed to parse output: ${data}`);
+        }
     }
 }
 

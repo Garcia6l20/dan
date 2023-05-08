@@ -118,7 +118,9 @@ export class PyMakeTestAdapter implements TestAdapter {
 
     async runTest(test: TestInfo): Promise<void> {
         this.testStatesEmitter.fire(<TestEvent>{ type: "test", test: test.id, state: "running" });
-        const stream = await run.streamExec(['python', '-m', 'pymake', 'test', '-B', this.ext.buildPath, '-q', test.id], { cwd: test.workingDirectory });
+        const stream = await run.streamExec(['python', '-m', 'pymake', 'test', '-B', this.ext.buildPath, '-q', test.id], {
+            cwd: this.ext.projectRoot,
+        });
         let out: string = '';
         stream.onLine((line, isError) => {
             out += line;
