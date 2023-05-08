@@ -84,7 +84,58 @@ _arm_defines = {
     'arm7s': ('__ARM_ARCH_7S__'),
 }
 
-def _parse_compiler_version(defines: dict[str, str|int]):
+def dict_contains(defines, *defs):
+    for d in defs:
+        if d in defines:
+            return True
+    return False
+
+def get_target_system(defines: dict[str, str]) -> str:
+    system = None
+    if dict_contains(defines, '_WIN32', '_WIN64'):
+        system = 'windows'
+    elif dict_contains(defines, '__ANDROID__'):
+        system = 'android'
+    elif dict_contains(defines, '__linux__'):
+        system = 'linux'
+    elif dict_contains(defines, '__sun'):
+        system = 'sun'
+    elif dict_contains(defines, '__hpux'):
+        system = 'hpux'
+    elif dict_contains(defines, '__DragonFly__'):
+        system = 'dragonfly'
+    elif dict_contains(defines, '__FreeBSD__'):
+        system = 'freebsd'
+    elif dict_contains(defines, '__NetBSD__'):
+        system = 'netbsd'
+    elif dict_contains(defines, '__OpenBSD__'):
+        system = 'openbsd'
+    elif dict_contains(defines, 'BSD'):
+        system = 'bsd'
+    elif dict_contains(defines, '__unix__'):
+        system = 'unix'
+    elif dict_contains(defines, '__MACH__', '__APPLE__'):
+        system = 'macos'
+    return system
+
+def get_target_arch(defines: dict[str, str]) -> str:
+    arch = None
+    if dict_contains(defines, '__x86_64__', '_M_X64'):
+        arch = 'x64'
+    elif dict_contains(defines, 'i386', '__i386__', '__i386', '_M_IX86'):
+        arch = 'x86'
+    elif dict_contains(defines, '__aarch64__', '_M_ARM64'):
+        arch = 'arm64'
+    elif '_M_ARM' in defines:
+        arch = 'arm'
+    else:
+        for defs in _arm_defines:
+            if dict_contains(defines, *defs):
+                arch = 'arm'
+                break
+    return arch
+
+def _parse_compiler_version(defines: dict[str, str]):
     try:
         if '__LCC__' in defines and '__e2k__' in defines:
             compiler = MCST_LCC
@@ -151,52 +202,8 @@ def _parse_compiler_version(defines: dict[str, str|int]):
         else:
             return None
         
-        def contains(*defs):
-            for d in defs:
-                if d in defines:
-                    return True
-            return False
-
-        arch = None
-        system = None
-        if contains('__x86_64__', '_M_X64'):
-            arch = 'x64'
-        elif contains('i386', '__i386__', '__i386', '_M_IX86'):
-            arch = 'x86'
-        elif contains('__aarch64__', '_M_ARM64'):
-            arch = 'arm64'
-        elif '_M_ARM' in defines:
-            arch = 'arm'
-        else:
-            for defs in _arm_defines:
-                if contains(*defs):
-                    arch = 'arm'
-                    break
-
-        if contains('_WIN32', '_WIN64'):
-            system = 'windows'
-        elif contains('__ANDROID__'):
-            system = 'android'
-        elif contains('__linux__'):
-            system = 'linux'
-        elif contains('__sun'):
-            system = 'sun'
-        elif contains('__hpux'):
-            system = 'hpux'
-        elif contains('__DragonFly__'):
-            system = 'dragonfly'
-        elif contains('__FreeBSD__'):
-            system = 'freebsd'
-        elif contains('__NetBSD__'):
-            system = 'netbsd'
-        elif contains('__OpenBSD__'):
-            system = 'openbsd'
-        elif contains('BSD'):
-            system = 'bsd'
-        elif contains('__unix__'):
-            system = 'unix'
-        elif contains('__MACH__', '__APPLE__'):
-            system = 'macos'
+        system = get_target_system(defines)
+        arch = get_target_arch(defines)
 
         return CompilerId(compiler, Version(major, minor, patch), arch=arch, system=system)
     except KeyError:
@@ -206,71 +213,73 @@ def _parse_compiler_version(defines: dict[str, str|int]):
     except TypeError:
         return None
 
+__data_path = Path(__file__).parent / 'data'
+__empty_source = __data_path / 'empty.c'
+__detect_cmd = __data_path / 'detect.cmd'
+
+detectors = {
+    # "-dM" generate list of #define directives
+    # "-E" run only preprocessor
+    # "-x c" compiler as C code
+    # the output is of lines in form of "#define name value"
+    'gcc': ['-dM', '-E', '-x', 'c'],
+    'clang': ['-dM', '-E', '-x', 'c'],
+    'clang-cl': ['--driver-mode=g++', '-dM', '-E', '-x', 'c'],
+    'sun-cc': ['-c', '-xdumpmacros'], 
+    # cl (Visual Studio, MSVC)
+    # "/nologo" Suppress Startup Banner
+    # "/E" Preprocess to stdout
+    # "/B1" C front-end
+    # "/c" Compile Without Linking
+    # "/TC" Specify Source File Type
+    'msvc': ['/nologo', '/E', '/B1', str(__detect_cmd), '/c', '/TC'],
+    'icc': ['/QdM', '/E', '/TC'],  # icc (Intel) on Windows,
+    'qcc': ['-Wp', '-dM', '-E', '-x', 'c'],  # QNX QCC
+}
+
+def parse_compiler_defines(output: str):
+    defines = dict()
+    for line in output.splitlines():
+        tokens = line.split(' ', 3)
+        if len(tokens) == 3 and tokens[0] == '#define':
+            defines[tokens[1]] = tokens[2]
+        # MSVC dumps macro definitions in single line:
+        # "MSC_CMD_FLAGS=-D_MSC_VER=1921 -Ze"
+        elif line.startswith("MSC_CMD_FLAGS="):
+            line = line[len("MSC_CMD_FLAGS="):].rstrip()
+            defines = dict()
+            tokens = line.split()
+            for token in tokens:
+                if token.startswith("-D") or token.startswith("/D"):
+                    token = token[2:]
+                    if '=' in token:
+                        name, value = token.split('=', 2)
+                    else:
+                        name, value = token, '1'
+                    defines[name] = value
+            break
+    return defines
+
+def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None):
+    with tempfile.TemporaryDirectory(prefix='pymake-dci-') as tmpdir:
+        output, _, rc = sync_run(
+                [executable, *detectors[compiler_type], *options, str(__empty_source)], env=env, cwd=tmpdir)
+        return parse_compiler_defines(output)
+
 
 def detect_compiler_id(executable, env=None):
     # use a temporary file, as /dev/null might not be available on all platforms
-    tmpdir = tempfile.mkdtemp(prefix='pymake-dci-')
-    tmpname = os.path.join(tmpdir, "temp.c")
-    with open(tmpname, "wb") as f:
-        f.write(b"\n")
-
-    cmd = os.path.join(tmpdir, "file.cmd")
-    with open(cmd, "wb") as f:
-        f.write(b"echo off\nset MSC_CMD_FLAGS\n")
-
-    detectors = [
-        # "-dM" generate list of #define directives
-        # "-E" run only preprocessor
-        # "-x c" compiler as C code
-        # the output is of lines in form of "#define name value"
-        ['-dM', '-E', '-x', 'c'],
-        ['--driver-mode=g++', '-dM', '-E', '-x', 'c'],  # clang-cl
-        ['-c', '-xdumpmacros'],  # SunCC,
-        # cl (Visual Studio, MSVC)
-        # "/nologo" Suppress Startup Banner
-        # "/E" Preprocess to stdout
-        # "/B1" C front-end
-        # "/c" Compile Without Linking
-        # "/TC" Specify Source File Type
-        ['/nologo', '/E', '/B1', cmd, '/c', '/TC'],
-        ['/QdM', '/E', '/TC'],  # icc (Intel) on Windows,
-        ['-Wp', '-dM', '-E', '-x', 'c'],  # QNX QCC
-    ]
-    try:
-        for detector in detectors:
+    with tempfile.TemporaryDirectory(prefix='pymake-dci-') as tmpdir:
+        for name, detector in detectors.items():
             output, _, rc = sync_run(
-                [executable, *detector, tmpname], no_raise=True, env=env, cwd=tmpdir)
+                [executable, *detector, str(__empty_source)], no_raise=True, env=env, cwd=tmpdir)
             if 0 == rc:
-                defines = dict()
-                for line in output.splitlines():
-                    tokens = line.split(' ', 3)
-                    if len(tokens) == 3 and tokens[0] == '#define':
-                        defines[tokens[1]] = tokens[2]
-                    # MSVC dumps macro definitions in single line:
-                    # "MSC_CMD_FLAGS=-D_MSC_VER=1921 -Ze"
-                    elif line.startswith("MSC_CMD_FLAGS="):
-                        line = line[len("MSC_CMD_FLAGS="):].rstrip()
-                        defines = dict()
-                        tokens = line.split()
-                        for token in tokens:
-                            if token.startswith("-D") or token.startswith("/D"):
-                                token = token[2:]
-                                if '=' in token:
-                                    name, value = token.split('=', 2)
-                                else:
-                                    name, value = token, '1'
-                                defines[name] = value
-                        break
+                defines = parse_compiler_defines(output)
                 compiler = _parse_compiler_version(defines)
                 if compiler is None:
                     continue
                 return compiler
         return None
-    finally:
-        try:
-            os.rmdir(tmpdir)
-        except OSError:
-            pass
 
 
 class Compiler:
