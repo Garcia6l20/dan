@@ -75,7 +75,7 @@ class PackageBuild(Target, internal=True):
             requirements = None
         makefile = load_makefile(self.sources.output / 'makefile.py', self.sources.refspec, requirements=requirements) #, build_path=self.build_path / 'build')
         makefile.options.get('version').value = str(self.version)
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
             for target in makefile.all_installed:
                 group.create_task(target.install(self.install_settings, InstallMode.dev))
 
@@ -97,7 +97,7 @@ class Package(Target, internal=True):
         self.pkgconfig_path.mkdir(exist_ok=True, parents=True)
         self.pymake_path.mkdir(exist_ok=True, parents=True)
 
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'importing {self.name} package') as group:
             for pkg in find_files(r'.+\.pc', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
                 self.debug('copying %s to %s', pkg, self.pkgconfig_path)
                 group.create_task(aiofiles.copy(pkg, self.pkgconfig_path))
@@ -109,7 +109,7 @@ class Package(Target, internal=True):
         if self.output.exists():
             from pymake.pkgconfig.package import Data, find_package
             data = Data(self.output)
-            async with asyncio.TaskGroup() as group:
+            async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 for pkg in data.requires:
                     pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[_get_packages_path()])
                     self.debug('copying %s to %s', pkg.config_path, self.pkgconfig_path)

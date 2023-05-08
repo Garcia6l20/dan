@@ -151,7 +151,7 @@ class Package(CXXTarget, internal=True):
         deps = set()
         reqs = self.data.requires
         if reqs:
-            async with asyncio.TaskGroup() as group:
+            async with asyncio.TaskGroup(f'resolving {self.name}\'s requirements') as group:
                 for req in reqs:
                     if req.name in self.all:
                         dep = self.all[req.name]

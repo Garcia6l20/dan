@@ -293,12 +293,12 @@ class Target(Logging, MakefileRegister, internal=True):
     async def preload(self):
         self.debug('preloading...')
 
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'building {self.name}\'s preload dependencies') as group:
             group.create_task(self.__load_unresolved_dependencies())
             for dep in self.preload_dependencies:
                 group.create_task(dep.build())
 
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'preloading {self.name}\'s target dependencies') as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.preload())
 
@@ -312,7 +312,7 @@ class Target(Logging, MakefileRegister, internal=True):
         await self.preload()
         self.debug('initializing...')
 
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'initializing {self.name}\'s target dependencies') as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.initialize())
 
@@ -339,7 +339,7 @@ class Target(Logging, MakefileRegister, internal=True):
         return True
 
     async def _build_dependencies(self):
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'building {self.name}\'s target dependencies') as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.build())
 
@@ -377,7 +377,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @asyncio.cached
     async def clean(self):
         await self.initialize()
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'cleaning {self.name} outputs') as group:
             if self.output and self.output.exists():
                 self.info('cleaning...')
                 if self.output.is_dir():

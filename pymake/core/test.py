@@ -75,7 +75,7 @@ class Test(Logging, MakefileRegister, internal=True):
         out_log, out_err = self.outs(args, expected_result)
         async with aiofiles.open(out_log, 'w') as outlog, \
                 aiofiles.open(out_err, 'w') as errlog:
-            async with asyncio.TaskGroup() as group:
+            async with asyncio.TaskGroup(f'writing {self.name} log files') as group:
                 group.create_task(outlog.write(out))
                 group.create_task(errlog.write(err))
         if rc != expected_result:
@@ -90,7 +90,7 @@ class Test(Logging, MakefileRegister, internal=True):
 
     async def run_test(self):
         try:
-            async with asyncio.TaskGroup() as tests:
+            async with asyncio.TaskGroup(f'running {self.name} tests') as tests:
                 for args, expected_result in self.cases:
                     tests.create_task(self._run_test(
                         args, expected_result=expected_result))

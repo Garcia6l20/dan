@@ -72,7 +72,7 @@ class TaskGroup:
 
     Example use:
 
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup('my group name') as group:
             task1 = group.create_task(some_coroutine(...))
             task2 = group.create_task(other_coroutine(...))
         print("Both tasks have completed now.")

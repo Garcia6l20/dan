@@ -279,14 +279,14 @@ class CXXObjectsTarget(CXXTarget, internal=True):
 
     async def __initialize__(self):
         self._init_sources()
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'initializing {self.name}\'s objects') as group:
             for obj in self.objs:
                 group.create_task(obj.initialize())
                 # self.load_dependency(obj)
 
     async def __build__(self):
         # compile objects
-        async with asyncio.TaskGroup() as group:
+        async with asyncio.TaskGroup(f'building {self.name}\'s objects') as group:
             for dep in self.objs:
                 group.create_task(dep.build())
 
