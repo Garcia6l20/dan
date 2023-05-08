@@ -384,7 +384,7 @@ def get_compilers(logger: logging.Logger):
         for info in infos:
             logger.info(f'Loading Visual Studio: {info["displayName"]}')
             paths = [info['installationPath']]
-            vcvars = find_file(r'vcvarsall.bat', paths=paths)
+            vcvars = find_file(r'vcvarsall.bat$', paths=paths)
             archs = [('x86_64', 'x64'), ('x86', 'x86')]
             for arch, vc_arch in archs:
                 env = get_environment_from_batch_command([vcvars, vc_arch])

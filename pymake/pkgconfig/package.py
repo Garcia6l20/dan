@@ -1,5 +1,4 @@
 from copy import deepcopy
-import functools
 import jinja2
 from pymake.core import aiofiles, asyncio
 from pymake.core.pathlib import Path
@@ -10,11 +9,9 @@ from pymake.core.find import find_file, find_files, library_paths_lookup
 from pymake.core.requirements import RequiredPackage, parse_requirement
 from pymake.core.runners import cmdline2list
 from pymake.core.settings import InstallMode, InstallSettings
-from pymake.core.target import Target
 from pymake.core.utils import unique
 from pymake.core.version import Version, VersionSpec
 from pymake.cxx.targets import CXXTarget, Library
-from pymake.logging import Logging
 
 
 class MissingPackage(RuntimeError):
@@ -23,10 +20,10 @@ class MissingPackage(RuntimeError):
 
 
 def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+    return find_file(fr'.*{name}\.pc$', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
 
 def find_pkg_configs(name, paths=list()) -> Path:
-    return find_files(fr'.*{name}\.pc', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+    return find_files(fr'.*{name}\.pc$', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
 
 
 def has_package(name,  paths=list()):

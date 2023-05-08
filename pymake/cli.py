@@ -188,7 +188,7 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
             '/usr/local/share/pymake',
             '/usr/share/pymake',
         ]
-    manifest = find_file(f'{name}-manifest.txt', paths=paths)
+    manifest = find_file(f'{name}-manifest.txt$', paths=paths)
     with open(manifest, 'r') as f:
         files = [(manifest.parent / mf.strip()).resolve()
                  for mf in f.readlines()]

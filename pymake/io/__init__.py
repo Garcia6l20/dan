@@ -109,11 +109,11 @@ class Package(Target, internal=True):
         self.pymake_path.mkdir(exist_ok=True, parents=True)
 
         async with asyncio.TaskGroup(f'importing {self.name} package') as group:
-            for pkg in find_files(r'.+\.pc', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
+            for pkg in find_files(r'.+\.pc$', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
                 self.debug('copying %s to %s', pkg, self.pkgconfig_path)
                 group.create_task(aiofiles.copy(pkg, self.pkgconfig_path))
 
-            for pkg in find_files(r'.+\.py', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'pymake']):
+            for pkg in find_files(r'.+\.py$', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'pymake']):
                 self.debug('copying %s to %s', pkg, self.pymake_path)
                 group.create_task(aiofiles.copy(pkg, self.pymake_path))
         
