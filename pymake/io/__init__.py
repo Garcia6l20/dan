@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from pymake.core import aiofiles, asyncio
 from pymake.core.runners import async_run
@@ -73,11 +74,21 @@ class PackageBuild(Target, internal=True):
             requirements = load_makefile(self.sources.output / 'requirements.py', f'{self.sources.refspec}-requirements')
         else:
             requirements = None
-        makefile = load_makefile(self.sources.output / 'makefile.py', self.sources.refspec, requirements=requirements) #, build_path=self.build_path / 'build')
+        makefile = load_makefile(self.sources.output / 'makefile.py', self.sources.refspec, requirements=requirements, build_path=self.build_path / 'build')
         makefile.options.get('version').value = str(self.version)
         async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
             for target in makefile.all_installed:
                 group.create_task(target.install(self.install_settings, InstallMode.dev))
+
+        makefile.cache.ignore()
+        del makefile
+
+        os.chdir(self.build_path)
+        async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
+            group.create_task(aiofiles.rmtree(self.build_path / 'build'))
+            # FIXME: access denied in .git/objects
+            # group.create_task(aiofiles.rmtree(self.build_path / 'sources'))
+
 
 class Package(Target, internal=True):
     repository: str = 'pymake.io'

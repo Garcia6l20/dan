@@ -260,6 +260,10 @@ class Target(Logging, MakefileRegister, internal=True):
                 self.output = self.build_path / self.output
 
     @property
+    def is_requirement(self) -> bool:
+        return self.makefile.name.endswith('requirements')
+
+    @property
     def source_path(self) -> Path:
         return self.makefile.source_path
 

@@ -75,7 +75,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 continue
 
             t = context.root.find(req.name)
-            if t and req.is_compatible(t):
+            if t and not t.is_requirement and req.is_compatible(t):
                 req.target = t
                 continue
 
