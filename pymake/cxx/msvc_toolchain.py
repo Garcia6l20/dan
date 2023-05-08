@@ -3,16 +3,15 @@ import json
 
 import aiofiles
 from pymake.core.runners import sync_run
-from pymake.core.settings import BuildType, ToolchainSettings
+from pymake.core.settings import BuildType
 from pymake.core.utils import unique
 from pymake.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
-from pymake.core.errors import InvalidConfiguration
 from pymake.core.pm import re_match
 
 
 class MSVCToolchain(Toolchain):
-    def __init__(self, data, tools, settings : ToolchainSettings):
-        Toolchain.__init__(self, data, settings)
+    def __init__(self, data, *args, **kwargs):
+        Toolchain.__init__(self, data, *args, **kwargs)
         self.cc = Path(data['cc'])
         self.cxx = self.cc
         self.lnk = Path(data['link'])

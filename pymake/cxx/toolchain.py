@@ -1,5 +1,6 @@
 from enum import Enum
 from pymake.core.asyncio import sync_wait
+from pymake.core.cache import Cache
 from pymake.core.pathlib import Path
 from pymake.core.settings import BuildType, ToolchainSettings
 from pymake.core.target import FileDependency
@@ -18,17 +19,19 @@ class RuntimeType(Enum):
     dynamic = 1
 
 class Toolchain(Logging):
-    def __init__(self, data: dict[str,str], settings: ToolchainSettings) -> None:
+    def __init__(self, data: dict[str,str], tools: dict, settings: ToolchainSettings, cache: dict = None) -> None:
         self.cc : Path = None
         self.cxx : Path = None
+        self.tools = tools
         self._compile_commands: CompileCommands = None
         self.cxx_flags = set()
         self.cpp_std = 17
         self.type = data['type']
-        self.arch = data['arch']
+        # self.arch = data['arch']
         self.system = data['system']
         self.version = Version(data['version'])
         self.settings = settings
+        self.cache = dict() if cache is None else cache
         Logging.__init__(self, f'{self.type}-{self.version}')
         self.env = None
         self.rpath = None
@@ -39,6 +42,30 @@ class Toolchain(Logging):
         self.runtime = RuntimeType.dynamic
         self.build_type = BuildType.debug
 
+    @property
+    def arch(self):
+        self.__update_cache()
+        return self.cache['arch']
+    
+    @property
+    def up_to_date(self):
+        if not 'arch' in self.cache or self.cache['arch'] is None:
+            return False
+        if not 'arch_detect_flags' in self.cache or self.cache['arch_detect_flags'] != self.settings.cxx_flags:
+            return False
+        return True
+
+    
+    def __update_cache(self):
+        if self.up_to_date:
+            return
+
+        from pymake.cxx.detect import get_compiler_defines, get_target_arch
+        defines = get_compiler_defines(self.cc, self.type, self.settings.cxx_flags, self.env)
+        arch = get_target_arch(defines)
+        self.cache['defines'] = defines
+        self.cache['arch'] = arch
+        self.cache['arch_detect_flags'] = self.settings.cxx_flags
     
     @property
     def compile_commands(self):
@@ -46,8 +73,8 @@ class Toolchain(Logging):
             self._compile_commands = CompileCommands()
         return self._compile_commands
 
-    def init(self, mode: str):
-        raise NotImplementedError()
+    def init(self):
+        self.__update_cache()
 
     def has_cxx_compile_options(*opts) -> bool:
         raise NotImplementedError()

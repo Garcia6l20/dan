@@ -10,8 +10,8 @@ c_extensions = ['.c']
 
 
 class UnixToolchain(Toolchain):
-    def __init__(self, data, tools, settings: ToolchainSettings):
-        Toolchain.__init__(self, data, settings)
+    def __init__(self, data, tools, *args, **kwargs):
+        Toolchain.__init__(self, data, *args, **kwargs)
         self.cc = data['cc']
         self.cxx = data['cxx']
         self.ar = data['ar'] if 'ar' in data else tools['ar']

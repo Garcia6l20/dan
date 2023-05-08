@@ -1,4 +1,5 @@
 import sys
+from pymake.core.cache import Cache
 
 from pymake.core.errors import InvalidConfiguration
 from pymake.core.settings import Settings
@@ -48,7 +49,14 @@ def init_toolchains(name: str = None, settings: Settings = None):
         case _:
             raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
     target_settings = settings.target
-    target_toolchain = tc_type(toolchain_data, data['tools'], target_settings)
+    cache = Cache.get('pymake.cache').data
+    if not 'toolchains' in cache:
+        cache['toolchains'] = {
+            'host': dict(),
+            'target': dict(),
+        }
+    target_toolchain = tc_type(toolchain_data, data['tools'], target_settings, cache=cache['toolchains']['target'])
+    target_toolchain.init()
     host_toolchain = target_toolchain
 
     from pymake.core.include import context
