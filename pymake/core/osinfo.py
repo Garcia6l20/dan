@@ -78,20 +78,20 @@ class OSInfo(object):
     """
 
     def __init__(self):
-        system = platform.system()
+        system = platform.system().lower()
         self.name = system
         self.version = None
         self.version_name = None
-        self.is_linux = system == "Linux"
+        self.is_linux = system == "linux"
         self.linux_distro = None
         self.is_msys = system.startswith(
-            "MING") or system.startswith("MSYS_NT")
-        self.is_cygwin = system.startswith("CYGWIN_NT")
-        self.is_windows = system == "Windows" or self.is_msys or self.is_cygwin
-        self.is_macos = system == "Darwin"
-        self.is_freebsd = system == "FreeBSD"
-        self.is_solaris = system == "SunOS"
-        self.is_aix = system == "AIX"
+            "ming") or system.startswith("msys_nt")
+        self.is_cygwin = system.startswith("cygwin_nt")
+        self.is_windows = system == "windows" or self.is_msys or self.is_cygwin
+        self.is_macos = system == "darwin"
+        self.is_freebsd = system == "freebsd"
+        self.is_solaris = system == "sunos"
+        self.is_aix = system == "aix"
         self.is_posix = os.pathsep == ':'
 
         if self.is_linux:
@@ -100,18 +100,19 @@ class OSInfo(object):
             self.version = self._get_win_os_version()
             self.version_name = self._get_win_version_name(self.version)
         elif self.is_macos:
+            self.name = "macos"
             self.version = Version(platform.mac_ver()[0])
             self.version_name = self._get_osx_version_name(self.version)
         elif self.is_freebsd:
             self.version = self._get_freebsd_version()
-            self.version_name = "FreeBSD %s" % self.version
+            self.version_name = "freebsd %s" % self.version
         elif self.is_solaris:
             self.version = Version(platform.release())
             self.version_name = self._get_solaris_version_name(
                 self.version)
         elif self.is_aix:
             self.version = self._get_aix_version()
-            self.version_name = "AIX %s" % self.version.minor(fill=False)
+            self.version_name = "aix %s" % self.version.minor(fill=False)
 
     def _get_linux_distro_info(self):
         import distro
@@ -121,6 +122,16 @@ class OSInfo(object):
         self.version_name = version_name if version_name != "n/a" else ""
         if not self.version_name and self.linux_distro == "debian":
             self.version_name = self._get_debian_version_name(self.version)
+
+    @property
+    def arch(self):
+        match platform.machine():
+            case 'i386':
+                return 'x86'
+            case 'AMD64':
+                return 'x64'
+            case _ as arch:
+                return arch
 
     @property
     def with_apt(self):

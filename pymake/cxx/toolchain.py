@@ -48,6 +48,11 @@ class Toolchain(Logging):
         return self.cache['arch']
     
     @property
+    def is_host(self):
+        self.__update_cache()
+        return self.cache['is_host']
+    
+    @property
     def up_to_date(self):
         if not 'arch' in self.cache or self.cache['arch'] is None:
             return False
@@ -66,6 +71,10 @@ class Toolchain(Logging):
         self.cache['defines'] = defines
         self.cache['arch'] = arch
         self.cache['arch_detect_flags'] = self.settings.cxx_flags
+        
+        from pymake.core.osinfo import OSInfo
+        osi = OSInfo()
+        self.cache['is_host'] = self.system == osi.name and self.arch == osi.arch
     
     @property
     def compile_commands(self):
