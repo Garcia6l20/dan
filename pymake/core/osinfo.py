@@ -128,7 +128,7 @@ class OSInfo(object):
         match platform.machine():
             case 'i386':
                 return 'x86'
-            case 'AMD64':
+            case 'AMD64' | 'x86_64':
                 return 'x64'
             case _ as arch:
                 return arch
