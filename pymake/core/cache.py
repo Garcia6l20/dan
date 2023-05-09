@@ -22,7 +22,9 @@ class Cache(t.Generic[T]):
         assert not self.name in self.__caches, 'a cache type should be unique'
         if self.path.exists():
             with open(self.path, 'r') as f:
-                self.__data = self.dataclass(**yaml.load(f, Loader=yaml.Loader))
+                self.__data = yaml.load(f, Loader=yaml.Loader)
+                if not isinstance(self.__data, self.dataclass):
+                    self.__data = self.dataclass(**self.__data)
                 self.__modification_date = self.path.modification_time
         else:
             self.__data = self.dataclass(*args, **kwargs)
@@ -47,7 +49,7 @@ class Cache(t.Generic[T]):
     
     async def save(self):
         if self.path and self.dirty:
-            data = yaml.dump(self.data.__getstate__()) if self.dataclass != dict else yaml.dump(self.data)
+            data = yaml.dump(self.data)
             if data:
                 self.path.parent.mkdir(exist_ok=True, parents=True)
                 async with aiofiles.open(self.path, 'w') as f:
