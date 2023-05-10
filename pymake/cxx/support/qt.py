@@ -3,34 +3,34 @@ from pymake.core import aiofiles, asyncio
 from pymake.core.find import find_executable
 from pymake.core.pathlib import Path
 from pymake.core.runners import async_run
-from pymake.cxx.targets import CXXObject, Executable, Library
+from pymake.cxx.targets import CXXObject, Executable, Library, CXXObjectsTarget
 from pymake.pkgconfig.package import Package
 
 
 class _QtMoccer:
     
     async def __initialize__(self):
-        qt_core = Package('Qt5Core')
+        qt_core = Package('Qt5Core', makefile=self.makefile)
         await qt_core.initialize()
         self.moc = self.makefile.cache.get('moc_executable')
         if not self.moc:
             self.moc = find_executable(
                 'moc', paths=[qt_core.host_bins], default_paths=False)
             self.makefile.cache.moc_executable = str(self.moc)
-        self.load_dependency(qt_core)
+        self.dependencies.add(qt_core)
 
         self.includes.private.append(self.build_path)
 
         for module in self.qt_modules:
-            pkg = Package(f'Qt5{module}')
+            pkg = Package(f'Qt5{module}', makefile=self.makefile)
             await pkg.initialize()
-            self.load_dependency(pkg)
+            self.dependencies.add(pkg)
 
         mocs = self.cache.get('mocs', list())
         for moc_name in mocs:
             moc_path = self.build_path / moc_name
             self.objs.append(
-                CXXObject(f'{self.name}.{moc_name}', self, moc_path))
+                CXXObject(moc_path, self))
             self.other_generated_files.add(moc_path)
 
         await super().__initialize__()
@@ -41,7 +41,8 @@ class _QtMoccer:
 
     async def __build__(self):
 
-        mocs = self.cache.get('mocs', list())
+        mocs = list()
+        moc_objs = list()
 
         async def do_moc(file: Path):
             moc_name = file.with_suffix('.moc.cpp').name
@@ -56,24 +57,41 @@ class _QtMoccer:
                     async with aiofiles.open(moc_file_path, 'w') as f:
                         await f.write(out)
                         if not moc_name in mocs:
-                            self.objs.append(
-                                CXXObject(f'{self.name}.{moc_name}', self, moc_file_path))
+                            moc_objs.append(
+                                CXXObject(moc_file_path, self))
                             mocs.append(moc_name)
 
-        mocings = list()
-        for header in self.headers:
-            mocings.append(do_moc(header))
-        await asyncio.gather(*mocings)
+        # we have to generate objects first in order to get files dependencies,
+        # which are used later to moc those dependencies (whenever they are within the same source directory)
+
+        # build existing objects
+        await CXXObjectsTarget.__build__(self)
+
+        # generate moc source files
+        async with asyncio.TaskGroup(f'moccing {self.name}') as g:
+            sources = set()
+            for obj in self.objs:
+                for dep in [Path(dep) for dep in obj.cache['deps']]:
+                    if self.source_path in dep.parents:
+                        sources.add(dep)
+            for source in sources:
+                g.create_task(do_moc(source))
+        
+        # add moc sources to objects dependencies
+        self.objs.extend(moc_objs)
+
+        # update cache
+        self.cache['mocs'] = mocs
+
+        # continue parent build process
         await super().__build__()
 
 
-class QtExecutable(_QtMoccer, Executable, internal=True):
-    def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
-        Executable.__init__(self, name, *args, **kwargs)
-        self.qt_modules = qt_modules
-
-
-class QtLibrary(_QtMoccer, Library, internal=True):
-    def __init__(self, name: str, *args, qt_modules: list[str] = list(), **kwargs):
-        Library.__init__(self, name, *args, **kwargs)
-        self.qt_modules = qt_modules
+def moc(modules: list[str]):
+    def decorator(cls):
+        from pymake.core.include import context
+        @context.current.wraps(cls)
+        class QtWapped(_QtMoccer, cls):
+            qt_modules = modules
+        return cls
+    return decorator
