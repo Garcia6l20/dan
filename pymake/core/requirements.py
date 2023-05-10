@@ -27,6 +27,10 @@ class RequiredPackage(Logging):
     def found(self):
         return self.target is not None
     
+    @property
+    def modification_time(self):
+        return self.target.modification_time if self.target else 0.0
+
     def __skipped_method_call(self, name, *args, **kwargs):
         self.debug('call to %s skipped (unresolved)', name)
 
