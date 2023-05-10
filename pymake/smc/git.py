@@ -25,12 +25,11 @@ class GitSources(Target, internal=True):
 
     async def __build__(self):
         try:
-            self.output.mkdir()
-            await async_run(f'git init', logger=self, cwd=self.output)
-            await async_run(f'git config advice.detachedHead off', logger=self, cwd=self.output)
+            self.output.mkdir()            
+            await async_run(f'git init -q', logger=self, cwd=self.output)
             await async_run(f'git remote add origin {self.url}', logger=self, cwd=self.output)
             await async_run(f'git fetch -q --depth 1 origin {self.refspec}', logger=self, cwd=self.output)
-            await async_run(f'git checkout FETCH_HEAD', logger=self, cwd=self.output)
+            await async_run(f'git checkout -q FETCH_HEAD', logger=self, cwd=self.output)
             
             for patch in self.patches:
                 await async_run(f'git am {self.source_path / patch}', logger=self, cwd=self.output)
