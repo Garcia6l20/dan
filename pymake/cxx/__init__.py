@@ -55,13 +55,14 @@ def init_toolchains(name: str = None, settings: Settings = None):
             'host': dict(),
             'target': dict(),
         }
-    target_toolchain = tc_type(toolchain_data, data['tools'], target_settings, cache=cache['toolchains']['target'])
+    target_toolchain = tc_type(toolchain_data, data['tools'], settings=target_settings, cache=cache['toolchains']['target'])
     target_toolchain.init()
     if target_toolchain.is_host:
         host_toolchain = target_toolchain
     else:
         import logging
         logging.warning(f'Cross compilation is currently not tested !')
+        host_toolchain = None
 
     from pymake.core.include import context
     context.set('cxx_target_toolchain', target_toolchain)
