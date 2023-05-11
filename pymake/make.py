@@ -262,7 +262,10 @@ class Make(Logging):
                         raise TypeError(f'unhandled "{op}=" operator on type {type(out_value)} ({name})')
                     case _:
                         out_value = in_value
-                setattr(input, sname, out_value)
+                if isinstance(input, dict):
+                    input[sname] = out_value
+                else:
+                    setattr(input, sname, out_value)
                 info(name, out_value)
             else:
                 raise RuntimeError(f'cannot process given input: {input}')

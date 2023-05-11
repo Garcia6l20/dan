@@ -255,7 +255,10 @@ async def options(ctx: CommandsContext, **kwargs):
     ctx(**kwargs)
     await ctx.make.initialize()
     for o in ctx.make.all_options:
-        click.echo(f'{o.fullname}: {o.help} (type: {o.type.__name__}, default: {o.default})')
+        current = ''
+        if o.value != o.default:
+            current = f', current: {o.value}'
+        click.echo(f'{o.fullname}: {o.help} (type: {o.type.__name__}, default: {o.default}{current})')
 
 @ls.command()
 def toolchains(**kwargs):
