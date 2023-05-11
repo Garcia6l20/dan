@@ -104,7 +104,7 @@ class FileDependency(PathImpl):
 
 
 class Option:
-    def __init__(self, parent: 'Options', fullname: str, default) -> None:
+    def __init__(self, parent: 'Options', fullname: str, default, help: str = None) -> None:
         self.fullname = fullname
         self.name = fullname.split('.')[-1]
         self.__parent = parent
@@ -112,6 +112,7 @@ class Option:
         self.__default = default
         self.__value = self.__cache.get(self.name, default)
         self.__value_type = type(default)
+        self.__help = help if help is not None else 'No description.'
 
     def reset(self):
         self.value = self.__default
@@ -127,6 +128,14 @@ class Option:
     @property
     def type(self):
         return self.__value_type
+        
+    @property
+    def default(self):
+        return self.__default
+        
+    @property
+    def help(self):
+        return self.__help
     
     @property
     def value(self):
@@ -156,8 +165,8 @@ class Options:
         self.__items: set[Option] = set()
         self.update(default)
 
-    def add(self, name: str, default_value):                
-        opt = Option(self, f'{self.__parent.name}.{name}', default_value)
+    def add(self, name: str, default_value, help=None):
+        opt = Option(self, f'{self.__parent.name}.{name}', default_value, help=help)
         self.__items.add(opt)
         return opt
 
@@ -168,10 +177,20 @@ class Options:
 
     def update(self, options: dict):
         for k, v in options.items():
+            help = None
+            match v:
+                case dict():
+                    help = v['help']
+                    v = v['default']
+                case tuple()|list()|set():
+                    help = v[1]
+                    v = v[0]
+                case _:
+                    pass
             if self[k]:
                 self[k] = v
             else:
-                self.add(k, v)
+                self.add(k, v, help)
 
     def items(self):
         for o in self.__items:

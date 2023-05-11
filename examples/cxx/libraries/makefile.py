@@ -7,7 +7,7 @@ sources = ['lib.cpp']
 includes = [self.source_path, self.build_path]
 
 # makefile-scope option
-self.options.add('library_type', LibraryType.AUTO)
+self.options.add('library_type', LibraryType.AUTO, 'The library type to build.')
 
 
 @generator('lib-config.hpp')

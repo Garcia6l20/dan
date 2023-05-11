@@ -6,7 +6,7 @@ class Simple(Executable):
     sources = 'test.cpp', 'main.cpp'
     private_includes = '.',
     options = {
-        'greater': 'hello_pymake'
+        'greater': ('hello_pymake', 'The name to be greated.')
     }
 
     async def __initialize__(self):

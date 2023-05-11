@@ -175,6 +175,7 @@ class Make(Logging):
             items = context.root.all_tests
         return items
 
+    @property
     def all_options(self) -> list[Option]:
         from pymake.core.include import context
         opts = []
@@ -268,7 +269,7 @@ class Make(Logging):
 
     async def apply_options(self, *options):
         await self.initialize()
-        all_opts = self.all_options()
+        all_opts = self.all_options
         def get_option(name):
             for opt in all_opts:
                 if opt.fullname == name:

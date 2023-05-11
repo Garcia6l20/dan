@@ -246,6 +246,16 @@ async def tests(ctx: CommandsContext, **kwargs):
     for t in ctx.make.tests:
         click.echo(t.fullname)
 
+@ls.command()
+@common_opts
+@pass_context
+async def options(ctx: CommandsContext, **kwargs):
+    """List tests"""
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    await ctx.make.initialize()
+    for o in ctx.make.all_options:
+        click.echo(f'{o.fullname}: {o.help} (type: {o.type.__name__}, default: {o.default})')
 
 @ls.command()
 def toolchains(**kwargs):
