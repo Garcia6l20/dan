@@ -11,11 +11,12 @@ from pymake.core.version import Version
 from pymake.logging import Logging
 
 
-class Dependencies(set):
+class Dependencies:
 
     def __init__(self, parent: 'Target', deps: Iterable = list()):
         super().__init__()
         self.parent = parent
+        self._content = list()
         for dep in deps:
             self.add(dep)
 
@@ -24,32 +25,34 @@ class Dependencies(set):
         return self.parent.makefile
 
     def add(self, dependency):
+        if dependency in self._content:
+            return
         from pymake.pkgconfig.package import RequiredPackage
         match dependency:
             case Target() | FileDependency():
-                super().add(dependency)
+                self._content.append(dependency)
             case type():
                 assert issubclass(dependency, Target)
-                super().add(self.makefile.find(dependency))
+                self._content.append(self.makefile.find(dependency))
             case str():
                 from pymake.pkgconfig.package import Package
                 for pkg in Package.all.values():
                     if pkg.name == dependency:
-                        self.add(pkg)
+                        self.append(pkg)
                         break
                 else:
                     if Path(self.parent.source_path / dependency).exists():
-                        super().add(FileDependency(
+                        self._content.append(FileDependency(
                             self.parent.source_path / dependency))
                     else:
                         from pymake.pkgconfig.package import parse_requirement
-                        super().add(parse_requirement(dependency))
+                        self._content.append(parse_requirement(dependency))
             case Path():
                 dependency = FileDependency(
                     self.parent.source_path / dependency)
-                super().add(dependency)
+                self._content.append(dependency)
             case RequiredPackage():
-                super().add(dependency)
+                self._content.append(dependency)
             case _:
                 raise RuntimeError(
                     f'Unhandled dependency {dependency} ({type(dependency)})')
@@ -59,9 +62,12 @@ class Dependencies(set):
             self.add(dep)
 
     def __getattr__(self, attr):
-        for item in self:
+        for item in self._content:
             if item.name == attr:
                 return item
+
+    def __iter__(self):
+        return self._content.__iter__()
 
     @property
     def up_to_date(self):
@@ -274,7 +280,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @property
     def requires(self):
         from pymake.pkgconfig.package import RequiredPackage
-        return {dep for dep in self.dependencies if isinstance(dep, RequiredPackage)}
+        return [dep for dep in self.dependencies if isinstance(dep, RequiredPackage)]
 
     @cached_property
     def fullname(self) -> str:

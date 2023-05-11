@@ -199,17 +199,12 @@ class CXXTarget(Target, internal=True):
                 path if path.is_absolute() else self.source_path / path)
 
     @property
-    def cxx_dependencies(self) -> set['CXXTarget']:
-        return {dep for dep in self.dependencies if isinstance(dep, CXXTarget)}
+    def cxx_dependencies(self) -> list['CXXTarget']:
+        return [dep for dep in self.dependencies if isinstance(dep, CXXTarget)]
 
     @property
-    def library_dependencies(self) -> set['Library']:
-        return {dep for dep in self.dependencies if isinstance(dep, Library)}
-    
-    # @property
-    # def requires(self):
-    #     from pymake.pkgconfig.package import RequiredPackage
-    #     return {dep for dep in self.dependencies if isinstance(dep, RequiredPackage)}
+    def library_dependencies(self) -> list['Library']:
+        return [dep for dep in self.dependencies if isinstance(dep, Library)]
 
     @property
     def libs(self) -> list[str]:

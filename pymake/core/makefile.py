@@ -126,7 +126,7 @@ class MakeFile(sys.__class__):
     @property
     def executables(self):
         from pymake.cxx import Executable
-        return {target for target in self.targets if issubclass(target, Executable)}
+        return [target for target in self.targets if issubclass(target, Executable)]
 
     @property
     def all_executables(self):
@@ -137,16 +137,16 @@ class MakeFile(sys.__class__):
 
     @property
     def installed(self):
-        return {target for target in self.targets if target.installed == True}
+        return [target for target in self.targets if target.installed == True]
 
     @property
     def all_installed(self):
-        return {target for target in self.all_targets if target.installed == True}
+        return [target for target in self.all_targets if target.installed == True]
 
     @property
     def default(self):
-        return {target for target in self.targets if target.default == True}
+        return [target for target in self.targets if target.default == True]
 
     @property
     def all_default(self):
-        return {target for target in self.all_targets if target.default == True}
+        return [target for target in self.all_targets if target.default == True]

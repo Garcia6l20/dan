@@ -184,13 +184,13 @@ class Package(CXXTarget, internal=True):
         if self.__libs is None:
             from pymake.cxx import target_toolchain
             tmp = list()
-            for pkg in self.package_dependencies:
-                tmp.extend(pkg.libs)
             libs = self.data.get('libs')
             if libs is not None:
                 libs = cmdline2list(libs)
                 libs = target_toolchain.from_unix_flags(libs)
                 tmp.extend(libs)
+            for pkg in self.package_dependencies:
+                tmp.extend(pkg.libs)
             self.__libs = unique(tmp)
         return self.__libs
 
