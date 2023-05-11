@@ -42,7 +42,7 @@ class InstallSettings:
 
 @dataclass
 class ToolchainSettings:
-    cxx_flags: set[str] = field(default_factory=lambda: set())
+    cxx_flags: list[str] = field(default_factory=lambda: list())
 
 @dataclass
 class Settings:

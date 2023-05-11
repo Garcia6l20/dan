@@ -6,6 +6,8 @@ import logging
 import os
 import fnmatch
 import re
+
+from dataclasses_json import dataclass_json
 from pymake.core.pathlib import Path
 import sys
 import tqdm
@@ -36,6 +38,7 @@ def flatten(list_of_lists):
         return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
     return list_of_lists[:1] + flatten(list_of_lists[1:])
 
+@dataclass_json
 @dataclass
 class Config:
     source_path: Path = None
@@ -47,8 +50,8 @@ class ConfigCache(Cache[Config]): ...
 
 
 class Make(Logging):
-    _config_name = 'pymake.config.yaml'
-    _cache_name = 'pymake.cache.yaml'
+    _config_name = 'pymake.config.json'
+    _cache_name = 'pymake.cache.json'
 
     def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
 

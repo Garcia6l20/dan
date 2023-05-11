@@ -140,7 +140,7 @@ export class PyMake implements vscode.Disposable {
 	}
 
 	configured() {
-		return existsSync(path.join(this.buildPath, 'pymake.config.yaml'));
+		return existsSync(path.join(this.buildPath, 'pymake.config.json'));
 	}
 
 	async ensureConfigured() {
