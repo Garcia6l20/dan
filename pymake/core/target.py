@@ -128,15 +128,15 @@ class Option:
     @property
     def type(self):
         return self.__value_type
-        
+
     @property
     def default(self):
         return self.__default
-        
+
     @property
     def help(self):
         return self.__help
-    
+
     @property
     def value(self):
         return self.__value
@@ -161,12 +161,13 @@ class Options:
             cache = parent.cache.data
         if not 'options' in cache:
             cache['options'] = dict()
-        self._cache = cache['options']    
+        self._cache = cache['options']
         self.__items: set[Option] = set()
         self.update(default)
 
     def add(self, name: str, default_value, help=None):
-        opt = Option(self, f'{self.__parent.name}.{name}', default_value, help=help)
+        opt = Option(self, f'{self.__parent.fullname}.{name}',
+                     default_value, help=help)
         self.__items.add(opt)
         return opt
 
@@ -182,7 +183,7 @@ class Options:
                 case dict():
                     help = v['help']
                     v = v['default']
-                case tuple()|list()|set():
+                case tuple() | list() | set():
                     help = v[1]
                     v = v[0]
                 case _:
@@ -222,7 +223,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
     dependencies: set[TargetDependencyLike] = set()
     preload_dependencies: set[TargetDependencyLike] = set()
-    
+
     def __init__(self,
                  name: str = None,
                  parent: 'Target' = None,
@@ -255,7 +256,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.makefile is None:
             raise RuntimeError('Makefile not resolved')
-                
+
         if build_path is None:
             self.__build_path = self.makefile.build_path
         else:
@@ -295,7 +296,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @property
     def build_path(self) -> Path:
         return self.__build_path
-    
+
     @property
     def requires(self):
         from pymake.pkgconfig.package import RequiredPackage

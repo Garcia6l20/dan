@@ -30,14 +30,15 @@ class MakeFile(sys.__class__):
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
 
-    @cached_property
+    @property
     def fullname(self):
         return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
 
     @property
     def cache(self) -> Cache:
         if not self.__cache:
-            self.__cache = Cache(self.build_path / f'{self.name}.cache.yaml', cache_name=self.fullname)
+            self.__cache = Cache(
+                self.build_path / f'{self.name}.cache.yaml', cache_name=self.fullname)
         return self.__cache
 
     def register(self, cls: type[Target | Test]):
@@ -50,14 +51,15 @@ class MakeFile(sys.__class__):
 
     def wraps(self, cls: type[Target]):
         def decorator(new_cls: type[Target]):
-            assert issubclass(new_cls, cls), 'Target wrapper must inherit from original target'
+            assert issubclass(
+                new_cls, cls), 'Target wrapper must inherit from original target'
             for t in self.__targets:
                 if isinstance(t, cls):
                     self.__targets.remove(t)
                     return cls
             assert False, 'Original target has not been registered'
         return decorator
-    
+
     def find(self, name_or_class) -> Target:
         """Find a target.
 
