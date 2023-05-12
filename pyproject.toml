@@ -37,6 +37,7 @@ include = ["pymake*"]
 
 [tool.setuptools.package-data]
 "pymake.pkgconfig.templates" = ["*.jinja2"]
+"pymake.cxx.data" = ["*"]
 
 
 [project.optional-dependencies]
