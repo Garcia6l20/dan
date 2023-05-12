@@ -488,3 +488,4 @@ class Target(Logging, MakefileRegister, internal=True):
     def utility(cls, fn: Callable):
         cls.utils.append(fn)
         setattr(cls, fn.__name__, fn)
+        return fn
