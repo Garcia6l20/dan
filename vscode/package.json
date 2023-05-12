@@ -3,6 +3,10 @@
   "displayName": "PyMake",
   "description": "Python-based build system",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Garcia6l20/pymake"
+  },
   "publisher": "pymake",
   "engines": {
     "vscode": "^1.74.0"
