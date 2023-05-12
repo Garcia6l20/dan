@@ -25,7 +25,8 @@ dependencies = [
     "aiohttp",
     "termcolor",
     "tqdm",
-    'importlib-metadata'
+    'importlib-metadata',
+    'dataclasses-json',
 ]
 
 [tool.setuptools]

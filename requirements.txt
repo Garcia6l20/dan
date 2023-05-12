@@ -6,3 +6,4 @@ aiofiles
 aiohttp
 termcolor
 tqdm
+dataclasses-json
