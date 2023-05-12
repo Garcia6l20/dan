@@ -149,6 +149,12 @@ export class PyMake implements vscode.Disposable {
 		}
 	}
 
+	notifyUpdated() {
+		if (this._cppToolsApi !== undefined && this._cppToolsProvider !== undefined) {
+			this._cppToolsApi.didChangeCustomConfiguration(this._cppToolsProvider);
+		}
+	}
+
 	async registerCommands() {
 		const register = (id: string, callback: (...args: any[]) => any, thisArg?: any) => {
 			this.extensionContext.subscriptions.push(
@@ -157,14 +163,19 @@ export class PyMake implements vscode.Disposable {
 		};
 
 		register('scanToolchains', async () => commands.scanToolchains(this));
-		register('configure', async () => commands.configure(this));
+		register('configure', async () => {
+			await commands.configure(this);
+			this.notifyUpdated();
+		});
 		register('build', async () => {
 			await this.ensureConfigured();
 			await commands.build(this, this.buildTargets);
+			this.notifyUpdated();
 		});
 		register('debugBuild', async () => {
 			await this.ensureConfigured();
 			await commands.build(this, this.buildTargets, true);
+			this.notifyUpdated();
 		});
 		register('clean', async () => {
 			if (this.configured()) {

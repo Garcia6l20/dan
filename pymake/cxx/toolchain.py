@@ -108,6 +108,9 @@ class Toolchain(Logging):
 
     def compile_generated_files(self, output: Path) -> set[Path]:
         return set()
+    
+    def debug_files(self, output: Path) -> set[Path]:
+        return set()
 
     def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
         raise NotImplementedError()

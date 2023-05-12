@@ -15,6 +15,11 @@ class BuildType(Enum):
     release_min_size = 2
     release_debug_infos = 3
 
+    @property
+    def is_debug_mode(self):
+        """Return true if the build type should produce debug symbols (ie.: debug and release_debug_infos)"""
+        return self in (BuildType.debug, BuildType.release_debug_infos)
+
 @dataclass(eq=True, unsafe_hash=True)
 class InstallSettings:
     destination: str = '/usr/local'

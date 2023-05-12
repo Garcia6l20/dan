@@ -23,6 +23,8 @@ class MSVCToolchain(Toolchain):
         flags = [
             '/nologo',
         ]
+        if self.build_type.is_debug_mode:
+            flags.append('/DEBUG')
         return flags
 
     @cached_property
@@ -39,7 +41,6 @@ class MSVCToolchain(Toolchain):
                     '/Gd',
                     '/ZI',
                     '/FS',
-                    '/DEBUG',
                 ])
             case BuildType.release:
                 flags.extend((rt, '/O2', '/DNDEBUG'))
@@ -125,6 +126,11 @@ class MSVCToolchain(Toolchain):
     def compile_generated_files(self, output: Path) -> set[Path]:
         return {}
 
+    def debug_files(self, output: Path) -> set[Path]:
+        if not self.build_type.is_debug_mode:
+            return {}
+        return {output.with_suffix('.pdb')}
+
     @property
     def cxxmodules_flags(self) -> list[str]:
         return list()
@@ -134,6 +140,8 @@ class MSVCToolchain(Toolchain):
         args = [self.cc, *unique(self.common_flags, self.default_cflags, self.default_cxxflags, options),
                 '/sourceDependencies', deps,
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
+        if self.build_type.is_debug_mode:
+            args.append(f'/Fd{str(output.with_suffix(".pdb"))}')
         return [args]
 
     def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:

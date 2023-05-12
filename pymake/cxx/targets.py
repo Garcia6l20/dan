@@ -425,6 +425,11 @@ class Library(CXXObjectsTarget, internal=True):
                         dest = includes_dest / \
                             header.relative_to(public_include_dir)
                         tasks.append(do_install(header, dest))
+
+            for obj in self.objs:
+                for dbg_file in self.toolchain.debug_files(obj.output):
+                    tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
+
         return await asyncio.gather(super().install(settings, mode), *tasks)
 
 
