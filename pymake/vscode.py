@@ -97,8 +97,7 @@ class Code:
 
         return json.dumps(make_suite_info(context.root), indent=2 if pretty else None)
         
-    def _make_source_configuration(self, target: CXXObject):
-            import subprocess
+    async def _make_source_configuration(self, target: CXXObject):
             # interface:
             #   - includePath: string[]
             #   - defines: string[]
@@ -110,6 +109,7 @@ class Code:
             #   - windowsSdkVersion?: string;
             includes = []
             defines = []
+            await target.initialize()
             for flag in target.private_cxx_flags:
                 match re_match(flag):
                     case r'[/-]I:?(.+)' as m:
@@ -133,7 +133,7 @@ class Code:
             if target:
                 result.append({
                     'uri': source,
-                    'configuration': self._make_source_configuration(target)
+                    'configuration': await self._make_source_configuration(target)
                 })
         return json.dumps(result)
     

@@ -150,11 +150,10 @@ class Package(CXXTarget, internal=True):
         if reqs:
             async with asyncio.TaskGroup(f'resolving {self.name}\'s requirements') as group:
                 for req in reqs:
-                    if req.name in self.all:
+                    if req.name in self.all and req.is_compatible(self.all[req.name]):
                         dep = self.all[req.name]
                     else:
-                        dep = Package(req.name, self.search_paths,
-                                      makefile=self.makefile)
+                        dep = find_package(req.name, req.version_spec, search_paths=self.search_paths, makefile=self.makefile)
                     group.create_task(dep.initialize())
                     deps.add(dep)
         self.includes.public.append(self.data.get('includedir'))
