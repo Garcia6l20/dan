@@ -1,0 +1,323 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "inputs": [
+        {
+            "id": "makefileCommand",
+            "description": "Select a command",
+            "type": "pickString",
+            "options": [
+                {
+                    "label": "Build",
+                    "value": "build"
+                },
+                {
+                    "label": "Clean",
+                    "value": "clean"
+                },
+                {
+                    "label": "Run",
+                    "value": "run"
+                },
+                {
+                    "label": "Test",
+                    "value": "test"
+                },
+                {
+                    "label": "List targets",
+                    "value": "list-targets"
+                },
+                {
+                    "label": "Install",
+                    "value": "install"
+                },
+                {
+                    "label": "Configure",
+                    "value": "configure"
+                },
+            ]
+        },
+        {
+            "id": "test",
+            "description": "Select a test",
+            "type": "pickString",
+            "options": [
+                {
+                    "label": "Generators",
+                    "value": "simple"
+                },
+                {
+                    "label": "CXX/simple",
+                    "value": "cxx/simple"
+                },
+                {
+                    "label": "CXX/library",
+                    "value": "cxx/library"
+                },
+                {
+                    "label": "CXX/qt",
+                    "value": "cxx/qt"
+                },
+                {
+                    "label": "CXX/modules",
+                    "value": "cxx/modules"
+                },
+            ]
+        },
+        {
+            "id": "unitTestName",
+            "description": "Enter a unit test matcher",
+            "type": "promptString",
+            "default": ""
+        }
+    ],
+    "configurations": [
+        {
+            "name": "examples",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "configure-test",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "configure",
+                "-t", "default",
+                "-s", "target.cxx_flags=-Wall",
+                "-s", "target.cxx_flags+=-Wextra;-Werror",
+                "-s", "target.cxx_flags-=-Wextra",
+                "-s", "target.cxx_flags-=*",
+                "-s", "build_type=release",
+                "-o", "simple.greater=wonderfull !"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "simple",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/simple",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/modules",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/modules",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/simple",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/simple",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/libraries",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/libraries",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/dan.io",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/dan.io",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/smc",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/smc",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/smc/catch2",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/smc/catch2",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/smc/spdlog",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/smc/spdlog",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "cxx/conan",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "${input:makefileCommand}",
+                "-v"
+            ],
+            "cwd": "${workspaceFolder}/examples/cxx/conan",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "unit tests",
+            "type": "python",
+            "request": "launch",
+            "module": "unittest",
+            "justMyCode": false,
+            "args": [
+                "discover",
+                "-v",
+                ".",
+                "test_*${input:unitTestName}*.py"
+            ],
+            "cwd": "${workspaceFolder}/tests",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "code-test",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "code", "get-source-configuration", "H:\\Projects\\g6-workspace\\dan\\examples\\cxx\\smc\\spdlog\\test_spdlog.cpp"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+        {
+            "name": "scan-toolchains",
+            "type": "python",
+            "request": "launch",
+            "module": "dan",
+            "justMyCode": true,
+            "args": [
+                "scan-toolchains"
+            ],
+            "cwd": "${workspaceFolder}/examples",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "DAN_BUILD_PATH": "./build"
+            }
+        },
+    ]
+}

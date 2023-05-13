@@ -1,0 +1,17 @@
+{
+    "python.envFile": "${workspaceFolder}/.env",
+    "terminal.integrated.env.linux": {
+        "PYTHONPATH": "${workspaceFolder}"
+    },
+    "terminal.integrated.env.windows": {
+        "PYTHONPATH": "${workspaceFolder}"
+    },
+    "python.testing.unittestEnabled": true,
+    "python.testing.pytestEnabled": false,
+    "cmake.sourceDirectory": "${workspaceFolder}/examples/cxx/libraries",
+    "python.testing.unittestArgs": [
+        "-v",
+        "./tests",
+        "test_*.py"
+    ]
+}

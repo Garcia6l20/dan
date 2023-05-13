@@ -1,0 +1,9 @@
+click
+jinja2
+distro
+pyyaml
+aiofiles
+aiohttp
+termcolor
+tqdm
+dataclasses-json

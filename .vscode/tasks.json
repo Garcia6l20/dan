@@ -1,0 +1,12 @@
+{
+    "tasks": [
+        {
+            "taskName": "makeTestDirs",
+            "command": "mkdir",
+            "args": [
+                "-p", "${workspaceFolder}/build/tests/simple", "${workspaceFolder}/build/tests/cxx/simple"
+            ],
+            "isShellCommand": true
+        }
+    ]
+}
