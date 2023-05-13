@@ -174,7 +174,7 @@ class Make(Logging):
         if self.required_targets and len(self.required_targets) > 0:
             for required in self.required_targets:
                 for test in context.root.all_tests:
-                    if required.startswith(test.fullname):
+                    if len(test) > 1 and required.startswith(test.fullname):
                         case_name = required.removeprefix(test.fullname + '.')
                         cases = list()
                         for case in test.cases:
