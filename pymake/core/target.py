@@ -1,4 +1,5 @@
 from functools import cached_property
+import functools
 from pymake.core.register import MakefileRegister
 from pymake.core.pathlib import Path
 from typing import Any, Callable, Iterable, Union, TypeAlias
@@ -487,5 +488,10 @@ class Target(Logging, MakefileRegister, internal=True):
     @classmethod
     def utility(cls, fn: Callable):
         cls.utils.append(fn)
-        setattr(cls, fn.__name__, fn)
+        # the class should have been registered
+        makefile = cls.get_static_makefile()
+        inst = makefile.find(cls)
+        name = fn.__name__
+        fn = functools.partial(fn, inst)
+        setattr(cls, name, fn)
         return fn

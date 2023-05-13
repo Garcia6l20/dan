@@ -7,7 +7,11 @@ class MakefileRegister:
             from pymake.core.include import context
             cls.__makefile = context.current
             cls.__makefile.register(cls)
-    
+
+    @classmethod
+    def get_static_makefile(cls):
+        return cls.__makefile
+
     @property
     def makefile(self):
         return self.__makefile
