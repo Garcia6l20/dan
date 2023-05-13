@@ -15,17 +15,13 @@ class PackageRepository(Target, internal=True):
 
     async def __build__(self):
         try:
-            self.output.parent.mkdir()
-            await async_run(f'git clone {self.url} {self.name}', logger=self, cwd=self.output.parent)
-            # await async_run(f'git config advice.detachedHead off', logger=self, cwd=self.output)
-            # await async_run(f'git remote add origin {self.url}', logger=self, cwd=self.output)
-            # await async_run(f'git fetch -q --depth 1 origin {self.refspec}', logger=self, cwd=self.output)
-            # await async_run(f'git checkout FETCH_HEAD', logger=self, cwd=self.output)
+            self.output.parent.mkdir(exist_ok=True, parents=True)
+            await async_run(f'git clone --mirror {self.url} {self.name}', logger=self, cwd=self.output.parent)
 
         except Exception as e:
             await aiofiles.rmtree(self.output)
             raise e
-        
+
 
 repositories : dict[str, dict] = {
     'pymake.io': {

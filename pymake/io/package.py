@@ -22,19 +22,21 @@ class PackageBuild(Target, internal=True):
         self.sources = GitSources(
             name=f'{self.name}-package-sources',
             url=self.repo.url,
-            refspec=f'{self.name}',
+            refspec='main',
             build_path=build_path,
             makefile=self.makefile,
-            dirname='package-sources')
+            dirname='package-sources',
+            subdirectory=f'packages/{self.name}')
         self.dependencies.add(self.sources)
 
     async def __build__(self):
         from pymake.core.include import load_makefile
-        if (self.sources.output / 'requirements.py').exists():
-            requirements = load_makefile(self.sources.output / 'requirements.py', f'{self.sources.refspec}-requirements')
+        root = self.sources.output / 'packages' / self.name
+        if (root / 'requirements.py').exists():
+            requirements = load_makefile(root / 'requirements.py', f'{self.sources.refspec}-requirements')
         else:
             requirements = None
-        makefile = load_makefile(self.sources.output / 'makefile.py', self.sources.refspec, requirements=requirements, build_path=self.build_path)
+        makefile = load_makefile(root / 'makefile.py', self.name, requirements=requirements, build_path=self.build_path)
         makefile.options.get('version').value = str(self.version)
 
         async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
@@ -47,7 +49,7 @@ class PackageBuild(Target, internal=True):
         os.chdir(self.build_path)
         async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
             from pymake.cxx import target_toolchain as toolchain
-            if toolchain.build_type.is_debug:
+            if toolchain.build_type.is_debug_mode:
                 # In debug mode we keep sources in order to let it be resolvable by debuggers
                 for file in self.build_path.iterdir():
                     if file.is_file():
