@@ -14,12 +14,13 @@ class AsyncExecutable(Logging):
 
 
 class Case:
-    def __init__(self, name, *args, expected_result=0, file=None, lineno=None):
+    def __init__(self, name, *args, expected_result=0, expected_output=None, file=None, lineno=None):
         self.name = name
         self.args = args
         self.expected_result = expected_result
         self.file = file
         self.lineno = lineno
+        self.expected_output = expected_output
 
 
 class Test(Logging, MakefileRegister, internal=True):
@@ -91,6 +92,11 @@ class Test(Logging, MakefileRegister, internal=True):
                 msg += '\nstdout: ' + out
             if err:
                 msg += '\nstderr: ' + err
+            raise RuntimeError(msg)
+        if out != caze.expected_output:
+            out = out.strip()
+            err = err.strip()
+            msg = f'Test \'{name}\' failed (output: {out}, expected: {caze.expected_output}) !'
             raise RuntimeError(msg)
 
     async def run_test(self):
