@@ -25,7 +25,7 @@ class PackageRepository(Target, internal=True):
 
 repositories : dict[str, dict] = {
     'pymake.io': {
-        'url': 'git@github.com:Garcia6l20/pymake.io.git',
+        'url': 'https://github.com/Garcia6l20/pymake.io.git',
     }
 }
 
