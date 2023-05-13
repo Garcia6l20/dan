@@ -11,6 +11,7 @@ T = t.TypeVar('T', bound=dict)
 
 class Cache(t.Generic[T]):
     dataclass: T = dict
+    indent = 0
     __caches: dict[str, 'Cache'] = dict()
 
     def __init_subclass__(cls) -> None:
@@ -40,7 +41,7 @@ class Cache(t.Generic[T]):
     
     def _dump(self):
         if self.dataclass == dict:
-            return json.dumps(self.data)
+            return json.dumps(self.data, indent=self.indent)
         else:
             return self.data.to_json()
 

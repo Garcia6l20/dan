@@ -46,7 +46,8 @@ class Config:
     toolchain: str = None
     settings: Settings = field(default_factory=lambda: Settings())
 
-class ConfigCache(Cache[Config]): ...
+class ConfigCache(Cache[Config]):
+    indent = 4
 
 
 class Make(Logging):
