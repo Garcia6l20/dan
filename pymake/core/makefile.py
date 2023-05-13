@@ -82,6 +82,9 @@ class MakeFile(sys.__class__):
             t = c.find(name_or_class)
             if t:
                 return t
+    
+    def __getitem__(self, name_or_class) -> Target:
+        return self.find(name_or_class)
 
     @property
     def requirements(self):

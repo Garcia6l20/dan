@@ -1,5 +1,7 @@
+from pymake import self
 from pymake.cxx import Executable
-from pymake.testing import Test
+from pymake.testing import Test, Case
+import re
 
 class Simple(Executable):
     name = 'simple'
@@ -16,3 +18,6 @@ class Simple(Executable):
 class SimpleTest(Test):
     name = 'simple-test'
     executable = Simple
+    cases = [
+        Case('default', expected_output=re.compile(fr'^{self[Simple].options["greater"]} !\s'), strip_output=False)
+    ]

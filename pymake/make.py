@@ -182,7 +182,9 @@ class Make(Logging):
                                 cases.append(case)
                         test.cases = cases
                         items.append(test)
-                    elif fnmatch.fnmatch(test.fullname, f'*{required}*'):
+                        continue
+                    
+                    if required.startswith(test.fullname) or fnmatch.fnmatch(test.fullname, f'*{required}*'):
                         items.append(test)
         else:
             for test in context.root.all_tests:
