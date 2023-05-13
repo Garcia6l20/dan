@@ -33,7 +33,7 @@ class PackageBuild(Target, internal=True):
         from pymake.core.include import load_makefile
         root = self.sources.output / 'packages' / self.name
         if (root / 'requirements.py').exists():
-            requirements = load_makefile(root / 'requirements.py', f'{self.sources.refspec}-requirements')
+            requirements = load_makefile(root / 'requirements.py', f'{self.name}-requirements')
         else:
             requirements = None
         makefile = load_makefile(root / 'makefile.py', self.name, requirements=requirements, build_path=self.build_path)
