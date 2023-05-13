@@ -488,10 +488,10 @@ class Target(Logging, MakefileRegister, internal=True):
     @classmethod
     def utility(cls, fn: Callable):
         cls.utils.append(fn)
-        # the class should have been registered
-        makefile = cls.get_static_makefile()
-        inst = makefile.find(cls)
         name = fn.__name__
-        fn = functools.partial(fn, inst)
+        makefile = cls.get_static_makefile()
+        if makefile is not None:
+            inst = makefile.find(cls)
+            fn = functools.partial(fn, inst)
         setattr(cls, name, fn)
         return fn
