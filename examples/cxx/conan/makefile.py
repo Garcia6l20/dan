@@ -1,6 +1,6 @@
 from pymake import requires
 from pymake.cxx import Executable
-from pymake.testing import Test
+from pymake.testing import Test, Case
 
 zlib, boost = requires('zlib', 'boost')
 
@@ -15,7 +15,7 @@ class BoostExample(Test, Executable):
     sources= 'boost-example.cpp',
     dependencies= boost,    
     cases = [
-        ((42, 12), 6),
-        ((44, 8), 4),
-        ((142, 42), 2),
+        Case('42-12', 42, 12, expected_result=6),
+        Case('44-8', 44, 8, expected_result=4),
+        Case('142-42', 142, 42, expected_result=2),
     ]

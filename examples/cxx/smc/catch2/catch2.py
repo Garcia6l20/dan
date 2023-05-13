@@ -166,14 +166,15 @@ def discover_tests(self, exe):
             f.write(yaml.dump(tests))
 
     with open(output, 'r') as f:
-        from pymake.testing import Test
+        from pymake.testing import Test, Case
         tests: dict = yaml.load(f.read(), yaml.Loader)
+        test_cases = list()
         for title, data in tests.items():
-            class Catch2Test(Test):
-                name = title
-                executable = exe
-                file = data['filepath']
-                lineno = data['lineno']
-                cases = [((title, ), 0),]
+            test_cases.append(Case(title, expected_result=0, file = data['filepath'], lineno=data['lineno']))
+        
+        class Catch2Test(Test):
+            name = exe.name
+            executable = exe
+            cases = test_cases
     
     return type[exe]

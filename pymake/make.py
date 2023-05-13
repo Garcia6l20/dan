@@ -172,11 +172,21 @@ class Make(Logging):
         from pymake.core.include import context
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
-            for test in context.root.all_tests:
-                if self.__matches(test):
-                    items.append(test)
+            for required in self.required_targets:
+                for test in context.root.all_tests:
+                    if required.startswith(test.fullname):
+                        case_name = required.removeprefix(test.fullname + '.')
+                        cases = list()
+                        for case in test.cases:
+                            if fnmatch.fnmatch(case.name, case_name):
+                                cases.append(case)
+                        test.cases = cases
+                        items.append(test)
+                    elif fnmatch.fnmatch(test.fullname, f'*{required}*'):
+                        items.append(test)
         else:
-            items = context.root.all_tests
+            for test in context.root.all_tests:
+                items.append(test)
         return items
 
     @property

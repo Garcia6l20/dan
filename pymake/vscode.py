@@ -1,7 +1,5 @@
-import enum
 import json
 import os
-from pathlib import Path
 from pymake.core.pm import re_match
 from pymake.cxx.toolchain import Toolchain
 
@@ -23,16 +21,16 @@ class Code:
     
     def get_test_suites(self, pretty):
         from pymake.core.include import context, MakeFile
-        from pymake.core.test import Test
+        from pymake.core.test import Test, Case
         from pymake.cxx import Executable
 
-        def make_inner_test_info(test: Test, case):
-            args, expected_result = case
-            basename = test.basename(args, expected_result)
-            out, err = test.outs(args, expected_result)
+        def make_inner_test_info(test: Test, case: Case):
+            basename = test.basename(case)
+            out, err = test.outs(case)
+            ident = f'{test.fullname}.{case.name}' if case .name is not None else test.fullname
             info = {
                 'type': 'test',
-                'id': f'{test.fullname}-{basename}' if not test.fullname.endswith(basename) else test.fullname,
+                'id': ident,
                 'label': basename,
                 'debuggable': False,
                 'target': test.executable.fullname,
@@ -41,13 +39,17 @@ class Code:
             }
             if isinstance(test.executable, Executable):
                 info['debuggable'] = True
-                if test.file:
+                if case.file:
+                    info['file'] = str(case.file)
+                elif test.file:
                     info['file'] = str(test.file)
                 else:
                     info['file'] = str(
                         test.executable.source_path / test.executable.sources[0])
 
-                if test.lineno:
+                if case.lineno:
+                    info['line'] = case.lineno
+                elif test.lineno:
                     info['line'] = test.lineno
 
                 if test.workingDir:
@@ -55,8 +57,8 @@ class Code:
                 else:
                     info['workingDirectory'] = str(test.executable.build_path)
 
-                if len(args) > 0:
-                    info['args'] = [str(a) for a in args]
+                if len(case.args) > 0:
+                    info['args'] = [str(a) for a in case.args]
 
             return info
 
