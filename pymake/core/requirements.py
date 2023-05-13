@@ -81,6 +81,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
             t = context.root.find(req.name)
             if t and not t.is_requirement and req.is_compatible(t):
                 req.target = t
+                result.append(req.target)
                 continue
 
             t = find_package(req.name, req.version_spec, search_paths=[deps_install_path], makefile=makefile)
