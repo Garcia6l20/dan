@@ -69,6 +69,10 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     deps_install_path = makefile.pkgs_path
     deps_settings = InstallSettings(deps_install_path)
 
+    pkgs_search_paths = [deps_install_path]
+    if makefile.requirements:
+        pkgs_search_paths.append(makefile.requirements.pkgs_path)
+
     result = list()
     unresolved = list()
 
@@ -84,7 +88,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 result.append(req.target)
                 continue
 
-            t = find_package(req.name, req.version_spec, search_paths=[deps_install_path], makefile=makefile)
+            t = find_package(req.name, req.version_spec, search_paths=pkgs_search_paths, makefile=makefile)
             if t is not None and req.is_compatible(t):
                 req.target = t
                 result.append(t)
@@ -98,7 +102,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
 
     if install:
         for req in unresolved:
-            pkg = find_package(req.name, req.version_spec, search_paths=[deps_install_path], makefile=makefile)
+            pkg = find_package(req.name, req.version_spec, search_paths=pkgs_search_paths, makefile=makefile)
             if pkg is None:
                 raise RuntimeError(f'Unresolved requirement {req}')
             req.target = pkg
