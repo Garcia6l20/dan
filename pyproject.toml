@@ -1,6 +1,6 @@
 [project]
 name = "dan-build"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python-based build system."
 authors = [
     {name = "Garcia Sylvain", email="garcia.6l20@gmail.com"},
