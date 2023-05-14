@@ -85,7 +85,8 @@ class Cache(t.Generic[T]):
             return cls.__caches[name]
 
     def ignore(self):
-        del self.__caches[self.name]
+        if self.name in self.__caches:
+            del self.__caches[self.name]
 
 
 def once_method(fn):    

@@ -172,8 +172,7 @@ class Toolchain(Logging):
                 fname = Path(f.name)
                 sync_run(self.make_compile_commands(fname, fname.with_suffix('.o'), options)[0])
                 return True
-            except CommandError as err:
-                print(err)
+            except CommandError:
                 return False
 
     def has_include(self, *includes, options: set[str] = set(), extension='.cpp'):

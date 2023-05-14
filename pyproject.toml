@@ -6,7 +6,7 @@ authors = [
     {name = "Garcia Sylvain", email="garcia.6l20@gmail.com"},
     {email = "garcia.6l20@gmail.com"}
 ]
-license = {file = "LICENSE.txt"}
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
 

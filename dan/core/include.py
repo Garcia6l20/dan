@@ -1,15 +1,13 @@
 import importlib.util
 import os
-import re
+
 from dan.core.asyncio import sync_wait
 from dan.core.makefile import MakeFile
-
 from dan.core.pathlib import Path
 from dan.core.requirements import load_requirements
-
 from dan.core.target import Target
 from dan.logging import Logging
-from dan.pkgconfig.package import MissingPackage, Package, RequiredPackage, parse_requirement
+from dan.pkgconfig.package import parse_requirement
 
 
 class TargetNotFound(RuntimeError):
@@ -109,13 +107,17 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
         build_path,
         requirements)
 
+_imported_makefiles: dict[Path, MakeFile] = dict()
 
 def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None, requirements: MakeFile = None) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
+    if module_path in _imported_makefiles:
+        return _imported_makefiles[module_path]
     spec = importlib.util.spec_from_file_location(
         module_name, module_path)
     module = importlib.util.module_from_spec(spec)
+    _imported_makefiles[module_path] = module
     _init_makefile(module, name, build_path, requirements)
     spec.loader.exec_module(module)
     context.up()
@@ -147,7 +149,12 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         else:
             raise RuntimeError(
                 f'Cannot find anything to include for "{name}" (looked for: {", ".join(lookups)})')
+        
+    if module_path in _imported_makefiles:
+        return _imported_makefiles[module_path]
+
     module = importlib.util.module_from_spec(spec)
+    _imported_makefiles[module_path] = module
     _init_makefile(module, name, build_path)
 
     requirements_file = module_path.with_stem('dan-requires')
