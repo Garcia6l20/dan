@@ -9,18 +9,24 @@ class PackageRepository(Target, internal=True):
 
     url: str = None
 
+    # never up-to-date
+    up_to_date = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.output = get_dan_path() / 'repositories' / self.name
-
+    
     async def __build__(self):
-        try:
-            self.output.parent.mkdir(exist_ok=True, parents=True)
-            await async_run(f'git clone --mirror {self.url} {self.name}', logger=self, cwd=self.output.parent)
+        if not self.output.exists():
+            try:
+                self.output.parent.mkdir(exist_ok=True, parents=True)
+                await async_run(f'git clone {self.url} {self.name}', logger=self, cwd=self.output.parent)
 
-        except Exception as e:
-            await aiofiles.rmtree(self.output)
-            raise e
+            except Exception as e:
+                await aiofiles.rmtree(self.output)
+                raise e
+        else:
+                await async_run(f'git pull', logger=self, cwd=self.output)
 
 
 repositories : dict[str, dict] = {

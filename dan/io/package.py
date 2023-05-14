@@ -4,8 +4,6 @@ from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
 from dan.core.find import find_files
 from dan.io.repositories import get_packages_path, get_repo_instance
-from dan.smc.git import GitSources
-from dan.smc.tar import TarSources
 
 
 class PackageBuild(Target, internal=True):
@@ -13,25 +11,16 @@ class PackageBuild(Target, internal=True):
     def __init__(self, name, version, repository, *args, **kwargs):
         packages_path = get_packages_path()
         from dan.cxx import target_toolchain as toolchain
-        build_path = packages_path / 'dist' / toolchain.system / toolchain.arch / toolchain.build_type.name / name / str(version) / 'data'
+        build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / name / str(version) / 'build'
         super().__init__(name, *args, build_path=build_path, version=version, **kwargs)
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
         self.output = self.build_path.parent
         self.install_settings = InstallSettings(self.output)
-        self.sources = GitSources(
-            name=f'{self.name}-package-sources',
-            url=self.repo.url,
-            refspec='main',
-            build_path=packages_path / 'src',
-            makefile=self.makefile,
-            dirname=name,
-            subdirectory=f'packages/{self.name}')
-        self.dependencies.add(self.sources)
 
     async def __build__(self):
         from dan.core.include import load_makefile
-        root = self.sources.output / 'packages' / self.name
+        root = self.repo.output / 'packages' / self.name
         if (root / 'dan-requires.py').exists():
             requirements = load_makefile(root / 'dan-requires.py', f'{self.name}-requirements')
         else:
