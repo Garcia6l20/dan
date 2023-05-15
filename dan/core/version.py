@@ -7,6 +7,10 @@ class Version:
     def __init__(self, *args) -> None:
         if len(args) == 1 and isinstance(args[0], str):
             args = Version.version_pattern.split(args[0])
+            first = args[0]
+            while not first.isnumeric():
+                first = first[1:]
+            args[0] = first
         else:
             args = list(args)
         self._parts = tuple(int(a) for a in args)
@@ -50,40 +54,40 @@ class Version:
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.major >= other.major \
-            or (self.minor or 0) > (other.minor or 0) \
-            or (self.patch or 0) > (other.patch or 0) \
-            or (self.build or 0) > (other.build or 0)
+        for mine, their in zip(self._parts, other._parts):
+            if mine > their:
+                return True
+            if mine < their:
+                return False
+        return False
+
 
     def __ge__(self, other: 'Version'):
         if isinstance(other, str):
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.major >= other.major \
-            or (self.minor or 0) >= (other.minor or 0) \
-            or (self.patch or 0) >= (other.patch or 0) \
-            or (self.build or 0) >= (other.build or 0)
+        return self.__eq__(other) or self.__gt__(other)
     
     def __lt__(self, other: 'Version'):
         if isinstance(other, str):
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.major < other.major \
-            or (self.minor or 0) < (other.minor or 0) \
-            or (self.patch or 0) < (other.patch or 0) \
-            or (self.build or 0) < (other.build or 0)
+        for mine, their in zip(self._parts, other._parts):
+            if mine < their:
+                return True
+            if mine > their:
+                return False
+        return False
+
     
     def __le__(self, other: 'Version'):
         if isinstance(other, str):
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.major < other.major \
-            or (self.minor or 0) <= (other.minor or 0) \
-            or (self.patch or 0) <= (other.patch or 0) \
-            or (self.build or 0) <= (other.build or 0)
+        return self.__eq__(other) or self.__le__(other)
 
     def __str__(self) -> str:
         res = str(self.major)
@@ -94,9 +98,24 @@ class Version:
                 if self.build is not None:
                     res += f'.{self.build}'
         return res
+    
+    def __repr__(self) -> str:
+        return f'Version[{self}]'
 
 
 class VersionSpec:
+
+    @staticmethod
+    def parse(data: str) -> tuple[str|None, 'VersionSpec']:
+        m = re.match(r'(.+?)?\s?+([><]=?|=)\s+([\d\.]+)', data)
+        if m:
+            name = m[1]
+            op = m[2]
+            version = Version(m[3])
+            return name, VersionSpec(version, op)
+        return None, None
+
+
     def __init__(self, version: Version, op: str) -> None:
         self.version = version
         self.op = op
