@@ -15,6 +15,8 @@ from dan.smc.tar import TarSources
 
 
 class PackageBuild(Target, internal=True):
+
+    _all_builds: dict[str, 'PackageBuild'] = dict()
     
     def __init__(self, name, version, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
@@ -60,17 +62,20 @@ class PackageBuild(Target, internal=True):
             case _:
                 self.warning(f'cannot get available versions')
 
+    def get_sources(self):
+        makefile = self.package_makefile
+        sources = None
+        for target in makefile.all_targets:
+            if 'source' in target.name:
+                sources = target
+                break
+        if sources is None:
+            raise RuntimeError(f'Cannot find {self.name} pacakge\'s sources target')
+        return sources
+
     async def __initialize__(self):
+        sources = self.get_sources()
         if self.spec is not None:
-            makefile = self.package_makefile
-            sources = None
-            for target in makefile.all_targets:
-                if 'source' in target.name:
-                    sources = target
-                    break
-            if sources is None:
-                raise RuntimeError(f'Cannot find {self.name} pacakge\'s sources target')
-            
             avail_versions = await self.get_available_versions(sources)
             if avail_versions is None:
                 self.warning(f'unable to get available versions, default one will be used')
@@ -83,35 +88,41 @@ class PackageBuild(Target, internal=True):
 
         packages_path = get_packages_path()
         from dan.cxx import target_toolchain as toolchain
-        self.build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.name / str(version) / 'build'
-        self.output = self.build_path / 'pymake.config.json'
-        self.install_settings = InstallSettings(self.output)
+        self.build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.name / str(self.version)
+        self.install_settings = InstallSettings(self.build_path)
+        self.output = self.build_path / self.install_settings.libraries_destination
+        sources.output = self.build_path / 'src'
 
         return await super().__initialize__()
     
     async def __build__(self):
+        ident = f'{self.name}-{self.version}'
+        if ident in self.all_builds:
+            self.debug(f'{ident} already built by {self.all_builds[ident].fullname}')
+            await self.all_builds[ident].build()
+            return
+
+        self.all_builds[ident] = self
+
         makefile = self.package_makefile
         makefile.options.get('version').value = str(self.version)
 
         async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
             for target in makefile.all_installed:
+                target.build_path = self.build_path
                 group.create_task(target.install(self.install_settings, InstallMode.dev))
 
         makefile.cache.ignore()
         del makefile
 
-        os.chdir(self.build_path)
+        os.chdir(self.build_path.parent)
+
+        self.debug('cleaning')
         async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
             from dan.cxx import target_toolchain as toolchain
-            if toolchain.build_type.is_debug_mode:
-                # In debug mode we keep sources in order to let it be resolvable by debuggers
-                for file in self.build_path.iterdir():
-                    if file.is_file():
-                        group.create_task(aiofiles.os.remove(file))
-            else:
-                group.create_task(aiofiles.rmtree(self.build_path))
-                # FIXME: access denied in .git/objects
-                # group.create_task(aiofiles.rmtree(self.build_path / 'sources'))
+            if not toolchain.build_type.is_debug_mode:
+                group.create_task(aiofiles.rmtree(self.output / 'src'))
+            # group.create_task(aiofiles.rmtree(self.build_path))
 
 
 class Package(Target, internal=True):
@@ -145,11 +156,11 @@ class Package(Target, internal=True):
         self.dan_path.mkdir(exist_ok=True, parents=True)      
 
         async with asyncio.TaskGroup(f'importing {self.name} package') as group:
-            for pkg in find_files(r'.+\.pc$', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
+            for pkg in find_files(r'.+\.pc$', [self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
                 self.debug('copying %s to %s', pkg, self.pkgconfig_path)
                 group.create_task(aiofiles.copy(pkg, self.pkgconfig_path))
 
-            for pkg in find_files(r'.+\.py$', [self.pkg_build.output / self.pkg_build.install_settings.libraries_destination / 'dan']):
+            for pkg in find_files(r'.+\.py$', [self.pkg_build.install_settings.libraries_destination / 'dan']):
                 self.debug('copying %s to %s', pkg, self.dan_path)
                 group.create_task(aiofiles.copy(pkg, self.dan_path))
         
