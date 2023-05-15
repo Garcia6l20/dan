@@ -123,6 +123,13 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
     context.up()
     return module
 
+def reload_makefile(makefile: MakeFile):
+    module_path = makefile.__file__
+    del _imported_makefiles[Path(module_path)]
+    makefile.cache.ignore()
+    return load_makefile(module_path, makefile.name, requirements=makefile.requirements, build_path=makefile.build_path)
+
+
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     ''' Include a sub-directory (or a sub-makefile).

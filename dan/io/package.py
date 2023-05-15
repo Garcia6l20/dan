@@ -3,7 +3,7 @@ import os
 
 import aiohttp
 from dan.core import aiofiles, asyncio
-from dan.core.pathlib import Path
+from dan.core.include import reload_makefile
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
 from dan.core.find import find_files
@@ -97,19 +97,21 @@ class PackageBuild(Target, internal=True):
     
     async def __build__(self):
         ident = f'{self.name}-{self.version}'
-        if ident in self.all_builds:
-            self.debug(f'{ident} already built by {self.all_builds[ident].fullname}')
-            await self.all_builds[ident].build()
+        if ident in self._all_builds:
+            self.debug(f'{ident} already built by {self._all_builds[ident].fullname}')
+            await self._all_builds[ident].build()
             return
 
-        self.all_builds[ident] = self
+        self._all_builds[ident] = self
 
         makefile = self.package_makefile
+        makefile.build_path = self.build_path / 'build'
+        makefile = reload_makefile(makefile)
+
         makefile.options.get('version').value = str(self.version)
 
         async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
             for target in makefile.all_installed:
-                target.build_path = self.build_path
                 group.create_task(target.install(self.install_settings, InstallMode.dev))
 
         makefile.cache.ignore()
@@ -128,16 +130,32 @@ class PackageBuild(Target, internal=True):
 class Package(Target, internal=True):
     repository: str = 'dan.io'
 
-    def __init__(self, *args, **kwargs) -> None:
-        name, spec = VersionSpec.parse(self.version)
-        if spec:
-            self.version = spec.version
-            self.spec = spec
-        else:
-            self.spec = VersionSpec(Version(self.version), '=')
+    def __init__(self,
+                 name: str = None,
+                 version: str = None,
+                 repository: str = None, **kwargs) -> None:        
+        if version is not None:
+            self.version = version
+        match self.version:
+            case str():
+                _name, spec = VersionSpec.parse(self.version)
+                if repository is not None:
+                    self.repository = repository
+                if _name is not None:
+                    name = _name        
+                if spec:
+                    self.version = spec.version
+                    self.spec = spec
+                else:
+                    self.spec = VersionSpec(Version(self.version), '=')
+            case VersionSpec():
+                self.spec = self.version
+                self.version = self.spec.version
+            case Version():
+                self.spec = VersionSpec(Version(self.version), '=')
         if name is not None:
             self.name = name
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
     
     async def __initialize__(self):
         self.pkg_build = PackageBuild(self.name,

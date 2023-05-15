@@ -3,6 +3,7 @@ import functools
 import re
 import typing as t
 from dan.core import asyncio
+from dan.core.pm import re_match
 from dan.core.settings import InstallMode, InstallSettings
 
 from dan.core.version import Version, VersionSpec
@@ -11,10 +12,17 @@ from dan.logging import Logging
 
 class RequiredPackage(Logging):
     def __init__(self, name: str, version_spec: VersionSpec = None):
-        self.name = name
         self.version_spec = version_spec
         super().__init__(name)
         self.target : 'Target' = None
+
+        match re_match(name):
+            case r'(.+?)@(.+)' as m:
+                self.name = m[1]
+                self.provider = m[2]
+            case _:
+                self.name = name
+                self.provider = None
 
     def is_compatible(self, t: 'Target'):
         if self.version_spec is not None:
@@ -59,6 +67,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     from dan.pkgconfig.package import find_package
     from dan.logging import _get_makefile_logger
     from dan.core.include import context
+    from dan.io import Package
 
     if logger is None:
         logger = _get_makefile_logger()
@@ -90,12 +99,18 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 req.target = t
                 result.append(t)
             elif install:
-                t = makefile.requirements.find(req.name)
-                if not t:
-                    raise RuntimeError(f'Unresolved requirement {req}')
+                if makefile.requirements:
+                    # install requirement from dan-requires.py
+                    t = makefile.requirements.find(req.name)
+                    if not t:
+                        raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
+                else:
+                    t = Package(req.name, req.version_spec, repository=req.provider, makefile=makefile)
                 logger.debug('installing requirement: %s %s', req.name, req.version_spec)
                 unresolved.append(req)                
                 group.create_task(t.install(deps_settings, InstallMode.dev))
+
+
 
     if install:
         for req in unresolved:
