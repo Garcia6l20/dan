@@ -1,9 +1,10 @@
 from dan.io import Package
 
 class Catch2(Package):
-    name = 'catch2'
-    version = '3.3.2'
+    version = 'catch2 >= 3.3.2'
 
 class Spdlog(Package):
-    name = 'spdlog'
-    version = '1.11.0'
+    version = 'spdlog = 1'
+
+class Fmt(Package):
+    version = 'fmt = 9'

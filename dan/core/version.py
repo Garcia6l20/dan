@@ -2,17 +2,21 @@ import re
 
 
 class Version:
-    version_pattern = re.compile('[.-]')
+    version_pattern = re.compile(r'[\.-]')
 
     def __init__(self, *args) -> None:
         if len(args) == 1 and isinstance(args[0], str):
-            args = Version.version_pattern.split(args[0])
-            first = args[0]
-            while not first.isnumeric():
-                first = first[1:]
-            args[0] = first
+            parts = Version.version_pattern.split(args[0])
+            args = list()
+            # cleanup
+            for a in parts:
+                # drop non numeric parts (ie.: v0.11.0 -> 0.11.0, 1.2-preview5, mylib-3.2, etc...)
+                while not a.isnumeric():
+                    a = a[1:]
+                args.append(a)
         else:
             args = list(args)
+        
         self._parts = tuple(int(a) for a in args)
 
     @property
@@ -107,7 +111,7 @@ class VersionSpec:
 
     @staticmethod
     def parse(data: str) -> tuple[str|None, 'VersionSpec']:
-        m = re.match(r'(.+?)?\s?+([><]=?|=)\s+([\d\.]+)', data)
+        m = re.match(r'(.+?)?\s+?([><]=?|=)\s+([\d\.]+)', data)
         if m:
             name = m[1]
             op = m[2]

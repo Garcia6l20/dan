@@ -48,12 +48,9 @@ class RequiredPackage(Logging):
 
 def parse_requirement(req: str) -> RequiredPackage:
     req = req.strip()
-    m = re.match(r'(.+?)\s+([><]=?|=)\s+([\d\.]+)', req)
-    if m:
-        name = m[1]
-        op = m[2]
-        version = Version(m[3])
-        return RequiredPackage(name, VersionSpec(version, op))
+    name, spec = VersionSpec.parse(req)
+    if spec:
+        return RequiredPackage(name, spec)
     else:
         return RequiredPackage(req)
 

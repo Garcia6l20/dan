@@ -232,7 +232,8 @@ class Target(Logging, MakefileRegister, internal=True):
                  default: bool = None,
                  makefile=None,
                  build_path: Path = None) -> None:
-        self.version = Version(self.version) if self.version else None
+        if isinstance(self.version, str):
+            self.version = Version(self.version)
         self.parent = parent
         self.__cache: dict = None
 
@@ -297,6 +298,10 @@ class Target(Logging, MakefileRegister, internal=True):
     @property
     def build_path(self) -> Path:
         return self.__build_path
+    
+    @build_path.setter
+    def build_path(self, build_path):
+        self.__build_path = build_path
 
     @property
     def requires(self):
