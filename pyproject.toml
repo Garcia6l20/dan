@@ -1,6 +1,6 @@
 [project]
 name = "dan-build"
-version = "0.1.1"
+version = "0.2.0"
 description = "Python-based build system."
 authors = [
     {name = "Garcia Sylvain", email="garcia.6l20@gmail.com"},
@@ -38,6 +38,11 @@ include = ["dan*"]
 [tool.setuptools.package-data]
 "dan.pkgconfig.templates" = ["*.jinja2"]
 "dan.cxx.data" = ["*"]
+
+[tool.setuptools.data-files]
+"etc/bash_completion.d" = [
+    "completion/bash/dan.sh",
+]
 
 
 [project.optional-dependencies]
