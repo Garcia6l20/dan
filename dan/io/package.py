@@ -92,8 +92,8 @@ class PackageBuild(Target, internal=True):
         from dan.cxx import target_toolchain as toolchain
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.name / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
-        self.output = self.build_path / self.install_settings.libraries_destination
-        sources.output = self.build_path / 'src'
+        self.output = self.install_settings.libraries_prefix
+        sources.output = 'src' # TODO source_prefix in install settings
 
         return await super().__initialize__()
     
@@ -169,8 +169,8 @@ class Package(Target, internal=True):
                                       spec=self.spec,
                                       makefile=self.makefile)
         self.dependencies.add(self.pkg_build)
-        self.pkgconfig_path = self.makefile.pkgs_path / 'lib' / 'pkgconfig'
-        self.dan_path = self.makefile.pkgs_path / 'lib' / 'dan'
+        self.pkgconfig_path = Path('pkgs') / 'lib' / 'pkgconfig'
+        self.dan_path = Path('pkgs') / 'lib' / 'dan'
         self.output = self.pkgconfig_path / f'{self.name}.pc'
         return await super().__initialize__()
     

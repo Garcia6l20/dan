@@ -24,7 +24,7 @@ class TarSources(Target, internal=True):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.output: Path = self.build_path / 'sources'
+        self.output: Path = 'sources'
 
     async def __build__(self):
         self.info(f'downloading {self.url}')

@@ -295,7 +295,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @output.setter
     def output(self, path):
         path = Path(path)
-        if path.is_absolute() and path in self.build_path.parents:
+        if path.is_absolute() and self.build_path in path.parents:
             raise RuntimeError(f'output must not be an absolute path within build directory')
         self._output = path
 
@@ -355,6 +355,9 @@ class Target(Logging, MakefileRegister, internal=True):
     async def initialize(self):
         await self.preload()
         self.debug('initializing...')
+
+        if isinstance(self.version, Option):
+            self.version = self.version.value
 
         async with asyncio.TaskGroup(f'initializing {self.name}\'s target dependencies') as group:
             for dep in self.target_dependencies:
