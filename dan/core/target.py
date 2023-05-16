@@ -230,8 +230,7 @@ class Target(Logging, MakefileRegister, internal=True):
                  parent: 'Target' = None,
                  version: str = None,
                  default: bool = None,
-                 makefile=None,
-                 build_path: Path = None) -> None:
+                 makefile=None) -> None:
         if isinstance(self.version, str):
             self.version = Version(self.version)
         self.parent = parent
@@ -259,10 +258,6 @@ class Target(Logging, MakefileRegister, internal=True):
         if self.makefile is None:
             raise RuntimeError('Makefile not resolved')
 
-        if build_path is None:
-            self.__build_path = self.makefile.build_path
-        else:
-            self.__build_path = build_path
 
         if self.fullname is None:
             self.fullname = f'{self.makefile.fullname}.{self.name}'
@@ -297,12 +292,8 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def build_path(self) -> Path:
-        return self.__build_path
+        return self.makefile.build_path
     
-    @build_path.setter
-    def build_path(self, build_path):
-        self.__build_path = build_path
-
     @property
     def requires(self):
         from dan.pkgconfig.package import RequiredPackage

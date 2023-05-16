@@ -3,7 +3,7 @@ import os
 
 import aiohttp
 from dan.core import aiofiles, asyncio
-from dan.core.include import reload_makefile
+from dan.core.pathlib import Path
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
 from dan.core.find import find_files
@@ -24,6 +24,7 @@ class PackageBuild(Target, internal=True):
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
         self._package_makefile = None
+        self._build_path = None
 
     @property
     def package_makefile(self):
@@ -34,7 +35,8 @@ class PackageBuild(Target, internal=True):
                 requirements = load_makefile(root / 'dan-requires.py', f'{self.name}-requirements')
             else:
                 requirements = None
-            self._package_makefile = load_makefile(root / 'dan-build.py', self.name, requirements=requirements, build_path=self.build_path)
+            self._package_makefile = load_makefile(root / 'dan-build.py', self.name, requirements=requirements, build_path=self.build_path, parent=self.makefile)
+            # self._package_makefile = load_makefile(root / 'dan-build.py', self.name, requirements=requirements, build_path=self.build_path)
         return self._package_makefile
 
 
@@ -88,12 +90,16 @@ class PackageBuild(Target, internal=True):
 
         packages_path = get_packages_path()
         from dan.cxx import target_toolchain as toolchain
-        self.build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.name / str(self.version)
+        self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.name / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
         self.output = self.build_path / self.install_settings.libraries_destination
         sources.output = self.build_path / 'src'
 
         return await super().__initialize__()
+    
+    @property
+    def build_path(self) -> Path:
+        return self._build_path
     
     async def __build__(self):
         ident = f'{self.name}-{self.version}'
@@ -106,7 +112,6 @@ class PackageBuild(Target, internal=True):
 
         makefile = self.package_makefile
         makefile.build_path = self.build_path / 'build'
-        makefile = reload_makefile(makefile)
 
         makefile.options.get('version').value = str(self.version)
 

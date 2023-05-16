@@ -91,12 +91,15 @@ def context_reset():
     context = Context()
 
 
-def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None):
+def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):
     global context
     source_path = Path(module.__file__).parent
-    if not build_path:
-        assert context.current
-        build_path = build_path or context.current.build_path / name
+    if parent is None and context.current is not None:
+        parent = context.current
+
+    if build_path is None:
+        assert parent is not None
+        build_path = build_path or parent.build_path / name
     build_path.mkdir(parents=True, exist_ok=True)
 
     module.__class__ = MakeFile
@@ -105,11 +108,12 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
         name,
         source_path,
         build_path,
-        requirements)
+        requirements,
+        parent)
 
 _imported_makefiles: dict[Path, MakeFile] = dict()
 
-def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None, requirements: MakeFile = None) -> MakeFile:
+def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
     if module_path in _imported_makefiles:
@@ -118,17 +122,10 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
         module_name, module_path)
     module = importlib.util.module_from_spec(spec)
     _imported_makefiles[module_path] = module
-    _init_makefile(module, name, build_path, requirements)
+    _init_makefile(module, name, build_path, requirements, parent)
     spec.loader.exec_module(module)
     context.up()
     return module
-
-def reload_makefile(makefile: MakeFile):
-    module_path = makefile.__file__
-    del _imported_makefiles[Path(module_path)]
-    makefile.cache.ignore()
-    return load_makefile(module_path, makefile.name, requirements=makefile.requirements, build_path=makefile.build_path)
-
 
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:

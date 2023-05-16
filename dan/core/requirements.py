@@ -79,34 +79,37 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     if makefile.requirements:
         pkgs_search_paths.append(makefile.requirements.pkgs_path)
 
-    result = list()
-    unresolved = list()
+    resolved: list[RequiredPackage] = list()
+    unresolved: list[RequiredPackage] = list()
 
     async with asyncio.TaskGroup('requirement loading') as group:
         for req in requirements:
             if req.found:
-                result.append(req.target)
+                resolved.append(req)
                 continue
 
             t = context.root.find(req.name)
             if t and not t.is_requirement and req.is_compatible(t):
+                logger.debug('%s: already fullfilled by %s', req, t.fullname)
                 req.target = t
-                result.append(req.target)
+                resolved.append(req)
                 continue
 
             t = find_package(req.name, req.version_spec, search_paths=pkgs_search_paths, makefile=makefile)
             if t is not None and req.is_compatible(t):
+                logger.debug('%s: using package %s', req, t.fullname)
                 req.target = t
-                result.append(t)
+                resolved.append(req)
             elif install:
                 if makefile.requirements:
                     # install requirement from dan-requires.py
                     t = makefile.requirements.find(req.name)
                     if not t:
                         raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
+                    logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
                     t = Package(req.name, req.version_spec, repository=req.provider, makefile=makefile)
-                logger.debug('installing requirement: %s %s', req.name, req.version_spec)
+                    logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)                
                 group.create_task(t.install(deps_settings, InstallMode.dev))
 
@@ -118,6 +121,6 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
             if pkg is None:
                 raise RuntimeError(f'Unresolved requirement {req}')
             req.target = pkg
-            result.append(pkg)
+            resolved.append(req)
 
-    return result
+    return [req.target for req in resolved]
