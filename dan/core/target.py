@@ -277,10 +277,27 @@ class Target(Logging, MakefileRegister, internal=True):
 
         super().__init__(self.fullname)
 
-        if self.output is not None:
-            self.output = Path(self.output)
-            if not self.output.is_absolute():
-                self.output = self.build_path / self.output
+        self._output: Path = None
+
+        if type(self).output != Target.output:
+            # hack class-defined output
+            #   transform it to classproperty for build_path resolution
+            output = self.output
+            type(self).output = utils.classproperty(lambda: self.build_path / output)
+
+    
+    @property
+    def output(self):
+        if self._output is None:
+            return None
+        return self.build_path / self._output
+
+    @output.setter
+    def output(self, path):
+        path = Path(path)
+        if path.is_absolute() and path in self.build_path.parents:
+            raise RuntimeError(f'output must not be an absolute path within build directory')
+        self._output = path
 
     @property
     def is_requirement(self) -> bool:
@@ -342,9 +359,6 @@ class Target(Logging, MakefileRegister, internal=True):
         async with asyncio.TaskGroup(f'initializing {self.name}\'s target dependencies') as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.initialize())
-
-        if self.output and not self.output.is_absolute():
-            self.output = self.build_path / self.output
 
         res = self.__initialize__()
         if inspect.iscoroutine(res):

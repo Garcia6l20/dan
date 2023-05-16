@@ -449,8 +449,7 @@ class Executable(CXXObjectsTarget, internal=True):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.output = self.build_path / \
-            self.toolchain.make_executable_name(self.name)
+        self.output = self.toolchain.make_executable_name(self.name)
         self.__dirty = False
 
     async def __initialize__(self):
