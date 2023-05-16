@@ -105,7 +105,6 @@ class Package(CXXTarget, internal=True):
     default = False
 
     def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, data: Data = None, **kwargs) -> None:
-        self.output = None
         if data is not None:
             self.config_path = data.path
             self.data = data

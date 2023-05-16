@@ -3,6 +3,7 @@ import functools
 import re
 import typing as t
 from dan.core import asyncio
+from dan.core.pm import re_match
 from dan.core.settings import InstallMode, InstallSettings
 
 from dan.core.version import Version, VersionSpec
@@ -11,10 +12,17 @@ from dan.logging import Logging
 
 class RequiredPackage(Logging):
     def __init__(self, name: str, version_spec: VersionSpec = None):
-        self.name = name
         self.version_spec = version_spec
         super().__init__(name)
         self.target : 'Target' = None
+
+        match re_match(name):
+            case r'(.+?)@(.+)' as m:
+                self.name = m[1]
+                self.provider = m[2]
+            case _:
+                self.name = name
+                self.provider = None
 
     def is_compatible(self, t: 'Target'):
         if self.version_spec is not None:
@@ -48,12 +56,9 @@ class RequiredPackage(Logging):
 
 def parse_requirement(req: str) -> RequiredPackage:
     req = req.strip()
-    m = re.match(r'(.+?)\s+([><]=?|=)\s+([\d\.]+)', req)
-    if m:
-        name = m[1]
-        op = m[2]
-        version = Version(m[3])
-        return RequiredPackage(name, VersionSpec(version, op))
+    name, spec = VersionSpec.parse(req)
+    if spec:
+        return RequiredPackage(name, spec)
     else:
         return RequiredPackage(req)
 
@@ -62,6 +67,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     from dan.pkgconfig.package import find_package
     from dan.logging import _get_makefile_logger
     from dan.core.include import context
+    from dan.io import Package
 
     if logger is None:
         logger = _get_makefile_logger()
@@ -73,32 +79,41 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     if makefile.requirements:
         pkgs_search_paths.append(makefile.requirements.pkgs_path)
 
-    result = list()
-    unresolved = list()
+    resolved: list[RequiredPackage] = list()
+    unresolved: list[RequiredPackage] = list()
 
     async with asyncio.TaskGroup('requirement loading') as group:
         for req in requirements:
             if req.found:
-                result.append(req.target)
+                resolved.append(req)
                 continue
 
             t = context.root.find(req.name)
             if t and not t.is_requirement and req.is_compatible(t):
+                logger.debug('%s: already fullfilled by %s', req, t.fullname)
                 req.target = t
-                result.append(req.target)
+                resolved.append(req)
                 continue
 
             t = find_package(req.name, req.version_spec, search_paths=pkgs_search_paths, makefile=makefile)
             if t is not None and req.is_compatible(t):
+                logger.debug('%s: using package %s', req, t.fullname)
                 req.target = t
-                result.append(t)
+                resolved.append(req)
             elif install:
-                t = makefile.requirements.find(req.name)
-                if not t:
-                    raise RuntimeError(f'Unresolved requirement {req}')
-                logger.debug('installing requirement: %s %s', req.name, req.version_spec)
+                if makefile.requirements:
+                    # install requirement from dan-requires.py
+                    t = makefile.requirements.find(req.name)
+                    if not t:
+                        raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
+                    logger.debug('%s using requirements\' target %s', req, t.fullname)
+                else:
+                    t = Package(req.name, req.version_spec, repository=req.provider, makefile=makefile)
+                    logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)                
                 group.create_task(t.install(deps_settings, InstallMode.dev))
+
+
 
     if install:
         for req in unresolved:
@@ -106,6 +121,6 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
             if pkg is None:
                 raise RuntimeError(f'Unresolved requirement {req}')
             req.target = pkg
-            result.append(pkg)
+            resolved.append(req)
 
-    return result
+    return [req.target for req in resolved]

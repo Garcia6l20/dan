@@ -13,15 +13,15 @@ class MakeFile(sys.__class__):
                name: str,
                source_path: Path,
                build_path: Path,
-               requirements: 'MakeFile' = None) -> None:
+               requirements: 'MakeFile' = None,
+               parent: 'MakeFile' = None) -> None:
         self.name = name
         self.description = None
         self.version = None
         self.source_path = source_path
         self.build_path = build_path
         self.__requirements = requirements
-        self.parent: MakeFile = self.parent if hasattr(
-            self, 'parent') else None
+        self.parent = parent
         self.__cache: Cache = None
         self.children: list[MakeFile] = list()
         if self.name != 'dan-requires' and self.parent:

@@ -17,4 +17,7 @@ class TestSpdlog(Test, Executable):
     name = 'test-spdlog'
     sources= 'test_spdlog.cpp',
     private_includes= '.',
-    dependencies = 'spdlog >= 1.11',
+    dependencies = (
+        'spdlog = 1',
+        'fmt = 9',
+    )

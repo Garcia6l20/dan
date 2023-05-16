@@ -44,8 +44,7 @@ class CXXObject(Target, internal=True):
         await self.parent.preload()
 
         ext = 'o' if os.name != 'nt' else 'obj'
-        self.output: Path = self.build_path / \
-            Path(f'{self.source.stem}.{ext}')
+        self.output: Path = Path(f'{self.source.stem}.{ext}')
 
         deps = self.cache.get('deps')
         if deps is not None:
@@ -332,10 +331,9 @@ class Library(CXXObjectsTarget, internal=True):
 
         if self.library_type != LibraryType.INTERFACE:
             self.dependencies.update(self.objs)
-            self.output = self.build_path / \
-                self.toolchain.make_library_name(self.name, self.shared)
+            self.output = self.toolchain.make_library_name(self.name, self.shared)
         else:
-            self.output = self.build_path / f"lib{self.name}.stamp"
+            self.output = f"lib{self.name}.stamp"
         await super().__initialize__()
 
         previous_args = self.cache.get('generate_args')
@@ -449,8 +447,7 @@ class Executable(CXXObjectsTarget, internal=True):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.output = self.build_path / \
-            self.toolchain.make_executable_name(self.name)
+        self.output = self.toolchain.make_executable_name(self.name)
         self.__dirty = False
 
     async def __initialize__(self):

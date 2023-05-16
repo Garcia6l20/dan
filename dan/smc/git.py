@@ -20,7 +20,7 @@ class GitSources(Target, internal=True):
         if patches is not None:
             self.patches = patches
         self.sha1 = None
-        self.output: Path = self.build_path / dirname
+        self.output: Path = dirname
         self.git_dir: Path = self.output / '.git'
         self.subdirectory = subdirectory
 
