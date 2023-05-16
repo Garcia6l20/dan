@@ -11,9 +11,10 @@ class Version:
             # cleanup
             for a in parts:
                 # drop non numeric parts (ie.: v0.11.0 -> 0.11.0, 1.2-preview5, mylib-3.2, etc...)
-                while not a.isnumeric():
+                while not a.isnumeric() and len(a):
                     a = a[1:]
-                args.append(a)
+                if len(a):
+                    args.append(a)
         else:
             args = list(args)
         
