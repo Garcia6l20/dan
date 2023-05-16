@@ -24,12 +24,12 @@ class TarSources(Target, internal=True):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.archive_name = self.url.split("/")[-1]
         self.output: Path = self.build_path / 'sources'
 
     async def __build__(self):
         self.info(f'downloading {self.url}')
-        await fetch_file(self.url, self.build_path / self.archive_name)
-        with tarfile.open(self.build_path / self.archive_name) as f:
-            self.info(f'extracting {self.archive_name}')
+        archive_name = self.url.split("/")[-1]
+        await fetch_file(self.url, self.build_path / archive_name)
+        with tarfile.open(self.build_path / archive_name) as f:
+            self.info(f'extracting {archive_name}')
             f.extractall(self.output)
