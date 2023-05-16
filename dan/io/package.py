@@ -138,14 +138,19 @@ class Package(Target, internal=True):
     def __init__(self,
                  name: str = None,
                  version: str = None,
-                 repository: str = None, **kwargs) -> None:        
+                 repository: str = None, **kwargs) -> None:
+        self.repository = repository
         if version is not None:
             self.version = version
+        if name is not None:
+            self.name = name
+        super().__init__(**kwargs)
+    
+    async def __initialize__(self):
+
         match self.version:
             case str():
                 _name, spec = VersionSpec.parse(self.version)
-                if repository is not None:
-                    self.repository = repository
                 if _name is not None:
                     name = _name        
                 if spec:
@@ -157,12 +162,10 @@ class Package(Target, internal=True):
                 self.spec = self.version
                 self.version = self.spec.version
             case Version():
-                self.spec = VersionSpec(Version(self.version), '=')
-        if name is not None:
-            self.name = name
-        super().__init__(**kwargs)
-    
-    async def __initialize__(self):
+                self.spec = VersionSpec(self.version, '=')
+            case None:
+                self.spec = None
+
         self.pkg_build = PackageBuild(self.name,
                                       self.version,
                                       self.repository,

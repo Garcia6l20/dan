@@ -36,6 +36,8 @@ repositories : dict[str, dict] = {
 }
 
 def get_repo_instance(repo_name:str, makefile) -> PackageRepository:
+    if repo_name is None:
+        repo_name = next(iter(repositories.keys()))
     if not repo_name in repositories:
         raise RuntimeError(f'Unknown repository: {repo_name}')
     repo_data = repositories[repo_name]
