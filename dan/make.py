@@ -173,18 +173,19 @@ class Make(Logging):
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for required in self.required_targets:
+                test_name, *test_case = required.split(':')
+                test_case = test_case[0] if len(test_case) else None
+
                 for test in context.root.all_tests:
-                    if len(test) > 1 and required.startswith(test.fullname):
-                        case_name = required.removeprefix(test.fullname + '.')
-                        cases = list()
-                        for case in test.cases:
-                            if fnmatch.fnmatch(case.name, case_name):
-                                cases.append(case)
-                        test.cases = cases
-                        items.append(test)
-                        continue
                     
-                    if required.startswith(test.fullname) or fnmatch.fnmatch(test.fullname, f'*{required}*'):
+                    if fnmatch.fnmatch(test.fullname, f'*{test_name}*'):
+                        if len(test) > 1 and test_case is not None:
+                            cases = list()
+                            for case in test.cases:
+                                if fnmatch.fnmatch(case.name, test_case):
+                                    cases.append(case)
+                            test.cases = cases
+                        
                         items.append(test)
         else:
             for test in context.root.all_tests:

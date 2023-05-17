@@ -244,7 +244,11 @@ async def tests(ctx: CommandsContext, **kwargs):
     ctx(**kwargs)
     await ctx.make.initialize()
     for t in ctx.make.tests:
-        click.echo(t.fullname)
+        if len(t) > 1:
+            for c in t.cases:
+                click.echo(f'{t.fullname}:{c.name}')
+        else:
+            click.echo(t.fullname)
 
 @ls.command()
 @common_opts
@@ -341,7 +345,13 @@ async def get_tests(ctx: CommandsContext, **kwargs):
     await ctx.make.initialize()
     from dan.core.include import context
     import json
-    click.echo(json.dumps([test.fullname for test in context.root.all_tests]))
+    out = list()
+    for t in context.root.all_tests:
+        out.append(t.fullname)
+        if len(t) > 1:
+            for c in t.cases:
+                out.append(f'{t.fullname}:{c.name}')
+    click.echo(json.dumps(out))
 
 
 @code.command()

@@ -27,7 +27,7 @@ class Code:
         def make_inner_test_info(test: Test, case: Case):
             basename = test.basename(case)
             out, err = test.outs(case)
-            ident = f'{test.fullname}.{case.name}' if case .name is not None else test.fullname
+            ident = f'{test.fullname}:{case.name}' if case.name is not None else test.fullname
             info = {
                 'type': 'test',
                 'id': ident,
