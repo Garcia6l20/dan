@@ -218,9 +218,7 @@ class Make(Logging):
 
     @classmethod
     def _parse_str_value(cls, name, value: str, orig: type, tp: type = None):
-        if issubclass(orig, str):
-            return value
-        elif issubclass(orig, Enum):
+        if issubclass(orig, Enum):
             names = [n.lower()
                         for n in orig._member_names_]
             value = value.lower()
@@ -235,7 +233,9 @@ class Make(Logging):
                 result.append(cls._parse_str_value(name, sub, tp))
             return orig(result)
         else:
-            raise TypeError(f'unhandled type {orig}')
+            if tp is not None:
+                raise TypeError(f'unhandled type {orig}[{tp}]')
+            return orig(value)
 
     
     @classmethod
@@ -255,6 +255,7 @@ class Make(Logging):
                     orig = t.get_origin(tp)
                     if orig is None:
                         orig = tp
+                        tp = None
                     else:
                         args = t.get_args(tp)
                         if args:
