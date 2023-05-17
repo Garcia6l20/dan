@@ -332,6 +332,17 @@ async def get_targets(ctx: CommandsContext, **kwargs):
     import json
     click.echo(json.dumps(out))
 
+@code.command()
+@common_opts
+@pass_context
+async def get_tests(ctx: CommandsContext, **kwargs):
+    kwargs['quiet'] = True
+    ctx(**kwargs)
+    await ctx.make.initialize()
+    from dan.core.include import context
+    import json
+    click.echo(json.dumps([test.fullname for test in context.root.all_tests]))
+
 
 @code.command()
 @common_opts
