@@ -42,3 +42,13 @@ class TestMbedTLS(Test, Executable):
         Case('hello', 'hello', expected_output=make_expected_result),
         Case('hello-dan', 'hello', 'dan', expected_output=make_expected_result),
     ]
+
+class TestBoost(Test, Executable):
+    name = 'test-boost'
+    sources= 'test_boost.cpp',
+    dependencies= 'boost:headers >= 1.82',    
+    cases = [
+        Case('42-12', 42, 12, expected_result=6),
+        Case('44-8', 44, 8, expected_result=4),
+        Case('142-42', 142, 42, expected_result=2),
+    ]
