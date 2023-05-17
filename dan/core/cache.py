@@ -43,7 +43,7 @@ class Cache(t.Generic[T]):
         if self.dataclass == dict:
             return json.dumps(self.data, indent=self.indent)
         else:
-            return self.data.to_json()
+            return self.data.to_json(indent=self.indent)
 
     
     @property
@@ -65,8 +65,8 @@ class Cache(t.Generic[T]):
             self.__dirty = self.__initial_state != self.__state
         return self.__dirty
     
-    async def save(self):
-        if self.path and self.dirty:
+    async def save(self, force=False):
+        if self.path and (self.dirty or force):
             if self.__state:
                 self.path.parent.mkdir(exist_ok=True, parents=True)
                 async with aiofiles.open(self.path, 'w') as f:
