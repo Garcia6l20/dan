@@ -1,4 +1,4 @@
-from dan.cli import main
+from dan.cli.main import main
 
 
 if __name__ == '__main__':

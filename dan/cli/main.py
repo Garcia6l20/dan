@@ -1,10 +1,9 @@
-import inspect
 import os
 import sys
 
 from dan.core.find import find_file
 from dan.core.pathlib import Path
-import click
+from dan.cli import click
 
 import logging
 import asyncio
@@ -13,25 +12,8 @@ from dan.cxx.targets import Executable
 
 
 from dan.make import ConfigCache, InstallMode, Make
-from dan.vscode import Code
+from dan.cli.vscode import Code
 
-
-class AsyncContext(click.Context):
-    def invoke(__self, __callback, *args, **kwargs):
-        ret = super().invoke(__callback, *args, **kwargs)
-        if inspect.isawaitable(ret):
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                return ret  # must be awaited
-            return loop.run_until_complete(ret)
-        else:
-            return ret
-
-
-click.BaseCommand.context_class = AsyncContext
-
-
-_logger = logging.getLogger('cli')
 
 _minimal_options = [
     click.option('--build-path', '-B', 'path', help='Path where dan has been initialized.',
@@ -128,8 +110,8 @@ async def configure(verbose: bool, toolchain: str, settings: tuple[str], options
     config.data.source_path = config.data.source_path if hasattr(
         config, 'source_path') else str(source_path)
     config.data.build_path = str(build_path)
-    _logger.info(f'source path: {config.data.source_path}')
-    _logger.info(f'build path: {config.data.build_path}')
+    click.logger.info(f'source path: {config.data.source_path}')
+    click.logger.info(f'build path: {config.data.build_path}')
     config.data.toolchain = toolchain or config.data.toolchain or click.prompt('Toolchain', type=_toolchain_choice, default='default')
     await config.save()
     Cache.ignore(config)
@@ -198,12 +180,12 @@ def uninstall(verbose: bool, yes: bool, root: str, name: str):
     if yes:
         def rm_empty(dir: Path):
             if dir.is_empty:
-                _logger.debug(f'removing empty directory: {dir}')
+                click.logger.debug(f'removing empty directory: {dir}')
                 os.rmdir(dir)
                 rm_empty(dir.parent)
 
         for f in files:
-            _logger.debug(f'removing: {f}')
+            click.logger.debug(f'removing: {f}')
             os.remove(f)
             rm_empty(f.parent)
 
@@ -405,10 +387,10 @@ def main():
     try:
         cli(auto_envvar_prefix='DAN')
     except Exception as err:
-        _logger.error(str(err))
+        click.logger.error(str(err))
         _ex_type, _ex, tb = sys.exc_info()
         import traceback
-        _logger.debug(' '.join(traceback.format_tb(tb)))
+        click.logger.debug(' '.join(traceback.format_tb(tb)))
         try:
             # wait asyncio loop to terminate
             asyncio.get_running_loop().run_until_complete()

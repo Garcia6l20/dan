@@ -1,5 +1,5 @@
 import tqdm
-import logging
+from logging import *
 from termcolor import colored
 
 
@@ -26,7 +26,7 @@ class bind_back:
         return self.fn(*args, *self.args, **kwds)
 
 
-class ColoredFormatter(logging.Formatter):
+class ColoredFormatter(Formatter):
 
     COLORS = {
         'WARNING': bind_back(colored, 'yellow'),
@@ -71,12 +71,12 @@ _color_formatter = ColoredFormatter()
 _no_color_formatter = ColoredFormatter(use_color=False)
 
 
-class TqdmHandler(logging.Handler):
+class TqdmHandler(Handler):
     def emit(self, record):
         tqdm.tqdm.write(self.format(record))
 
 
-def setup_logger(logger: logging.Logger):
+def setup_logger(logger: Logger):
     if not logger.hasHandlers():
         console = TqdmHandler()
         console.setFormatter(_color_formatter)
@@ -84,10 +84,10 @@ def setup_logger(logger: logging.Logger):
     else:
         for handler in logger.handlers:
             handler.setFormatter(_color_formatter if isinstance(
-                handler, logging.StreamHandler) else _no_color_formatter)
+                handler, StreamHandler) else _no_color_formatter)
 
 
-class ColoredLogger(logging.Logger):
+class ColoredLogger(Logger):
 
     def __init__(self, name):
         super().__init__(name)
@@ -95,7 +95,7 @@ class ColoredLogger(logging.Logger):
         setup_logger(self)
 
 
-logging.setLoggerClass(ColoredLogger)
+setLoggerClass(ColoredLogger)
 
 
 class Logging:
@@ -104,7 +104,7 @@ class Logging:
             name = self.__class__.__name__
         if name.startswith('root.'):
             name = name.removeprefix('root.')
-        self._logger = logging.getLogger(name)
+        self._logger = getLogger(name)
         self.debug = self._logger.debug
         self.info = self._logger.info
         self.warning = self._logger.warning
@@ -114,11 +114,11 @@ class Logging:
 def _get_makefile_logger():
     from dan.core.include import context
     if not hasattr(context.current, '_logger'):
-        makefile_logger = logging.getLogger(context.current.name)
+        makefile_logger = getLogger(context.current.name)
         setup_logger(makefile_logger)
         setattr(context.current, '_logger', makefile_logger)
     else:
-        makefile_logger: logging.Logger = getattr(
+        makefile_logger: Logger = getattr(
             context.current, '_logger')
     return makefile_logger
 
