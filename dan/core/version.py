@@ -106,6 +106,12 @@ class Version:
     
     def __repr__(self) -> str:
         return f'Version[{self}]'
+    
+    def __hash__(self) -> int:
+        h = 0
+        for part in self._parts:
+            h ^= hash(part)
+        return h
 
 
 class VersionSpec:
