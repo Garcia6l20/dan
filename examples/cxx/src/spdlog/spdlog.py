@@ -1,5 +1,5 @@
 from dan.cxx import Library
-from dan.smc import GitSources
+from dan.src import GitSources
 
 version = '1.11.0'
 description = 'Fast C++ logging library'
@@ -11,7 +11,7 @@ class SpdLogSources(GitSources):
     refspec = f'v{version}'
 
 
-class Fmt(Library):
+class SpdLog(Library):
     name = 'spdlog'
     preload_dependencies = SpdLogSources,
     dependencies = 'fmt',

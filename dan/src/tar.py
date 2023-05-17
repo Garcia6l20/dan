@@ -1,3 +1,4 @@
+import os
 from click import Path
 from dan.core import aiofiles
 from dan.core.target import Target
@@ -32,4 +33,6 @@ class TarSources(Target, internal=True):
         await fetch_file(self.url, self.build_path / archive_name)
         with tarfile.open(self.build_path / archive_name) as f:
             self.info(f'extracting {archive_name}')
-            f.extractall(self.output)
+            root = os.path.commonprefix(f.getnames())
+            f.extractall(self.output.parent)
+            os.rename(self.output.parent / root, self.output)

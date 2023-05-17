@@ -10,8 +10,8 @@ from dan.core.find import find_files
 from dan.core.version import Version, VersionSpec
 from dan.core.pm import re_match
 from dan.io.repositories import get_packages_path, get_repo_instance
-from dan.smc.git import GitSources
-from dan.smc.tar import TarSources
+from dan.src.git import GitSources
+from dan.src.tar import TarSources
 
 
 class PackageBuild(Target, internal=True):

@@ -3,7 +3,7 @@ import platform
 
 include(
     'spdlog',
-    'catch2',
+    # 'catch2',
 )
 
 if platform.system() == 'Linux':
