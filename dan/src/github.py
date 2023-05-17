@@ -16,7 +16,7 @@ class GitHubReleaseSources(TarSources, internal=True):
 
     def __init__(self, *args, **kwargs):
         if self.name is None:
-            self.name = f'{self.user}/{self.project}'
+            self.name = f'{self.user}-{self.project}-sources'
         super().__init__(*args, **kwargs)
 
     async def __initialize__(self):
@@ -28,22 +28,31 @@ class GitHubReleaseSources(TarSources, internal=True):
             if self.version is None:
                 self.version = sorted(avail_versions, reverse=True)[0]
             version = self.version if isinstance(self.version, Version) else Version(self.version)
-            data = avail_versions[version]
-            if 'tarball_url' in data:
-                self._url = data['tarball_url']
+            release = avail_versions[version]
+            assets = release['assets']
+            # prefer assets over tarball, asset might contain submodules while tarballs will not
+            for asset in assets:
+                if asset['content_type'] in ('application/zip', 'application/gzip'):
+                    self._url = asset['browser_download_url']
+                    break
             else:
+                if 'tarball_url' in release:
+                    self._url = release['tarball_url']
+            if self._url is None:
                 raise RuntimeError(f'cannot resolve url of {self.name}')
             self.cache['url'] = self._url
 
     @asyncio.cached
     async def available_versions(self):
         self.info('fetching github releases')
-        url = f'https://api.github.com/repos/{self.user}/{self.project}/tags'
+
+        url = f'https://api.github.com/repos/{self.user}/{self.project}/releases'
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 data = await resp.read()
                 if resp.status != 200:
                     raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
-                return {Version(item['name']): item for item in json.loads(data)}
+                releases = json.loads(data)
+                return {Version(release['tag_name']): release for release in releases}
 
 

@@ -4,6 +4,7 @@ from dan.core import aiofiles
 from dan.core.target import Target
 import aiohttp
 import tarfile
+import zipfile
 
 
 async def fetch_file(url, dest):
@@ -31,8 +32,13 @@ class TarSources(Target, internal=True):
         self.info(f'downloading {self.url}')
         archive_name = self.url.split("/")[-1]
         await fetch_file(self.url, self.build_path / archive_name)
-        with tarfile.open(self.build_path / archive_name) as f:
-            self.info(f'extracting {archive_name}')
-            root = os.path.commonprefix(f.getnames())
-            f.extractall(self.output.parent)
-            os.rename(self.output.parent / root, self.output)
+        self.info(f'extracting {archive_name}')
+        if archive_name.endswith('.zip'):
+            with zipfile.ZipFile(self.build_path / archive_name) as f:
+                root = os.path.commonprefix(f.namelist())
+                f.extractall(self.output.parent)
+        else:
+            with tarfile.open(self.build_path / archive_name) as f:
+                root = os.path.commonprefix(f.getnames())
+                f.extractall(self.output.parent)
+        os.rename(self.output.parent / root, self.output)
