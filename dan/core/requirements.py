@@ -17,12 +17,26 @@ class RequiredPackage(Logging):
         self.target : 'Target' = None
 
         match re_match(name):
+            # full specification <pkg>:<lib>@<repo>
+            case r'(.+?):(.+?)@(.+)' as m:
+                self.package = m[1]
+                self.name = m[2]
+                self.repository = m[3]
+            # repo specification <lib>@<repo>
             case r'(.+?)@(.+)' as m:
+                self.package = None
                 self.name = m[1]
-                self.provider = m[2]
+                self.repository = m[2]
+            # package specification <pkg>:<lib>
+            case r'(.+?):(.+)' as m:
+                self.package = m[1]
+                self.name = m[2]
+                self.repository = None
+            # no specification, automatic resolution in default repository
             case _:
+                self.package = None
                 self.name = name
-                self.provider = None
+                self.repository = None
 
     def is_compatible(self, t: 'Target'):
         if self.version_spec is not None:
@@ -108,9 +122,9 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                         raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
-                    t = Package(req.name, req.version_spec, repository=req.provider, makefile=makefile)
+                    t = Package(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
                     logger.debug('%s: adding package %s', req, t.fullname)
-                unresolved.append(req)                
+                unresolved.append(req)
                 group.create_task(t.install(deps_settings, InstallMode.dev))
 
 

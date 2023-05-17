@@ -18,9 +18,10 @@ class PackageBuild(Target, internal=True):
 
     _all_builds: dict[str, 'PackageBuild'] = dict()
     
-    def __init__(self, name, version, repository, *args, spec: VersionSpec = None, **kwargs):
+    def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
         super().__init__(name, *args, version=version, **kwargs)
+        self.package = name if package is None else package
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
         self._package_makefile = None
@@ -30,13 +31,12 @@ class PackageBuild(Target, internal=True):
     def package_makefile(self):
         if self._package_makefile is None:
             from dan.core.include import load_makefile
-            root = self.repo.output / 'packages' / self.name
+            root = self.repo.output / 'packages' / self.package
             if (root / 'dan-requires.py').exists():
-                requirements = load_makefile(root / 'dan-requires.py', f'{self.name}-requirements')
+                requirements = load_makefile(root / 'dan-requires.py', f'{self.package}-requirements')
             else:
                 requirements = None
-            self._package_makefile = load_makefile(root / 'dan-build.py', self.name, requirements=requirements, build_path=self.build_path, parent=self.makefile)
-            # self._package_makefile = load_makefile(root / 'dan-build.py', self.name, requirements=requirements, build_path=self.build_path)
+            self._package_makefile = load_makefile(root / 'dan-build.py', self.package, requirements=requirements, build_path=self.build_path, parent=self.makefile)
         return self._package_makefile
 
 
@@ -90,7 +90,7 @@ class PackageBuild(Target, internal=True):
 
         packages_path = get_packages_path()
         from dan.cxx import target_toolchain as toolchain
-        self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.name / str(self.version)
+        self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
         self.output = self.install_settings.libraries_prefix
         sources.output = 'src' # TODO source_prefix in install settings
@@ -102,7 +102,7 @@ class PackageBuild(Target, internal=True):
         return self._build_path
     
     async def __build__(self):
-        ident = f'{self.name}-{self.version}'
+        ident = f'{self.package}-{self.version}'
         if ident in self._all_builds:
             self.debug(f'{ident} already built by {self._all_builds[ident].fullname}')
             await self._all_builds[ident].build()
@@ -113,9 +113,10 @@ class PackageBuild(Target, internal=True):
         makefile = self.package_makefile
         makefile.build_path = self.build_path / 'build'
 
-        makefile.options.get('version').value = str(self.version)
+        if self.version:
+            makefile.options.get('version').value = str(self.version)
 
-        async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
+        async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
             for target in makefile.all_installed:
                 group.create_task(target.install(self.install_settings, InstallMode.dev))
 
@@ -125,7 +126,7 @@ class PackageBuild(Target, internal=True):
         os.chdir(self.build_path.parent)
 
         self.debug('cleaning')
-        async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
+        async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
             from dan.cxx import target_toolchain as toolchain
             if not toolchain.build_type.is_debug_mode:
                 group.create_task(aiofiles.rmtree(self.output / 'src'))
@@ -133,12 +134,13 @@ class PackageBuild(Target, internal=True):
 
 
 class Package(Target, internal=True):
-    repository: str = 'dan.io'
 
     def __init__(self,
                  name: str = None,
                  version: str = None,
+                 package: str = None,
                  repository: str = None, **kwargs) -> None:
+        self.package = package
         self.repository = repository
         if version is not None:
             self.version = version
@@ -168,6 +170,7 @@ class Package(Target, internal=True):
 
         self.pkg_build = PackageBuild(self.name,
                                       self.version,
+                                      self.package,
                                       self.repository,
                                       spec=self.spec,
                                       makefile=self.makefile)
