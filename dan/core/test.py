@@ -15,7 +15,7 @@ class AsyncExecutable(Logging):
 
 
 class Case:
-    def __init__(self, name, *args, expected_result=0, expected_output=None, file=None, lineno=None, strip_output=True, normalize_newlines=True):
+    def __init__(self, name, *args, expected_result: int = 0, expected_output: str = None, file=None, lineno=None, strip_output=True, normalize_newlines=True):
         self.name = name
         self.args = args
         self.expected_result = expected_result
@@ -99,22 +99,27 @@ class Test(Logging, MakefileRegister, internal=True):
 
         if caze.expected_output is not None:
 
+            if callable(caze.expected_output):
+                expected_output = caze.expected_output(caze)
+            else:
+                expected_output = caze.expected_output
+
             if caze.strip_output:
                 out = out.strip()
 
             if caze.normalize_newlines:
                 out = out.replace(os.linesep, '\n')
 
-            if isinstance(caze.expected_output, re.Pattern):
-                if not caze.expected_output.match(out):
+            if isinstance(expected_output, re.Pattern):
+                if not expected_output.match(out):
                     out = out.strip()
                     err = err.strip()
-                    msg = f'Test \'{name}\' failed (output: {out}, expected: {caze.expected_output}) !'
+                    msg = f'Test \'{name}\' failed (output: {out}, expected: {expected_output}) !'
                     raise RuntimeError(msg)
-            elif out != caze.expected_output:
+            elif out != expected_output:
                 out = out.strip()
                 err = err.strip()
-                msg = f'Test \'{name}\' failed (output: {out}, expected: {caze.expected_output.strip()}) !'
+                msg = f'Test \'{name}\' failed (output: {out}, expected: {expected_output.strip()}) !'
                 raise RuntimeError(msg)
 
     async def run_test(self):
