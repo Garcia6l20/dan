@@ -183,12 +183,12 @@ class Package(Target, internal=True):
 
         async with asyncio.TaskGroup(f'importing {self.name} package') as group:
             for pkg in find_files(r'.+\.pc$', [self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
-                self.debug('copying %s to %s', pkg, self.pkgconfig_path)
-                group.create_task(aiofiles.copy(pkg, self.pkgconfig_path))
+                self.debug('copying %s to %s', pkg, self.build_path / self.pkgconfig_path)
+                group.create_task(aiofiles.copy(pkg, self.build_path / self.pkgconfig_path))
 
             for pkg in find_files(r'.+\.py$', [self.pkg_build.install_settings.libraries_destination / 'dan']):
-                self.debug('copying %s to %s', pkg, self.dan_path)
-                group.create_task(aiofiles.copy(pkg, self.dan_path))
+                self.debug('copying %s to %s', pkg, self.build_path / self.dan_path)
+                group.create_task(aiofiles.copy(pkg, self.build_path / self.dan_path))
         
         if self.output.exists():
             from dan.pkgconfig.package import Data, find_package
@@ -196,5 +196,5 @@ class Package(Target, internal=True):
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 for pkg in data.requires:
                     pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[get_packages_path()])
-                    self.debug('copying %s to %s', pkg.config_path, self.pkgconfig_path)
-                    group.create_task(aiofiles.copy(pkg.config_path, self.pkgconfig_path))
+                    self.debug('copying %s to %s', pkg.config_path, self.build_path / self.pkgconfig_path)
+                    group.create_task(aiofiles.copy(pkg.config_path, self.build_path / self.pkgconfig_path))
