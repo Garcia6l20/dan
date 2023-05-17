@@ -10,7 +10,7 @@ from dan.core.pathlib import Path
 from dan.core import aiofiles, cache
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
-from dan.core.utils import unique
+from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
 
@@ -428,8 +428,13 @@ class Library(CXXObjectsTarget, internal=True):
                 for dbg_file in self.toolchain.debug_files(obj.output):
                     tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
 
-        return await asyncio.gather(super().install(settings, mode), *tasks)
+        tasks.insert(0, super().install(settings, mode))
 
+        result = list()
+        for tchunk in chunks(tasks, 100):
+            result.append(await asyncio.gather(*tchunk))
+
+        return result
 
 class Module(CXXObjectsTarget, internal=True):
     def __init__(self, name: str, sources: list[str], *args, **kwargs):
