@@ -1,5 +1,6 @@
 
 import asyncio
+import fnmatch
 import os
 
 from dan.cli import click
@@ -86,6 +87,16 @@ async def versions(library: str):
         else:
             click.echo(f' - {v}')
 
+@cli.command()
+@click.argument('NAME')
+async def search(name):
+    name = f'*{name}*'
+    repos = await get_repositories()
+    for repo in repos:
+        installed = await repo.installed()
+        for libname, lib in installed.items():
+            if fnmatch.fnmatch(libname, name):
+                click.echo(f'{libname} = {lib.version.value}')
 
 
 def main():
