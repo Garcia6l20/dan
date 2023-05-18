@@ -1,6 +1,6 @@
 [project]
 name = "dan-build"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Python-based build system."
 authors = [
     {name = "Garcia Sylvain", email="garcia.6l20@gmail.com"},
@@ -65,7 +65,9 @@ dan = "dan.cli.main:main"
 dan-io = "dan.cli.io:main"
 
 [build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
+requires = ["setuptools>=40.8.0", "wheel", "setuptools-git-versioning"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools-git-versioning]
+enabled = true
 
