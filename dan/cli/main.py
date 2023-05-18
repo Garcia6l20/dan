@@ -73,6 +73,7 @@ pass_context = click.make_pass_decorator(CommandsContext)
 
 
 @click.group()
+@click.version_option(package_name='dan-build')
 @click.option('--quiet', '-q', is_flag=True,
               help='Dont print informations (errors only)')
 @click.option('--verbose', '-v', is_flag=True,

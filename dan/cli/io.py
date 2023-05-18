@@ -50,17 +50,20 @@ def cli():
 
 @cli.group()
 def ls():
+    """Inspect stuff"""
     pass
 
 
 @ls.command()
 async def repositories():
+    """List available repositories"""
     repos = await get_repositories()
     for repo in repos:
         click.echo(repo.name)
 
 @ls.command()
 async def libraries():
+    """List available libraries"""
     repos = await get_repositories()
     for repo in repos:
         for name, lib in repo.installed.items():
@@ -69,6 +72,7 @@ async def libraries():
 @ls.command()
 @click.argument('LIBRARY')
 async def versions(library: str):
+    """Get LIBRARY's available versions"""
     package, library, repository = parse_package(library)
     repo = await get_repository(repository)
     if repo is None:
@@ -98,6 +102,7 @@ async def versions(library: str):
 @cli.command()
 @click.argument('NAME')
 async def search(name):
+    """Search for NAME in repositories"""
     name = f'*{name}*'
     repos = await get_repositories()
     for repo in repos:
