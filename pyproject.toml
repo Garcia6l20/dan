@@ -44,6 +44,10 @@ include = ["dan*"]
     "completion/bash/dan.sh",
     "completion/bash/dan-io.sh",
 ]
+"etc/zsh_completion.d" = [
+    "completion/zsh/dan.sh",
+    "completion/zsh/dan-io.sh",
+]
 
 
 [project.optional-dependencies]
