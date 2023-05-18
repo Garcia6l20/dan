@@ -48,30 +48,32 @@ async def hello_cpy(self):
 
 #### Libraries/Executables
 
-    ```python
-    from dan.cxx import Library, Executable
-    class MyLib(Library):
-        name = 'my-lib'
-        sources = ['src/my-lib.cpp']
-        public_includes = ['include']
+```python
+from dan.cxx import Library, Executable
+class MyLib(Library):
+    name = 'my-lib'
+    sources = ['src/my-lib.cpp']
+    public_includes = ['include']
 
-    class MyExe(Executable):
-        name = 'my-exe'
-        sources = ['src/main.cpp']
-        dependencies = [MyLib]
+class MyExe(Executable):
+    name = 'my-exe'
+    sources = ['src/main.cpp']
+    dependencies = [MyLib]
 
-    ```
+```
 
 #### Packages
-    [dan.io](https://github.com/Garcia6l20/dan.io) is the main (default) package source repository (custom repositories are supported by editting _~/.dan/repositories.json_) [documentation comming soon].
-    ```python
-    class MyExe(Executable):
-        name = 'my-exe'
-        sources = ['src/main.cpp']
-        dependencies = ['boost:headers@dan.io >= 1.82']
-    ```
 
-## dan cli usage
+[dan.io](https://github.com/Garcia6l20/dan.io) is the main (default) package source repository (custom repositories are supported by editting _~/.dan/repositories.json_), documentation comming soon.
+
+```python
+class MyExe(Executable):
+    name = 'my-exe'
+    sources = ['src/main.cpp']
+    dependencies = ['boost:headers@dan.io >= 1.82']
+```
+
+## `dan` cli usage
 
 `dan` is the main executable to build your project, it can build, test, list targets/test, ...
 
@@ -119,7 +121,7 @@ dan build [-B <build_path>] [-v] [--for-install] [TARGETS]...
 
 ### Install
 
-Install targets marked with `self.install(...)` to the *install.destination* setting.
+Install targets marked with `install = True` property to the *install.destination* setting.
 
 ```bash
 dan install [-B <build_path>] [TARGETS]... [user|dev]
@@ -133,8 +135,7 @@ Settings:
 - *install.data_prefix*: Data files installation prefix (default: share).
 - *install.project_prefix*: !!! NOT USED YET !!! Project prefix (default: None).
 
-
-## dan-io cli usage
+## `dan-io` cli usage
 
 `dan-io` is a secondary utility to interract with package management system.
 
@@ -168,16 +169,16 @@ Commands:
 
 ## Auto completion
 
-`bash` and `zsh` completions are currently supported:
+_bash_ and _zsh_ completions are currently supported:
 
-- bash:
+- _bash_:
     ```bash
     for script in ~/.local/etc/bash_completion.d/*.sh; do
         source ${script}
     done
     ```
 
-- ksh:
+- _ksh_:
     ```ksh
     for script in ~/.local/etc/ksh_completion.d/*.sh; do
         source ${script}
