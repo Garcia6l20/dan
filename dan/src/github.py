@@ -43,7 +43,7 @@ class GitHubReleaseSources(TarSources, internal=True):
             self.cache['url'] = self._url
 
     @asyncio.cached
-    async def available_versions(self):
+    async def available_versions(self) -> dict[Version, dict]:
         self.info('fetching github releases')
 
         url = f'https://api.github.com/repos/{self.user}/{self.project}/releases'

@@ -88,6 +88,18 @@ class PackageRepository(Target, internal=True):
 
         return self._package_makefile
 
+    async def installed(self) -> dict[str, Target]:
+        pkgs = await self.pkgs_makefile()
+        return {f'{lib.makefile.name}:{lib.name}@{self.name}' : lib for lib in pkgs.all_installed}
+    
+    async def find(self, name, package) -> Target:
+        if package is None:
+            package = name
+        
+        pkgs = await self.pkgs_makefile()
+        for lib in pkgs.all_installed:
+            if lib.name == name and lib.makefile.name == package:
+                return lib
 
 
 def get_repo_instance(repo_name:str, makefile=None) -> PackageRepository:

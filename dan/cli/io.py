@@ -3,24 +3,36 @@ import asyncio
 import os
 
 from dan.cli import click
+from dan.core.requirements import parse_package
 from dan.make import Make
+
+_make : Make = None
+async def get_make():
+    global _make
+    if _make is None:
+        from dan.cxx.detect import get_dan_path
+        source_path = get_dan_path() / 'deps'
+        source_path.mkdir(exist_ok=True, parents=True)
+        os.chdir(source_path)
+        (source_path / 'dan-build.py').touch()
+        make = Make(source_path / 'build', quiet=True)
+        make.config.source_path = str(source_path)
+        make.config.build_path = str(source_path / 'build')
+        make.config.toolchain = 'default'
+        await make._config.save()
+        await make.initialize()
+    return _make
 
 
 async def get_repositories():
     from dan.io.repositories import get_all_repo_instances
-    from dan.cxx.detect import get_dan_path
-    source_path = get_dan_path() / 'deps'
-    source_path.mkdir(exist_ok=True, parents=True)
-    os.chdir(source_path)
-    (source_path / 'dan-build.py').touch()
-    make = Make(source_path / 'build', quiet=True)
-    make.config.source_path = str(source_path)
-    make.config.build_path = str(source_path / 'build')
-    make.config.toolchain = 'default'
-    await make._config.save()
-    await make.initialize()
+    await get_make()
     return get_all_repo_instances()
 
+async def get_repository(name = None):
+    from dan.io.repositories import get_repo_instance
+    await get_make()
+    return get_repo_instance(name)
 
 @click.group()
 def cli():
@@ -41,10 +53,40 @@ async def repositories():
 async def libraries():
     repos = await get_repositories()
     for repo in repos:
-        pkgs = await repo.pkgs_makefile()
-        for pkg in pkgs.children:
-            for lib in pkg.all_installed:
-                click.echo(f'{pkg.name}:{lib.name}@{repo.name} = {lib.version.value}')
+        installed = await repo.installed()
+        for name, lib in installed.items():
+            click.echo(f'{name} = {lib.version.value}')
+
+@ls.command()
+@click.argument('LIBRARY')
+async def versions(library: str):
+    package, library, repository = parse_package(library)
+    repo = await get_repository(repository)
+    if repo is None:
+        click.logger.error(f'cannot find repository {repository}')
+        return -1
+
+    lib = await repo.find(library, package)
+    if lib is None:
+        if repository is None:
+            repository = repo.name
+        if package is None:
+            package = library
+        click.logger.error(f'cannot find {package}:{library}@{repository}')
+        return -1
+    
+    from dan.src.github import GitHubReleaseSources
+    
+    sources: GitHubReleaseSources = lib.get_dependency(GitHubReleaseSources)
+    available_versions = await sources.available_versions()
+    available_versions = sorted(available_versions.keys())
+    for v in available_versions:
+        if v == lib.version.value:
+            click.echo(f' - {v} (default)')
+        else:
+            click.echo(f' - {v}')
+
+
 
 def main():
     import sys

@@ -9,34 +9,41 @@ from dan.core.settings import InstallMode, InstallSettings
 from dan.core.version import Version, VersionSpec
 from dan.logging import Logging
 
+def parse_package(name: str) -> tuple[str, str, str]:
+    """Parse package name
+    
+    :returns: package, library, repository"""
+    match re_match(name):
+        # full specification <pkg>:<lib>@<repo>
+        case r'(.+?):(.+?)@(.+)' as m:
+            package = m[1]
+            library = m[2]
+            repository = m[3]
+        # repo specification <lib>@<repo>
+        case r'(.+?)@(.+)' as m:
+            package = None
+            library = m[1]
+            repository = m[2]
+        # package specification <pkg>:<lib>
+        case r'(.+?):(.+)' as m:
+            package = m[1]
+            library = m[2]
+            repository = None
+        # no specification, automatic resolution in default repository
+        case _:
+            package = None
+            library = name
+            repository = None
+    
+    return package, library, repository
+
 
 class RequiredPackage(Logging):
     def __init__(self, name: str, version_spec: VersionSpec = None):
         self.version_spec = version_spec
         super().__init__(name)
         self.target : 'Target' = None
-
-        match re_match(name):
-            # full specification <pkg>:<lib>@<repo>
-            case r'(.+?):(.+?)@(.+)' as m:
-                self.package = m[1]
-                self.name = m[2]
-                self.repository = m[3]
-            # repo specification <lib>@<repo>
-            case r'(.+?)@(.+)' as m:
-                self.package = None
-                self.name = m[1]
-                self.repository = m[2]
-            # package specification <pkg>:<lib>
-            case r'(.+?):(.+)' as m:
-                self.package = m[1]
-                self.name = m[2]
-                self.repository = None
-            # no specification, automatic resolution in default repository
-            case _:
-                self.package = None
-                self.name = name
-                self.repository = None
+        self.package, self.name, self.repository = parse_package(name)
 
     def is_compatible(self, t: 'Target'):
         if self.version_spec is not None:
