@@ -46,6 +46,21 @@ class Version:
             return False
         if self.major != other.major:
             return False
+        if self.minor != other.minor:
+            return False
+        if self.patch != other.patch:
+            return False
+        if self.build != other.build:
+            return False
+        return True
+    
+    def is_compatible(self, other):
+        if isinstance(other, str):
+            other = Version(other)
+        elif not isinstance(other, Version):
+            return False
+        if self.major != other.major:
+            return False
         if self.minor and other.minor and self.minor != other.minor:
             return False
         if self.patch and other.patch and self.patch != other.patch:
@@ -64,7 +79,7 @@ class Version:
                 return True
             if mine < their:
                 return False
-        return False
+        return True
 
 
     def __ge__(self, other: 'Version'):
@@ -72,7 +87,12 @@ class Version:
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.__eq__(other) or self.__gt__(other)
+        for mine, their in zip(self._parts, other._parts):
+            if mine >= their:
+                return True
+            if mine < their:
+                return False
+        return False
     
     def __lt__(self, other: 'Version'):
         if isinstance(other, str):
@@ -92,7 +112,12 @@ class Version:
             other = Version(other)
         elif not isinstance(other, Version):
             return False
-        return self.__eq__(other) or self.__le__(other)
+        for mine, their in zip(self._parts, other._parts):
+            if mine < their:
+                return True
+            if mine > their:
+                return False
+        return True
 
     def __str__(self) -> str:
         res = str(self.major)
@@ -133,8 +158,10 @@ class VersionSpec:
         
     def is_compatible(self, version: Version):
         match self.op:
-            case '==' | '=':
+            case '==':
                 return version == self.version
+            case '=':
+                return version.is_compatible(self.version)
             case '>':
                 return version > self.version
             case '>=':
