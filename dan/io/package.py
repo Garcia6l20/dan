@@ -1,17 +1,12 @@
-import json
 import os
 
-import aiohttp
 from dan.core import aiofiles, asyncio
 from dan.core.pathlib import Path
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
 from dan.core.find import find_files
 from dan.core.version import Version, VersionSpec
-from dan.core.pm import re_match
 from dan.io.repositories import get_packages_path, get_repo_instance
-from dan.src.git import GitSources
-from dan.src.tar import TarSources
 
 
 class PackageBuild(Target, internal=True):
@@ -30,39 +25,8 @@ class PackageBuild(Target, internal=True):
     @property
     def package_makefile(self):
         if self._package_makefile is None:
-            from dan.core.include import load_makefile
-            root = self.repo.output / 'packages' / self.package
-            if (root / 'dan-requires.py').exists():
-                requirements = load_makefile(root / 'dan-requires.py', f'{self.package}-requirements')
-            else:
-                requirements = None
-            self._package_makefile = load_makefile(root / 'dan-build.py', self.package, requirements=requirements, build_path=self.build_path, parent=self.makefile)
+            self._package_makefile = self.repo.find(self.name, self.package).makefile
         return self._package_makefile
-
-
-    async def get_available_versions(self, target: GitSources | TarSources) -> list[Version] | None:
-        """Get available versions
-        
-        Returns the available version (if the given source's version can even be fetched) from highest to lowest.
-        """
-        match re_match(target.url):
-            case r'.+github\.com[/:](.+?)/(.+?)/.+' as m:
-                username = m[1]
-                reponame = m[2]
-
-                self.info('fetching github releases')
-                url = f'https://api.github.com/repos/{username}/{reponame}/tags'
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        data = await resp.read()
-                        if resp.status != 200:
-                            raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
-                        versions = [Version(item['name']) for item in json.loads(data)]
-                        versions = sorted(versions, reverse=True)
-                        return versions
-
-            case _:
-                self.warning(f'cannot get available versions')
 
     def get_sources(self):
         makefile = self.package_makefile
@@ -78,7 +42,7 @@ class PackageBuild(Target, internal=True):
     async def __initialize__(self):
         sources = self.get_sources()
         if self.spec is not None:
-            avail_versions = await self.get_available_versions(sources)
+            avail_versions = await sources.available_versions()
             if avail_versions is None:
                 self.warning(f'unable to get available versions, default one will be used')
             else:

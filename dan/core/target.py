@@ -216,7 +216,6 @@ class Target(Logging, MakefileRegister, internal=True):
     name: str = None
     fullname: str = None
     description: str = None,
-    version: str = None
     default: bool = True
     installed: bool = False
     output: Path = None
@@ -231,8 +230,7 @@ class Target(Logging, MakefileRegister, internal=True):
                  version: str = None,
                  default: bool = None,
                  makefile=None) -> None:
-        if isinstance(self.version, str):
-            self.version = Version(self.version)
+        
         self.parent = parent
         self.__cache: dict = None
 
@@ -241,9 +239,6 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.name is None:
             self.name = self.__class__.__name__
-
-        if version is not None:
-            self.version = version
 
         if default is not None:
             self.default = default
@@ -264,8 +259,11 @@ class Target(Logging, MakefileRegister, internal=True):
 
         self.options = Options(self, self.options)
 
-        if self.version is None:
-            self.version = self.makefile.version
+        if version is not None:
+            self._version = version
+
+        if not hasattr(self, '_version'):
+            self._version = self.makefile.version
 
         if self.description is None:
             self.description = self.makefile.description
@@ -291,6 +289,19 @@ class Target(Logging, MakefileRegister, internal=True):
         if self._output is None:
             return None
         return self.build_path / self._output
+    
+    @property
+    def version(self):
+        version = self._version
+        if isinstance(version, Option):
+            version = version.value
+        if isinstance(version, str):
+            version = Version(version)
+        return version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
 
     @output.setter
     def output(self, path):

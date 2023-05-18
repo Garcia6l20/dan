@@ -25,15 +25,24 @@ async def get_make():
     return _make
 
 
+_repositories = None
 async def get_repositories():
-    from dan.io.repositories import get_all_repo_instances
-    await get_make()
-    return get_all_repo_instances()
+    global _repositories
+    if _repositories is None:
+        from dan.io.repositories import get_all_repo_instances
+        await get_make()
+        _repositories = get_all_repo_instances()
+        async with asyncio.TaskGroup() as g:
+            for repo in _repositories:
+                g.create_task(repo.build())
+    return _repositories
 
 async def get_repository(name = None):
     from dan.io.repositories import get_repo_instance
     await get_make()
-    return get_repo_instance(name)
+    repo = get_repo_instance(name)
+    await repo.build()
+    return repo
 
 @click.group()
 def cli():
@@ -54,8 +63,7 @@ async def repositories():
 async def libraries():
     repos = await get_repositories()
     for repo in repos:
-        installed = await repo.installed()
-        for name, lib in installed.items():
+        for name, lib in repo.installed.items():
             click.echo(f'{name} = {lib.version.value}')
 
 @ls.command()
@@ -67,7 +75,7 @@ async def versions(library: str):
         click.logger.error(f'cannot find repository {repository}')
         return -1
 
-    lib = await repo.find(library, package)
+    lib = repo.find(library, package)
     if lib is None:
         if repository is None:
             repository = repo.name
@@ -93,7 +101,7 @@ async def search(name):
     name = f'*{name}*'
     repos = await get_repositories()
     for repo in repos:
-        installed = await repo.installed()
+        installed = repo.installed
         for libname, lib in installed.items():
             if fnmatch.fnmatch(libname, name):
                 click.echo(f'{libname} = {lib.version.value}')
