@@ -64,7 +64,7 @@ async def libraries():
     repos = await get_repositories()
     for repo in repos:
         for name, lib in repo.installed.items():
-            click.echo(f'{name} = {lib.version.value}')
+            click.echo(f'{name} = {lib.version}')
 
 @ls.command()
 @click.argument('LIBRARY')
@@ -90,7 +90,7 @@ async def versions(library: str):
     available_versions = await sources.available_versions()
     available_versions = sorted(available_versions.keys())
     for v in available_versions:
-        if v == lib.version.value:
+        if v == lib.version:
             click.echo(f' - {v} (default)')
         else:
             click.echo(f' - {v}')
@@ -104,7 +104,7 @@ async def search(name):
         installed = repo.installed
         for libname, lib in installed.items():
             if fnmatch.fnmatch(libname, name):
-                click.echo(f'{libname} = {lib.version.value}')
+                click.echo(f'{libname} = {lib.version}')
 
 
 def main():
