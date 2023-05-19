@@ -61,17 +61,18 @@ class PackageBuild(Target, internal=True):
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
         
+        # update package build-path
         makefile = self.package_makefile
         makefile.build_path = self.build_path / 'build'
 
-        for target in makefile.all_installed:
-            target.package_name = f'{self.package}:{target.name}'
-
-
+        # set package version
         if self.version:
             makefile.options.get('version').value = str(self.version)
 
-        self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{target.package_name}.pc'
+        # set our output to the last installed package
+        # TODO handle multiple outputs, then set our outputs to all installed packages
+        pkg_name = makefile.all_installed[-1].name     
+        self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{pkg_name}.pc'
         sources.output = self.build_path / 'src' # TODO source_prefix in install settings
 
         return await super().__initialize__()
