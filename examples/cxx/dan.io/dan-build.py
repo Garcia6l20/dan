@@ -46,7 +46,7 @@ class TestMbedTLS(Test, Executable):
 class TestBoost(Test, Executable):
     name = 'test-boost'
     sources= 'test_boost.cpp',
-    dependencies= 'boost:headers >= 1.82',    
+    dependencies= 'boost:boost-headers >= 1.82',
     cases = [
         Case('42-12', 42, 12, expected_result=6),
         Case('44-8', 44, 8, expected_result=4),

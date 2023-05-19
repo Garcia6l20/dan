@@ -91,7 +91,7 @@ class PackageRepository(Target, internal=True):
         pkgs = self.pkgs_makefile
         return {f'{lib.makefile.name}:{lib.name}@{self.name}' : lib for lib in pkgs.all_installed}
     
-    def find(self, name, package) -> Target:
+    def find(self, name: str, package: str) -> Target:
         if package is None:
             package = name
 

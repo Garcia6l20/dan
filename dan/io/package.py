@@ -25,6 +25,9 @@ class PackageBuild(Target, internal=True):
     @property
     def package_makefile(self):
         if self._package_makefile is None:
+            target = self.repo.find(self.name, self.package)
+            if target is None:
+                raise RuntimeError(f'cannot find {self.name} in {self.repo.name}')
             self._package_makefile = self.repo.find(self.name, self.package).makefile
         return self._package_makefile
 
@@ -56,7 +59,12 @@ class PackageBuild(Target, internal=True):
         from dan.cxx import target_toolchain as toolchain
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
-        self.output = self.install_settings.libraries_prefix
+
+        makefile = self.package_makefile
+        for target in makefile.all_installed:
+            target.package_name = f'{self.package}:{target.name}'
+
+        self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{target.package_name}.pc'
         sources.output = 'src' # TODO source_prefix in install settings
 
         return await super().__initialize__()
