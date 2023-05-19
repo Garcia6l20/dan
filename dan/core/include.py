@@ -100,7 +100,6 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
     if build_path is None:
         assert parent is not None
         build_path = build_path or parent.build_path / name
-    build_path.mkdir(parents=True, exist_ok=True)
 
     module.__class__ = MakeFile
     context.current = module
