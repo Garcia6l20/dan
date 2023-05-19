@@ -46,8 +46,18 @@ class GitHubReleaseSources(TarSources, internal=True):
     async def available_versions(self) -> dict[Version, dict]:
         self.info('fetching github releases')
 
+
+        api_token = None
+
+        from dan.io.repositories import _get_settings
+        settings = _get_settings()
+        if settings.github is not None and settings.github.api_token is not None:
+            api_token = settings.github.api_token
+
         url = f'https://api.github.com/repos/{self.user}/{self.project}/releases'
         async with aiohttp.ClientSession() as session:
+            if api_token is not None:
+                session.headers['Authorization'] = f'Bearer {api_token}'
             async with session.get(url) as resp:
                 data = await resp.read()
                 if resp.status != 200:
