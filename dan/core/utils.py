@@ -26,6 +26,12 @@ def unique(*seqs):
         full.extend(seq)
     return [x for x in full if not (x in seen or seen.add(x))]
 
+
+def chunks(lst, chunk_size):
+    for ii in range(0, len(lst), chunk_size):
+        yield lst[ii:ii + chunk_size]
+
+
 class _ClassPropertyDescriptor(object):
 
     def __init__(self, fget, fset=None):

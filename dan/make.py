@@ -173,18 +173,19 @@ class Make(Logging):
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for required in self.required_targets:
+                test_name, *test_case = required.split(':')
+                test_case = test_case[0] if len(test_case) else None
+
                 for test in context.root.all_tests:
-                    if len(test) > 1 and required.startswith(test.fullname):
-                        case_name = required.removeprefix(test.fullname + '.')
-                        cases = list()
-                        for case in test.cases:
-                            if fnmatch.fnmatch(case.name, case_name):
-                                cases.append(case)
-                        test.cases = cases
-                        items.append(test)
-                        continue
                     
-                    if required.startswith(test.fullname) or fnmatch.fnmatch(test.fullname, f'*{required}*'):
+                    if fnmatch.fnmatch(test.fullname, f'*{test_name}*'):
+                        if len(test) > 1 and test_case is not None:
+                            cases = list()
+                            for case in test.cases:
+                                if fnmatch.fnmatch(case.name, test_case):
+                                    cases.append(case)
+                            test.cases = cases
+                        
                         items.append(test)
         else:
             for test in context.root.all_tests:
@@ -218,9 +219,7 @@ class Make(Logging):
 
     @classmethod
     def _parse_str_value(cls, name, value: str, orig: type, tp: type = None):
-        if issubclass(orig, str):
-            return value
-        elif issubclass(orig, Enum):
+        if issubclass(orig, Enum):
             names = [n.lower()
                         for n in orig._member_names_]
             value = value.lower()
@@ -235,7 +234,9 @@ class Make(Logging):
                 result.append(cls._parse_str_value(name, sub, tp))
             return orig(result)
         else:
-            raise TypeError(f'unhandled type {orig}')
+            if tp is not None:
+                raise TypeError(f'unhandled type {orig}[{tp}]')
+            return orig(value)
 
     
     @classmethod
@@ -255,6 +256,7 @@ class Make(Logging):
                     orig = t.get_origin(tp)
                     if orig is None:
                         orig = tp
+                        tp = None
                     else:
                         args = t.get_args(tp)
                         if args:

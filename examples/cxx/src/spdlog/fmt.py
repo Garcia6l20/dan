@@ -1,14 +1,13 @@
 from dan import self
 from dan.cxx import Library
-from dan.smc import GitSources
+from dan.src.github import GitHubReleaseSources
 
 version = '9.1.0'
 description = 'A modern formatting library'
 
-class FmtSources(GitSources):
-    name = 'fmt-source'
-    url = 'https://github.com/fmtlib/fmt.git'
-    refspec = version
+class FmtSources(GitHubReleaseSources):
+    user = 'fmtlib'
+    project = 'fmt'
 
 class Fmt(Library):
     name = 'fmt'

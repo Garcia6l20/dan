@@ -216,7 +216,6 @@ class Target(Logging, MakefileRegister, internal=True):
     name: str = None
     fullname: str = None
     description: str = None,
-    version: str = None
     default: bool = True
     installed: bool = False
     output: Path = None
@@ -230,9 +229,8 @@ class Target(Logging, MakefileRegister, internal=True):
                  parent: 'Target' = None,
                  version: str = None,
                  default: bool = None,
-                 makefile=None,
-                 build_path: Path = None) -> None:
-        self.version = Version(self.version) if self.version else None
+                 makefile=None) -> None:
+        
         self.parent = parent
         self.__cache: dict = None
 
@@ -241,9 +239,6 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.name is None:
             self.name = self.__class__.__name__
-
-        if version is not None:
-            self.version = version
 
         if default is not None:
             self.default = default
@@ -258,18 +253,17 @@ class Target(Logging, MakefileRegister, internal=True):
         if self.makefile is None:
             raise RuntimeError('Makefile not resolved')
 
-        if build_path is None:
-            self.__build_path = self.makefile.build_path
-        else:
-            self.__build_path = build_path
 
         if self.fullname is None:
             self.fullname = f'{self.makefile.fullname}.{self.name}'
 
         self.options = Options(self, self.options)
 
-        if self.version is None:
-            self.version = self.makefile.version
+        if version is not None:
+            self._version = version
+
+        if not hasattr(self, '_version'):
+            self._version = self.makefile.version
 
         if self.description is None:
             self.description = self.makefile.description
@@ -281,10 +275,40 @@ class Target(Logging, MakefileRegister, internal=True):
 
         super().__init__(self.fullname)
 
-        if self.output is not None:
-            self.output = Path(self.output)
-            if not self.output.is_absolute():
-                self.output = self.build_path / self.output
+        self._output: Path = None
+
+        if type(self).output != Target.output:
+            # hack class-defined output
+            #   transform it to classproperty for build_path resolution
+            output = self.output
+            type(self).output = utils.classproperty(lambda: self.build_path / output)
+
+    
+    @property
+    def output(self):
+        if self._output is None:
+            return None
+        return self.build_path / self._output
+    
+    @property
+    def version(self):
+        version = self._version
+        if isinstance(version, Option):
+            version = version.value
+        if isinstance(version, str):
+            version = Version(version)
+        return version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
+
+    @output.setter
+    def output(self, path):
+        path = Path(path)
+        if path.is_absolute() and self.build_path in path.parents:
+            raise RuntimeError(f'output must not be an absolute path within build directory')
+        self._output = path
 
     @property
     def is_requirement(self) -> bool:
@@ -296,8 +320,8 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def build_path(self) -> Path:
-        return self.__build_path
-
+        return self.makefile.build_path
+    
     @property
     def requires(self):
         from dan.pkgconfig.package import RequiredPackage
@@ -343,12 +367,12 @@ class Target(Logging, MakefileRegister, internal=True):
         await self.preload()
         self.debug('initializing...')
 
+        if isinstance(self.version, Option):
+            self.version = self.version.value
+
         async with asyncio.TaskGroup(f'initializing {self.name}\'s target dependencies') as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.initialize())
-
-        if self.output and not self.output.is_absolute():
-            self.output = self.build_path / self.output
 
         res = self.__initialize__()
         if inspect.iscoroutine(res):

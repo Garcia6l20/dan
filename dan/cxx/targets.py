@@ -10,7 +10,7 @@ from dan.core.pathlib import Path
 from dan.core import aiofiles, cache
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
-from dan.core.utils import unique
+from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
 
@@ -44,8 +44,7 @@ class CXXObject(Target, internal=True):
         await self.parent.preload()
 
         ext = 'o' if os.name != 'nt' else 'obj'
-        self.output: Path = self.build_path / \
-            Path(f'{self.source.stem}.{ext}')
+        self.output: Path = Path(f'{self.source.stem}.{ext}')
 
         deps = self.cache.get('deps')
         if deps is not None:
@@ -332,10 +331,9 @@ class Library(CXXObjectsTarget, internal=True):
 
         if self.library_type != LibraryType.INTERFACE:
             self.dependencies.update(self.objs)
-            self.output = self.build_path / \
-                self.toolchain.make_library_name(self.name, self.shared)
+            self.output = self.toolchain.make_library_name(self.name, self.shared)
         else:
-            self.output = self.build_path / f"lib{self.name}.stamp"
+            self.output = f"lib{self.name}.stamp"
         await super().__initialize__()
 
         previous_args = self.cache.get('generate_args')
@@ -430,8 +428,13 @@ class Library(CXXObjectsTarget, internal=True):
                 for dbg_file in self.toolchain.debug_files(obj.output):
                     tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
 
-        return await asyncio.gather(super().install(settings, mode), *tasks)
+        tasks.insert(0, super().install(settings, mode))
 
+        result = list()
+        for tchunk in chunks(tasks, 100):
+            result.append(await asyncio.gather(*tchunk))
+
+        return result
 
 class Module(CXXObjectsTarget, internal=True):
     def __init__(self, name: str, sources: list[str], *args, **kwargs):
@@ -449,8 +452,7 @@ class Executable(CXXObjectsTarget, internal=True):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.output = self.build_path / \
-            self.toolchain.make_executable_name(self.name)
+        self.output = self.toolchain.make_executable_name(self.name)
         self.__dirty = False
 
     async def __initialize__(self):

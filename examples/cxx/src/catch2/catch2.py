@@ -2,7 +2,7 @@ import os
 import shutil
 from dan import self
 from dan.cxx import Library, target_toolchain
-from dan.smc import GitSources
+from dan.src import GitSources
 from dan.cmake import ConfigureFile
 
 version = '3.2.1'

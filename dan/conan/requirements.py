@@ -27,7 +27,7 @@ class ConanFile(Target, internal=True):
     def __init__(self, makefile) -> None:
         super().__init__('conanfile', makefile=makefile)
         self.__reqs = list()
-        self.output = self.build_path / 'conanfile.txt'
+        self.output = 'conanfile.txt'
 
     def add(self, pkg: 'Package'):
         self.__reqs.append(pkg)

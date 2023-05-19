@@ -4,7 +4,7 @@ from dan.cxx import (
     Library,
     Executable,
     target_toolchain as tc)
-from dan.smc import GitSources
+from dan.src import GitSources
 
 version = '2.1'
 description = 'Helpers to setup and teardown io_uring instances'

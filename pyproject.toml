@@ -1,12 +1,12 @@
 [project]
 name = "dan-build"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python-based build system."
 authors = [
     {name = "Garcia Sylvain", email="garcia.6l20@gmail.com"},
     {email = "garcia.6l20@gmail.com"}
 ]
-license = {file = "LICENSE.txt"}
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
 
@@ -39,6 +39,16 @@ include = ["dan*"]
 "dan.pkgconfig.templates" = ["*.jinja2"]
 "dan.cxx.data" = ["*"]
 
+[tool.setuptools.data-files]
+"etc/bash_completion.d" = [
+    "completion/bash/dan.sh",
+    "completion/bash/dan-io.sh",
+]
+"etc/zsh_completion.d" = [
+    "completion/zsh/dan.sh",
+    "completion/zsh/dan-io.sh",
+]
+
 
 [project.optional-dependencies]
 #dev = [
@@ -51,10 +61,13 @@ documentation = "https://github.com/Garcia6L20/dan"
 repository = "https://github.com/Garcia6L20/dan"
 
 [project.scripts]
-dan = "dan.cli:main"
+dan = "dan.cli.main:main"
+dan-io = "dan.cli.io:main"
 
 [build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
+requires = ["setuptools>=40.8.0", "wheel", "setuptools-git-versioning"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools-git-versioning]
+enabled = true
 
