@@ -27,7 +27,7 @@ class GitHubConfig:
 @dataclass_json
 @dataclass
 class RepositoriesSettings:
-    github: t.Optional[GitHubConfig]
+    github: GitHubConfig = field(default_factory=lambda: GitHubConfig())
     repositories: list[RepositoryConfig] = field(default_factory=lambda: [
         RepositoryConfig('dan.io', 'https://github.com/Garcia6l20/dan.io.git'),
     ])

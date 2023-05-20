@@ -51,7 +51,7 @@ class GitHubReleaseSources(TarSources, internal=True):
 
         from dan.io.repositories import _get_settings
         settings = _get_settings()
-        if settings.github is not None and settings.github.api_token is not None:
+        if settings.github.api_token is not None:
             api_token = settings.github.api_token
 
         url = f'https://api.github.com/repos/{self.user}/{self.project}/releases'
