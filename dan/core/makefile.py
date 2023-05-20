@@ -155,3 +155,10 @@ class MakeFile(sys.__class__):
     @property
     def all_default(self):
         return [target for target in self.all_targets if target.default == True]
+    
+    @cached_property
+    def root(self):
+        m = self
+        while m.parent is not None:
+            m = m.parent
+        return m

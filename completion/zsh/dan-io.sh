@@ -9,7 +9,7 @@ _dan_io_completion() {
     response=("${(@f)$(env COMP_WORDS="${words[*]}" COMP_CWORD=$((CURRENT-1)) _DAN_IO_COMPLETE=zsh_complete 'dan-io')}")
 
     for type key descr in ${response}; do
-        if [[ "$type" == "plain" ]]; then
+        if [[ "$type" =~ ^(plain|nospace)$ ]]; then
             if [[ "$descr" == "_" ]]; then
                 completions+=("$key")
             else
@@ -27,7 +27,11 @@ _dan_io_completion() {
     fi
 
     if [ -n "$completions" ]; then
-        compadd -U -V unsorted -a completions
+        if [[ "$type" == "nospace" ]]; then
+            compadd -U -S '' -V unsorted -a completions
+        else
+            compadd -U -V unsorted -a completions
+        fi
     fi
 }
 

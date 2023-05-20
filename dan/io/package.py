@@ -56,16 +56,24 @@ class PackageBuild(Target, internal=True):
                         break
 
         packages_path = get_packages_path()
+        
         from dan.cxx import target_toolchain as toolchain
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
-
+        
+        # update package build-path
         makefile = self.package_makefile
-        for target in makefile.all_installed:
-            target.package_name = f'{self.package}:{target.name}'
+        makefile.build_path = self.build_path / 'build'
 
-        self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{target.package_name}.pc'
-        sources.output = 'src' # TODO source_prefix in install settings
+        # set package version
+        if self.version:
+            makefile.options.get('version').value = str(self.version)
+
+        # set our output to the last installed package
+        # TODO handle multiple outputs, then set our outputs to all installed packages
+        pkg_name = makefile.all_installed[-1].name     
+        self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{pkg_name}.pc'
+        sources.output = self.build_path / 'src' # TODO source_prefix in install settings
 
         return await super().__initialize__()
     
@@ -83,10 +91,6 @@ class PackageBuild(Target, internal=True):
         self._all_builds[ident] = self
 
         makefile = self.package_makefile
-        makefile.build_path = self.build_path / 'build'
-
-        if self.version:
-            makefile.options.get('version').value = str(self.version)
 
         async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
             for target in makefile.all_installed:

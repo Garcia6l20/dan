@@ -11,6 +11,8 @@ from dan.core.cache import Cache
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass, field
 
+import typing as t
+
 
 @dataclass
 class RepositoryConfig:
@@ -18,10 +20,14 @@ class RepositoryConfig:
     url: str
     branch: str = 'main'
 
+@dataclass
+class GitHubConfig:
+    api_token: str = None
 
 @dataclass_json
 @dataclass
 class RepositoriesSettings:
+    github: GitHubConfig = field(default_factory=lambda: GitHubConfig())
     repositories: list[RepositoryConfig] = field(default_factory=lambda: [
         RepositoryConfig('dan.io', 'https://github.com/Garcia6l20/dan.io.git'),
     ])

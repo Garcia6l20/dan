@@ -79,7 +79,7 @@ class CXXObject(Target, internal=True):
         self.info(f'scanning dependencies of {self.source}')
         deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
         deps = [d for d in deps
-                if self.source_path in Path(d).parents
+                if self.makefile.root.source_path in Path(d).parents
                 or self.build_path in Path(d).parents]
         self.cache['deps'] = deps
 

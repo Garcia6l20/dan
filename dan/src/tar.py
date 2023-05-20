@@ -1,7 +1,7 @@
 import os
 from click import Path
 import tqdm
-from dan.core import aiofiles
+from dan.core import aiofiles, asyncio
 from dan.core.target import Target
 import aiohttp
 import tarfile
@@ -46,4 +46,6 @@ class TarSources(Target, internal=True):
             with tarfile.open(self.build_path / archive_name) as f:
                 root = os.path.commonprefix(f.getnames())
                 f.extractall(self.output.parent)
-        os.rename(self.output.parent / root, self.output)
+        async with asyncio.TaskGroup() as g:
+            g.create_task(aiofiles.os.rename(self.output.parent / root, self.output))
+            g.create_task(aiofiles.os.remove(self.build_path / archive_name))
