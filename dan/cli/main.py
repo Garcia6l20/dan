@@ -1,14 +1,15 @@
 import os
 import sys
+import logging
+import asyncio
 
 from dan.core.find import find_file
 from dan.core.pathlib import Path
 from dan.cli import click
 
-import logging
-import asyncio
 from dan.core.cache import Cache
 from dan.cxx.targets import Executable
+from dan.core.settings import Settings
 
 
 from dan.make import ConfigCache, InstallMode, Make
@@ -98,7 +99,7 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
               help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
               type=_toolchain_choice)
-@click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True)
+@click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True)
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build')

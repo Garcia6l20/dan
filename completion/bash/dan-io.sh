@@ -15,6 +15,9 @@ _dan_io_completion() {
             compopt -o default
         elif [[ $type == 'plain' ]]; then
             COMPREPLY+=($value)
+        elif [[ $type == 'nospace' ]]; then
+            COMPREPLY+=($value)
+            compopt -o nospace
         fi
     done
 
