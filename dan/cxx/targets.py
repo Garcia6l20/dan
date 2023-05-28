@@ -330,7 +330,6 @@ class Library(CXXObjectsTarget, internal=True):
             self.compile_definitions.add(f'{self.name.upper()}_EXPORT=1')
 
         if self.library_type != LibraryType.INTERFACE:
-            self.dependencies.update(self.objs)
             self.output = self.toolchain.make_library_name(self.name, self.shared)
         else:
             self.output = f"lib{self.name}.stamp"
@@ -364,11 +363,6 @@ class Library(CXXObjectsTarget, internal=True):
 
         self.info(
             f'creating {self.library_type.name.lower()} library {self.output}...')
-
-        objs = self.objs
-        for dep in self.cxx_dependencies:
-            if isinstance(dep, CXXObjectsTarget) and not isinstance(dep, Library):
-                objs.update(dep.objs)
 
         if self.static:
             await self.toolchain.static_lib([obj.output for obj in self.objs], self.output, self.libs)
