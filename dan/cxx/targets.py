@@ -285,11 +285,11 @@ class CXXObjectsTarget(CXXTarget, internal=True):
                 group.create_task(dep.build())
 
 
-class LibraryType(Enum):
-    AUTO = 0
-    STATIC = 1
-    SHARED = 2
-    INTERFACE = 3
+class LibraryType(str, Enum):
+    AUTO = 'auto'
+    STATIC = 'static'
+    SHARED = 'shared'
+    INTERFACE = 'interface'
 
 
 class Library(CXXObjectsTarget, internal=True):
