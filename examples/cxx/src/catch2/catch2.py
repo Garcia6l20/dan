@@ -25,25 +25,7 @@ class Config(ConfigureFile):
         await super().__initialize__()
         self.input = self.get_dependency(
             'catch2-source').output / 'src/catch2/catch_user_config.hpp.in'
-
-
-class Catch2(Library):
-    name = 'catch2'
-    preload_dependencies = Config,
-
-    def sources(self):
-        return (self.get_dependency('catch2-source').output / 'src').rglob('*.cpp')
-
-    async def __initialize__(self):
-
-        src = self.get_dependency('catch2-source').output / 'src'
-        self.config = self.get_dependency('catch2-config')
-        self.config.options = self.options
-        self.includes.add(src, public=True)
-        self.includes.add(self.build_path / 'generated', public=True)
-        if self.toolchain.type == 'msvc':
-            self.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
-
+        
         self.add_overridable_catch2_option('counter', True)
         self.add_overridable_catch2_option('android_logwrite', False)
         self.add_overridable_catch2_option('colour_win32', os.name == 'nt')
@@ -81,21 +63,34 @@ class Catch2(Library):
         self.add_catch2_option('windows_crtdbg', os.name == 'nt')
         self.add_catch2_option('experimental_redirect', False)
         self.add_catch2_option('default_reporter', 'console')
-        self.add_catch2_option(
-            'console_width', shutil.get_terminal_size().columns)
-
-        await super().__initialize__()
+        self.add_catch2_option('console_width', 80)
 
     def add_overridable_catch2_option(self, name: str, value: bool):
         o = self.options.add(name, value)
-        self.config[f'CATCH_CONFIG_{name.upper()}'] = o.value
-        self.config[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
+        self[f'CATCH_CONFIG_{name.upper()}'] = o.value
+        self[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
 
     def add_catch2_option(self, name: str, value):
         o = self.options.add(name, value)
-        self.config[f'CATCH_CONFIG_{name.upper()}'] = o.value
+        self[f'CATCH_CONFIG_{name.upper()}'] = o.value
 
-# FIXME: this is actually associated to Target's utils
+class Catch2(Library):
+    name = 'catch2'
+    preload_dependencies = Config,
+
+    def sources(self):
+        return (self.get_dependency('catch2-source').output / 'src').rglob('*.cpp')
+
+    async def __initialize__(self):
+        src = self.get_dependency('catch2-source').output / 'src'
+        self.config = self.get_dependency('catch2-config')
+        self.options = self.config.options
+        self.includes.add(src, public=True)
+        self.includes.add(self.build_path / 'generated', public=True)
+        if self.toolchain.type == 'msvc':
+            self.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
+
+        await super().__initialize__()
 
 
 @Catch2.utility
