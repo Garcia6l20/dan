@@ -107,7 +107,7 @@ class Make(Logging):
     def root(self) -> MakeFile:
         return self.context.root
 
-    def configure(self, source_path: str, toolchain: str = None):
+    async def configure(self, source_path: str, toolchain: str = None):
         self.config.source_path = str(source_path)
         self.config.build_path = str(self.build_path)
         self.info(f'source path: {self.config.source_path}')
@@ -116,6 +116,7 @@ class Make(Logging):
             self.config.toolchain = toolchain
         if not self.config.toolchain:
             self.warning('no toolchain configured')
+        await self._config.save()
 
     @asyncio.cached
     async def initialize(self):
@@ -130,7 +131,7 @@ class Make(Logging):
         self.info(
             f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
 
-        with scoped_context(self.context):
+        with self.context.make_current():
             init_toolchains(toolchain, self.settings)
             include_makefile(self.source_path, self.build_path)
 

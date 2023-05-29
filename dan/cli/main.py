@@ -110,7 +110,7 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
     ctx(**kwds)  # update kwds
     if toolchain is None and ctx.make.toolchain is None:
         toolchain = click.prompt('Toolchain', type=_toolchain_choice, default='default')
-    ctx.make.configure(source_path, toolchain)
+    await ctx.make.configure(source_path, toolchain)
 
     if len(settings) or len(options):
         await ctx.make.initialize()
