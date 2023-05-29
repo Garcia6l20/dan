@@ -77,8 +77,17 @@ class Context(Logging):
     def set(self, name, value):
         setattr(self, name, value)
 
+    @contextmanager
+    def make_current(self) -> 'Context':
+        global context
+        back = context
+        context = self
+        try:
+            yield self
+        finally:
+            context = back
 
-context = Context()
+context: Context = None
 
 
 def context_reset():
@@ -92,18 +101,6 @@ def context_reset():
     del context
     context = Context()
 
-
-@contextmanager
-def scoped_context(ctx = None) -> Context:
-    global context
-    if ctx is None:
-        ctx = Context()
-    back = context
-    context = ctx
-    try:
-        yield ctx
-    finally:
-        context = back
 
 
 def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):

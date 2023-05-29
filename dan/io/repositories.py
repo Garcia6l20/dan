@@ -85,10 +85,10 @@ class PackageRepository(Target, internal=True):
     @property
     def pkgs_makefile(self) -> MakeFile:
         if self._package_makefile is None:
-            from dan.core.include import load_makefile, scoped_context
+            from dan.core.include import load_makefile
             root = self.output / 'packages'
             requirements = None
-            with scoped_context(self.makefile.context):
+            with self.makefile.context.make_current():
                 self._package_makefile = load_makefile(root / 'dan-build.py', f'{self.name}.packages', requirements=requirements, build_path=self.build_path / self.name, parent=self.makefile)
 
         return self._package_makefile

@@ -86,7 +86,6 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
 
     from dan.pkgconfig.package import find_package
     from dan.logging import _get_makefile_logger
-    from dan.core.include import scoped_context
     from dan.io import Package
 
     if logger is None:
@@ -128,7 +127,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                         raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
-                    with scoped_context(makefile.context):
+                    with makefile.context.make_current():
                         t = Package(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
                     logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)

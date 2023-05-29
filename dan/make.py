@@ -15,7 +15,7 @@ import typing as t
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
-from dan.core.include import include_makefile, scoped_context, Context
+from dan.core.include import include_makefile, Context
 from dan.core import aiofiles, asyncio
 from dan.core.settings import InstallMode, Settings
 from dan.core.test import Test
@@ -352,7 +352,7 @@ class Make(Logging):
     async def build(self):
         await self.initialize()
 
-        with scoped_context(self.context), \
+        with self.context.make_current(), \
              self.progress('building', self.targets, lambda t: t.build(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
@@ -375,7 +375,7 @@ class Make(Logging):
 
         await self.build()
 
-        with scoped_context(self.context), \
+        with self.context.make_current(), \
              self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
@@ -399,7 +399,7 @@ class Make(Logging):
 
     async def run(self):
         await self.initialize()
-        with scoped_context(self.context):
+        with self.context.make_current():
             results = await asyncio.gather(*[t.execute(log=True) for t in self.executable_targets])
             for result in results:
                 if result[2] != 0:
@@ -408,7 +408,7 @@ class Make(Logging):
 
     async def test(self):
         await self.initialize()
-        with scoped_context(self.context):
+        with self.context.make_current():
             with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
                 results = await asyncio.gather(*tasks)
                 if all(results):
@@ -420,7 +420,7 @@ class Make(Logging):
 
     async def clean(self):
         await self.initialize()
-        with scoped_context(self.context):
+        with self.context.make_current():
             await asyncio.gather(*[t.clean() for t in self.targets])
             # from dan.cxx import target_toolchain
             # target_toolchain.compile_commands.clear()
