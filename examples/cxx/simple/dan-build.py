@@ -10,6 +10,7 @@ class Simple(Executable):
     options = {
         'greater': ('hello_dan', 'The name to be greated.')
     }
+    installed = True
 
     async def __initialize__(self):
         self.compile_definitions.add(f'SIMPLE_GREATER="{self.options["greater"]}"')
