@@ -13,6 +13,7 @@ from dan.core.target import Target
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
+from dan.cxx.toolchain import Toolchain
 
 
 class CXXObject(Target, internal=True):
@@ -20,8 +21,7 @@ class CXXObject(Target, internal=True):
         super().__init__(source.stem, parent=parent, default=False)
         self.parent = parent
         self.source = self.source_path / source
-        from . import target_toolchain
-        self.toolchain = target_toolchain
+        self.toolchain = self.context.get('cxx_target_toolchain')
         self.__dirty = False
 
     @property
@@ -167,8 +167,7 @@ class CXXTarget(Target, internal=True):
                  *args,
                  **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        from . import target_toolchain
-        self.toolchain = target_toolchain
+        self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
 
         self.includes = OptionSet(self, 'includes',
                                 #   self.public_includes, self.private_includes,

@@ -16,6 +16,10 @@ class MakefileRegister:
     def makefile(self):
         return self.__makefile
     
+    @property
+    def context(self):
+        return self.__makefile.context
+    
     @makefile.setter
     def makefile(self, value) -> 'MakeFile':
         assert self.__makefile is None, 'makefile should be set once'

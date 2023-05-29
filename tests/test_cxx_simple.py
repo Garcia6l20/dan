@@ -11,64 +11,71 @@ class CXXSimpleTest(PyMakeBaseTest):
 
         ########################################
         async with self.section("base build", clean=True) as make:
-            target, = make.get('dan-simple')
+            target = make.root.find('simple')
             await target.initialize()
             self.assertFalse(target.output.exists())
             await target.build()
             self.assertTrue(target.output.exists())
-            self.modified_at = target.output.modification_time
-            del make, target
+            modified_at = target.output.modification_time
 
 
         ########################################
         async with self.section("no-modification => no-rebuild") as make:
-            target, = make.get('dan-simple')
+            target = make.root.find('simple')
             await target.build()
             self.assertTrue(target.output.exists())
-            self.assertEqual(self.modified_at, target.output.modification_time,
+            self.assertEqual(modified_at, target.output.modification_time,
                             "no modifications should NOT trigger a re-build")
 
             # update source
             src: Path = target.source_path / list(target.sources)[0]
             src.utime()
-            del make, target
 
         ########################################
         async with self.section("source modification => rebuild") as make:
-            target, = make.get('dan-simple')
+            target = make.root.find('simple')
             await target.build()
-            self.assertTrue(target.output.younger_than(self.modified_at),
+            self.assertTrue(target.output.younger_than(modified_at),
                             "a source modification should trigger a re-build")
-            self.modified_at = target.output.modification_time
 
+
+    async def test_option_change(self):
+
+        ########################################
+        async with self.section("base build", clean=True) as make:
+            target = make.root.find('simple')
+            await target.initialize()
+            self.assertFalse(target.output.exists())
+            await target.build()
+            self.assertTrue(target.output.exists())
+            modified_at = target.output.modification_time
+            sha1 = target.options.sha1
+            
             # change option
             greater = target.options.get('greater')
             expected_output = '=== test ==='
             greater.value = expected_output
-            await target.makefile.cache.save()
-            del make, target, greater
+            self.assertNotEqual(sha1, target.options.sha1)
 
         ########################################
         async with self.section("option modification => rebuild") as make:
-            target, = make.get('dan-simple')
+            target = make.root.find('simple')
             await target.build()
-            self.assertTrue(target.output.younger_than(self.modified_at),
+            self.assertTrue(target.output.younger_than(modified_at),
                             "an option change should trigger a re-build")
-            self.modified_at = target.output.modification_time
+            modified_at = target.output.modification_time
             out, err, rc = await target.execute()
             self.assertEqual(rc, 0)
-            self.assertEqual(out, f'{expected_output} !\n')
-
-            del make, target
-
+            self.assertEqual(out.strip(), f'{expected_output} !')
 
     async def test_install(self):
 
         ########################################
-        async with self.section("install") as make:
-            make.apply_settings(f"install.destination={self.build_path}/dist")
+        async with self.section("install",
+                                settings=[f"install.destination={self.build_path}/dist"]
+                                ) as make:
             await make.initialize()
             await make.install(InstallMode.user)
-            self.assertTrue((self.build_path / 'dist/bin/dan-simple').exists())
-
-            del make
+            bins = list((self.build_path / 'dist/bin').glob('*'))
+            self.assertEqual(len(bins), 1)
+            self.assertEqual(bins[0].stem, 'simple')

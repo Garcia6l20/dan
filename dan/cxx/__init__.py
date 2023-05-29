@@ -7,16 +7,25 @@ from dan.cxx.toolchain import Toolchain
 from dan.cxx.detect import get_toolchains
 
 target_toolchain: Toolchain = None
+"""The target toolchain.
+"""
+
 host_toolchain: Toolchain = None
+"""The host toolchain.
+"""
 
 class __LazyContext(sys.__class__):
+    """Base class for the cxx module.
+
+    It overloads some context dependent properties exposed by this module, eg.: target and host toolchains.
+    """
     @property
-    def target_toolchain(__):
+    def target_toolchain(__) -> Toolchain:
         from dan.core.include import context
         return context.get('cxx_target_toolchain')
 
     @property
-    def host_toolchain(__):
+    def host_toolchain(__) -> Toolchain:
         from dan.core.include import context
         return context.get('cxx_host_toolchain')
     
@@ -68,19 +77,19 @@ def init_toolchains(name: str = None, settings: Settings = None):
     context.set('cxx_target_toolchain', target_toolchain)
     context.set('cxx_host_toolchain', host_toolchain)
 
-def __pick_arg(*names, env=None, default=None):
-    import sys
-    import os
-    if env:
-        value = os.getenv(env, None)
-        if value:
-            return value
-    for name in names:
-        try:
-            return sys.argv[sys.argv.index(name) + 1]
-        except ValueError:
-            continue
-    return default
+# def __pick_arg(*names, env=None, default=None):
+#     import sys
+#     import os
+#     if env:
+#         value = os.getenv(env, None)
+#         if value:
+#             return value
+#     for name in names:
+#         try:
+#             return sys.argv[sys.argv.index(name) + 1]
+#         except ValueError:
+#             continue
+#     return default
 
 #def __init_toolchains():
 #    init_toolchains(__pick_arg('-t', '--toolchain', env='DAN_TOOLCHAIN'))

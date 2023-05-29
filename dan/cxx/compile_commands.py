@@ -5,9 +5,8 @@ import subprocess
 
 
 class CompileCommands:
-    def __init__(self) -> None:
-        from dan.core.include import context
-        self.cc_path: Path = context.root.build_path / 'compile_commands.json'
+    def __init__(self, path) -> None:
+        self.cc_path: Path = path / 'compile_commands.json'
         if self.cc_path.exists():
             with open(self.cc_path, 'r') as cc_f:
                 try:

@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import importlib.util
 import os
 
@@ -36,6 +37,7 @@ class Context(Logging):
         self.__root: MakeFile = None
         self.__current: MakeFile = None
         self.__all_makefiles: set[MakeFile] = set()
+        self.imported_makefiles: dict[Path, MakeFile] = dict()
         super().__init__('context')
 
     @property
@@ -91,6 +93,19 @@ def context_reset():
     context = Context()
 
 
+@contextmanager
+def scoped_context(ctx = None) -> Context:
+    global context
+    if ctx is None:
+        ctx = Context()
+    back = context
+    context = ctx
+    try:
+        yield ctx
+    finally:
+        context = back
+
+
 def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):
     global context
     source_path = Path(module.__file__).parent
@@ -110,17 +125,15 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
         requirements,
         parent)
 
-_imported_makefiles: dict[Path, MakeFile] = dict()
-
 def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
-    if module_path in _imported_makefiles:
-        return _imported_makefiles[module_path]
+    if module_path in context.imported_makefiles:
+        return context.imported_makefiles[module_path]
     spec = importlib.util.spec_from_file_location(
         module_name, module_path)
     module = importlib.util.module_from_spec(spec)
-    _imported_makefiles[module_path] = module
+    context.imported_makefiles[module_path] = module
     _init_makefile(module, name, build_path, requirements, parent)
     spec.loader.exec_module(module)
     context.up()
@@ -153,11 +166,11 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             raise RuntimeError(
                 f'Cannot find anything to include for "{name}" (looked for: {", ".join(lookups)})')
         
-    if module_path in _imported_makefiles:
-        return _imported_makefiles[module_path]
+    if module_path in context.imported_makefiles:
+        return context.imported_makefiles[module_path]
 
     module = importlib.util.module_from_spec(spec)
-    _imported_makefiles[module_path] = module
+    context.imported_makefiles[module_path] = module
     _init_makefile(module, name, build_path)
 
     requirements_file = module_path.with_stem('dan-requires')

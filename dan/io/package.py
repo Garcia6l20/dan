@@ -57,7 +57,7 @@ class PackageBuild(Target, internal=True):
 
         packages_path = get_packages_path()
         
-        from dan.cxx import target_toolchain as toolchain
+        toolchain = self.context.get('cxx_target_toolchain')
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
         
@@ -92,8 +92,15 @@ class PackageBuild(Target, internal=True):
 
         makefile = self.package_makefile
 
+        # FIXME: shall a makefile have an associated toolchain ?
+        toolchain = None
         async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
             for target in makefile.all_installed:
+                if hasattr(target, 'toolchain'):
+                    if toolchain is None:
+                        toolchain = target.toolchain
+                    else:
+                        assert toolchain == target.toolchain, 'Toolchain missmatch'
                 group.create_task(target.install(self.install_settings, InstallMode.dev))
 
         makefile.cache.ignore()
@@ -103,10 +110,9 @@ class PackageBuild(Target, internal=True):
 
         self.debug('cleaning')
         async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
-            from dan.cxx import target_toolchain as toolchain
-            if not toolchain.build_type.is_debug_mode:
+            if toolchain is not None and not toolchain.build_type.is_debug_mode:
                 group.create_task(aiofiles.rmtree(self.output / 'src'))
-            # group.create_task(aiofiles.rmtree(self.build_path))
+            group.create_task(aiofiles.rmtree(self.build_path, force=True))
 
 
 class Package(Target, internal=True):
@@ -174,6 +180,6 @@ class Package(Target, internal=True):
             data = Data(self.output)
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 for pkg in data.requires:
-                    pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[get_packages_path()])
+                    pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[get_packages_path()], makefile=self.makefile)
                     self.debug('copying %s to %s', pkg.config_path, self.build_path / self.pkgconfig_path)
                     group.create_task(aiofiles.copy(pkg.config_path, self.build_path / self.pkgconfig_path))

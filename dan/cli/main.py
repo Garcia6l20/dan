@@ -17,9 +17,8 @@ from dan.cli.vscode import Code
 
 
 _minimal_options = [
-    click.option('--build-path', '-B', 'path', help='Path where dan has been initialized.',
+    click.option('--build-path', '-B', help='Path where dan has been initialized.',
                  type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH'),
-
 ]
 
 _common_opts = [
@@ -105,31 +104,22 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build')
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
-async def configure(verbose: bool, toolchain: str, settings: tuple[str], options: tuple[str], build_path: Path, source_path: Path):
+@pass_context
+async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
-    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
-    config = ConfigCache(build_path / Make._config_name, )
-    config.data.source_path = config.data.source_path if hasattr(
-        config, 'source_path') else str(source_path)
-    config.data.build_path = str(build_path)
-    click.logger.info(f'source path: {config.data.source_path}')
-    click.logger.info(f'build path: {config.data.build_path}')
-    config.data.toolchain = toolchain or config.data.toolchain or click.prompt('Toolchain', type=_toolchain_choice, default='default')
-    await config.save()
-    Cache.ignore(config)
-    del config
+    ctx(**kwds)  # update kwds
+    if toolchain is None and ctx.make.toolchain is None:
+        toolchain = click.prompt('Toolchain', type=_toolchain_choice, default='default')
+    ctx.make.configure(source_path, toolchain)
 
     if len(settings) or len(options):
-        make = Make(build_path, None, verbose, False)
-        await make.initialize()
+        await ctx.make.initialize()
 
         if len(options):
-            await make.apply_options(*options)
+            await ctx.make.apply_options(*options)
 
         if len(settings):
-            await make.apply_settings(*settings)
-
-        await make.cache.save()
+            await ctx.make.apply_settings(*settings)
 
 
 @cli.command()
@@ -140,8 +130,8 @@ async def build(ctx: CommandsContext, **kwds):
     """Build targets"""
     ctx(**kwds)  # update kwds
     await ctx.make.build()
-    from dan.cxx import target_toolchain
-    target_toolchain.compile_commands.update()
+    # from dan.cxx import target_toolchain
+    # target_toolchain.compile_commands.update()
 
 
 @cli.command()

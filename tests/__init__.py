@@ -1,9 +1,6 @@
-import importlib
-import logging
-import shutil
 import sys
-import tempfile
 import unittest
+from dan.core.test import Test
 from dan.logging import Logging
 
 from dan.core import aiofiles
@@ -47,21 +44,34 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         tracemalloc.stop()
         return super().tearDown()
 
-    def reset(self, check_still_alive=True):
+    def reset(self, check_still_alive=True, autodelete=True):
         import gc
 
         from dan.core.include import context_reset
         context_reset()
+        Cache.clear_all()
 
         gc.collect()
+        
+        auto_delete_classes = (Make, Target, Test, MakeFile, Cache, CompileCommands, Toolchain)
+        if autodelete:
+            for obj in gc.get_objects():
+                if isinstance(obj, auto_delete_classes):
+                    del obj
+
+            gc.collect()
 
         if check_still_alive:
             active_objects = list()
             for obj in gc.get_objects():
-                if isinstance(obj, (Make, Target, MakeFile, Cache, CompileCommands, Toolchain)):
+                if isinstance(obj, auto_delete_classes):
                     tb = tracemalloc.get_object_traceback(obj)
+                    if tb is not None:
+                        tb = f'\nobject traceback: {tb}'
+                    else:
+                        tb = ''
                     self.warning(
-                        f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1}) !\n{tb}')
+                        f'{obj} [{type(obj)}] still alive ({sys.getrefcount(obj) - 1} references) !{tb}')
                     active_objects.append(obj)
 
             self.assertEqual(len(active_objects), 0)
@@ -95,9 +105,9 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
             if len(self.options) or len(self.settings):
                 await make.initialize()
                 if len(self.options):
-                    make.apply_options(*self.options)
+                    await make.apply_options(*self.options)
                 if len(self.settings):
-                    make.apply_settings(*self.settings)
+                    await make.apply_settings(*self.settings)
                 await Cache.save_all()
                 del make
                 self.test.reset()
@@ -108,24 +118,27 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
 
             return make
 
-        async def __aexit__(self, *err):
+        async def __aexit__(self, exc_type, exc, tb):
             await Cache.save_all()
-            self.test.reset()
+            Cache.clear_all()
+            # self.test.reset(check_still_alive=exc_type is None)
 
     def section(self, desc: str, options=list(), settings=list(), clean=False, init=True):
         return self.__MakeSection(self, desc, options, settings, clean, init)
 
     async def clean(self):
         if self.build_path.exists():
-            print(Path.cwd())
-            await aiofiles.rmtree(self.build_path)
+            print(f'cleaning: {self.build_path}')
+            await aiofiles.rmtree(self.build_path, force=True)
 
     async def configure(self,
                         toolchain=None) -> Make:
         await self.clean()
-        config = Cache(self.build_path / Make._config_name)
-        config.source_path = str(self.source_path)
-        config.build_path = str(self.build_path)
-        config.toolchain = toolchain or get_default_toolchain()
+        from dan.make import ConfigCache
+        config = ConfigCache(self.build_path / Make._config_name)
+        config.data.source_path = str(self.source_path)
+        config.data.build_path = str(self.build_path)
+        config.data.toolchain = toolchain or get_default_toolchain()
         await config.save()
+        config.ignore()
         del config

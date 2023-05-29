@@ -30,6 +30,9 @@ class MakeFile(sys.__class__):
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
 
+        from dan.core.include import context
+        self.context = context
+
     @property
     def fullname(self):
         return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
