@@ -90,19 +90,6 @@ class Context(Logging):
 context: Context = None
 
 
-def context_reset():
-    """Reset whole context
-
-    Mainly used for test purpose
-    """
-    global context
-    for m in context.all_makefiles:
-        del m
-    del context
-    context = Context()
-
-
-
 def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):
     global context
     source_path = Path(module.__file__).parent
