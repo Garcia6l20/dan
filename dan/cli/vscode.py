@@ -20,7 +20,7 @@ class Code:
         self.make = make
     
     def get_test_suites(self, pretty):
-        from dan.core.include import context, MakeFile
+        from dan.core.include import MakeFile
         from dan.core.test import Test, Case
         from dan.cxx import Executable
 
@@ -97,7 +97,7 @@ class Code:
                     'children': children
                 }
 
-        return json.dumps(make_suite_info(context.root), indent=2 if pretty else None)
+        return json.dumps(make_suite_info(self.make.context.root), indent=2 if pretty else None)
         
     async def _make_source_configuration(self, target: CXXObject):
             # interface:

@@ -295,9 +295,8 @@ async def get_targets(ctx: CommandsContext, **kwargs):
     kwargs['quiet'] = True
     ctx(**kwargs)
     await ctx.make.initialize()
-    from dan.core.include import context
     out = []
-    targets = context.root.all_targets
+    targets = ctx.make.context.root.all_targets
     for target in targets:
         out.append({
             'name': target.name,
@@ -317,10 +316,9 @@ async def get_tests(ctx: CommandsContext, **kwargs):
     kwargs['quiet'] = True
     ctx(**kwargs)
     await ctx.make.initialize()
-    from dan.core.include import context
     import json
     out = list()
-    for t in context.root.all_tests:
+    for t in ctx.make.context.root.all_tests:
         out.append(t.fullname)
         if len(t) > 1:
             for c in t.cases:
