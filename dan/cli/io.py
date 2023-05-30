@@ -50,7 +50,7 @@ async def get_repository(name = None):
 @contextlib.asynccontextmanager
 async def make_context():
     make = await get_make()
-    with make.context.make_current():
+    with make.context:
         yield
 
 

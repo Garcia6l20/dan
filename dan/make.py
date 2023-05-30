@@ -131,7 +131,7 @@ class Make(Logging):
         self.info(
             f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
 
-        with self.context.make_current():
+        with self.context:
             init_toolchains(toolchain, self.settings)
             include_makefile(self.source_path, self.build_path)
 
@@ -353,7 +353,7 @@ class Make(Logging):
     async def build(self):
         await self.initialize()
 
-        with self.context.make_current(), \
+        with self.context, \
              self.progress('building', self.targets, lambda t: t.build(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
@@ -376,7 +376,7 @@ class Make(Logging):
 
         await self.build()
 
-        with self.context.make_current(), \
+        with self.context, \
              self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
@@ -400,7 +400,7 @@ class Make(Logging):
 
     async def run(self):
         await self.initialize()
-        with self.context.make_current():
+        with self.context:
             results = await asyncio.gather(*[t.execute(log=True) for t in self.executable_targets])
             for result in results:
                 if result[2] != 0:
@@ -409,7 +409,7 @@ class Make(Logging):
 
     async def test(self):
         await self.initialize()
-        with self.context.make_current():
+        with self.context:
             with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
                 results = await asyncio.gather(*tasks)
                 if all(results):
@@ -421,7 +421,7 @@ class Make(Logging):
 
     async def clean(self):
         await self.initialize()
-        with self.context.make_current():
+        with self.context:
             await asyncio.gather(*[t.clean() for t in self.targets])
             # from dan.cxx import target_toolchain
             # target_toolchain.compile_commands.clear()

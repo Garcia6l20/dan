@@ -88,7 +88,7 @@ class PackageRepository(Target, internal=True):
             from dan.core.include import load_makefile
             root = self.output / 'packages'
             requirements = None
-            with self.makefile.context.make_current():
+            with self.makefile.context:
                 self._package_makefile = load_makefile(root / 'dan-build.py', f'{self.name}.packages', requirements=requirements, build_path=self.build_path / self.name, parent=self.makefile)
 
         return self._package_makefile

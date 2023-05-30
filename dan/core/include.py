@@ -38,6 +38,7 @@ class Context(Logging):
         self.__current: MakeFile = None
         self.__all_makefiles: set[MakeFile] = set()
         self.imported_makefiles: dict[Path, MakeFile] = dict()
+        self.__prev_ctx: Context = None
         super().__init__('context')
 
     @property
@@ -77,15 +78,17 @@ class Context(Logging):
     def set(self, name, value):
         setattr(self, name, value)
 
-    @contextmanager
-    def make_current(self) -> 'Context':
+    def __enter__(self):
         global context
-        back = context
+        self.__prev_ctx = context
         context = self
-        try:
-            yield self
-        finally:
-            context = back
+        return self
+
+    def __exit__(self, *exc):
+        global context
+        context = self.__prev_ctx
+        self.__prev_ctx = None
+
 
 context: Context = None
 

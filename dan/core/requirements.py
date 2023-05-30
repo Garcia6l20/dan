@@ -127,7 +127,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                         raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
-                    with makefile.context.make_current():
+                    with makefile.context:
                         t = Package(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
                     logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)
