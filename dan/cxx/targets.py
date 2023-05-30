@@ -404,9 +404,6 @@ class Library(CXXObjectsTarget, internal=True):
             tasks.append(do_install(self.output, dest))
 
         if mode == InstallMode.dev:
-            for dependency in self.library_dependencies:
-                tasks.append(dependency.install(settings, mode))
-
             header_expr = re.compile(self.header_match)
             includes_dest = settings.includes_destination
             for public_include_dir in self.includes.public_raw:
