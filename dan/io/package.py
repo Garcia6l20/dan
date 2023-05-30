@@ -91,6 +91,7 @@ class PackageBuild(Target, internal=True):
         self._all_builds[ident] = self
 
         makefile = self.package_makefile
+        build_path = makefile.build_path
 
         # FIXME: shall a makefile have an associated toolchain ?
         toolchain = None
@@ -112,7 +113,7 @@ class PackageBuild(Target, internal=True):
         async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
             if toolchain is not None and not toolchain.build_type.is_debug_mode:
                 group.create_task(aiofiles.rmtree(self.output / 'src'))
-            group.create_task(aiofiles.rmtree(self.build_path, force=True))
+            group.create_task(aiofiles.rmtree(build_path, force=True))
 
 
 class Package(Target, internal=True):
