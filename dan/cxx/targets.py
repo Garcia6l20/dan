@@ -394,12 +394,14 @@ class Library(CXXObjectsTarget, internal=True):
             if dest.exists() and dest.younger_than(src):
                 self.info(f'{dest} is up-to-date')
             else:
-                self.info(f'installing {dest}')
+                self.debug(f'installing {dest}')
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 await aiofiles.copy(src, dest)
             return dest
 
         dest = settings.libraries_destination / self.output.name
+        self.info(f'installing {self.name} to {dest}')
+
         if not self.interface:
             tasks.append(do_install(self.output, dest))
 
