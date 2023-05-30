@@ -60,22 +60,18 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
             else:
                 make = Make(self.test.build_path, verbose=True)
             if len(self.options) or len(self.settings):
-                await make.initialize()
                 if len(self.options):
                     await make.apply_options(*self.options)
                 if len(self.settings):
                     await make.apply_settings(*self.settings)
                 await Cache.save_all()
-                del make
-                self.test.reset()
-                make = Make(self.test.build_path, verbose=True)
             
             if self.init:
                 await make.initialize()
 
             return make
 
-        async def __aexit__(self, exc_type, exc, tb):
+        async def __aexit__(self, *exc):
             await Cache.save_all()
             Cache.clear_all()
 
