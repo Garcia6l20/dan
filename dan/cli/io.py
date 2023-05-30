@@ -2,6 +2,7 @@
 import asyncio
 import fnmatch
 import os
+import contextlib
 
 from dan.cli import click
 from dan.core.requirements import parse_package
@@ -22,6 +23,7 @@ async def get_make():
         make.config.toolchain = 'default'
         await make._config.save()
         await make.initialize()
+        _make = make
     return _make
 
 
@@ -44,6 +46,14 @@ async def get_repository(name = None):
     await repo.build()
     return repo
 
+
+@contextlib.asynccontextmanager
+async def make_context():
+    make = await get_make()
+    with make.context.make_current():
+        yield
+
+
 @click.group()
 def cli():
     pass
@@ -57,59 +67,63 @@ def ls():
 @ls.command()
 async def repositories():
     """List available repositories"""
-    repos = await get_repositories()
-    for repo in repos:
-        click.echo(repo.name)
+    async with make_context():
+        repos = await get_repositories()
+        for repo in repos:
+            click.echo(repo.name)
 
 @ls.command()
 async def libraries():
     """List available libraries"""
-    repos = await get_repositories()
-    for repo in repos:
-        for name, lib in repo.installed.items():
-            click.echo(f'{name} = {lib.version}')
+    async with make_context():
+        repos = await get_repositories()
+        for repo in repos:
+            for name, lib in repo.installed.items():
+                click.echo(f'{name} = {lib.version}')
 
 @ls.command()
 @click.argument('LIBRARY')
 async def versions(library: str):
     """Get LIBRARY's available versions"""
-    package, library, repository = parse_package(library)
-    repo = await get_repository(repository)
-    if repo is None:
-        click.logger.error(f'cannot find repository {repository}')
-        return -1
+    async with make_context():
+        package, library, repository = parse_package(library)
+        repo = await get_repository(repository)
+        if repo is None:
+            click.logger.error(f'cannot find repository {repository}')
+            return -1
 
-    lib = repo.find(library, package)
-    if lib is None:
-        if repository is None:
-            repository = repo.name
-        if package is None:
-            package = library
-        click.logger.error(f'cannot find {package}:{library}@{repository}')
-        return -1
-    
-    from dan.src.github import GitHubReleaseSources
-    
-    sources: GitHubReleaseSources = lib.get_dependency(GitHubReleaseSources)
-    available_versions = await sources.available_versions()
-    available_versions = sorted(available_versions.keys())
-    for v in available_versions:
-        if v == lib.version:
-            click.echo(f' - {v} (default)')
-        else:
-            click.echo(f' - {v}')
+        lib = repo.find(library, package)
+        if lib is None:
+            if repository is None:
+                repository = repo.name
+            if package is None:
+                package = library
+            click.logger.error(f'cannot find {package}:{library}@{repository}')
+            return -1
+        
+        from dan.src.github import GitHubReleaseSources
+        
+        sources: GitHubReleaseSources = lib.get_dependency(GitHubReleaseSources)
+        available_versions = await sources.available_versions()
+        available_versions = sorted(available_versions.keys())
+        for v in available_versions:
+            if v == lib.version:
+                click.echo(f' - {v} (default)')
+            else:
+                click.echo(f' - {v}')
 
 @cli.command()
 @click.argument('NAME')
 async def search(name):
     """Search for NAME in repositories"""
-    name = f'*{name}*'
-    repos = await get_repositories()
-    for repo in repos:
-        installed = repo.installed
-        for libname, lib in installed.items():
-            if fnmatch.fnmatch(libname, name):
-                click.echo(f'{libname} = {lib.version}')
+    async with make_context():
+        name = f'*{name}*'
+        repos = await get_repositories()
+        for repo in repos:
+            installed = repo.installed
+            for libname, lib in installed.items():
+                if fnmatch.fnmatch(libname, name):
+                    click.echo(f'{libname} = {lib.version}')
 
 
 def main():
@@ -127,3 +141,6 @@ def main():
         except Exception:
             pass
         return -1
+
+if __name__ == '__main__':
+    main()
