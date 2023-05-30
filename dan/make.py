@@ -204,7 +204,7 @@ class Make(Logging):
             if target.source_path not in source.parents:
                 continue
             target._init_sources()
-            if source.name in target.sources:
+            if source.name in [str(s) for s in target.sources]:
                 return target
 
 
