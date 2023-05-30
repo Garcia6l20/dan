@@ -8,13 +8,14 @@ import fnmatch
 import re
 
 from dataclasses_json import dataclass_json
-from dan.core.pathlib import Path
 import sys
 import tqdm
 import typing as t
 
 from dan.core.cache import Cache
-from dan.core.include import include_makefile
+from dan.core.makefile import MakeFile
+from dan.core.pathlib import Path
+from dan.core.include import include_makefile, Context
 from dan.core import aiofiles, asyncio
 from dan.core.settings import InstallMode, Settings
 from dan.core.test import Test
@@ -54,10 +55,7 @@ class Make(Logging):
     _config_name = 'dan.config.json'
     _cache_name = 'dan.cache.json'
 
-    def __init__(self, path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
-
-        from dan.core.include import context_reset
-        context_reset()
+    def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
 
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
@@ -75,36 +73,19 @@ class Make(Logging):
 
         self.no_progress = no_progress
         self.for_install = for_install
-        path = Path(path)
-        if not path.exists() or not (path / 'dan-build.py').exists():
-            self.source_path = Path.cwd().absolute()
-            self.build_path = path.absolute().resolve()
-        else:
-            self.source_path = path.absolute().resolve()
-            self.build_path = Path.cwd().absolute()
-
-        self.config_path = self.build_path / self._config_name
-        self.cache_path = self.build_path / self._cache_name
+        
+        self.build_path = Path(build_path)
+        self.config_path = build_path / self._config_name
+        self.cache_path = build_path / self._cache_name
 
         self.required_targets = targets
-        self.build_path.mkdir(exist_ok=True, parents=True)
-        sys.pycache_prefix = str(self.build_path / '__pycache__')
-        self._config = ConfigCache(self.config_path)
-        self.cache = Cache(self.cache_path)
-
-        # self.settings: Settings = self.config.get('settings', Settings())
-
-        # self.source_path = Path(self.config.get(
-        #     'source_path', self.source_path))
-
-        self.debug(f'source path: {self.source_path}')
-        self.debug(f'build path: {self.build_path}')
+        sys.pycache_prefix = str(build_path / '__pycache__')
+        self._config = ConfigCache.instance(self.config_path)
+        self.cache = Cache.instance(self.cache_path)
+        
         self.debug(f'jobs: {jobs}')
-
-        assert (self.source_path /
-                'dan-build.py').exists(), f'no makefile in {self.source_path}'
-        assert (self.source_path !=
-                self.build_path), f'in-source build are not allowed'
+        
+        self.context = Context()
         
     @property
     def config(self) -> Config:
@@ -113,15 +94,36 @@ class Make(Logging):
     @property
     def settings(self) -> Settings:
         return self._config.data.settings
+    
+    @property
+    def source_path(self):
+        return Path(self.config.source_path)
+        
+    @property
+    def toolchain(self):
+        return self.config.toolchain
+    
+    @property
+    def root(self) -> MakeFile:
+        return self.context.root
 
-    def configure(self, toolchain):
-        self.config.source_path = str(self.source_path)
+    async def configure(self, source_path: str, toolchain: str = None):
+        self.config.source_path = str(source_path)
         self.config.build_path = str(self.build_path)
-        self.config.toolchain = toolchain
+        self.info(f'source path: {self.config.source_path}')
+        self.info(f'build path: {self.config.build_path}')
+        if toolchain:
+            self.config.toolchain = toolchain
+        if not self.config.toolchain:
+            self.warning('no toolchain configured')
+        await self._config.save()
 
     @asyncio.cached
     async def initialize(self):
-        assert self.source_path and self.config_path.exists(), 'configure first'
+        assert self.config_path.exists(), 'configure first'
+
+        self.debug(f'source path: {self.source_path}')
+        self.debug(f'build path: {self.build_path}')
 
         toolchain = self.config.toolchain
         build_type = self.settings.build_type
@@ -129,18 +131,11 @@ class Make(Logging):
         self.info(
             f'using \'{toolchain}\' toolchain in \'{build_type.name}\' mode')
 
-        from dan.core.include import context_reset
-        import gc
+        with self.context.make_current():
+            init_toolchains(toolchain, self.settings)
+            include_makefile(self.source_path, self.build_path)
 
-        # for test purpose
-        context_reset()
-        gc.collect()
-
-        init_toolchains(toolchain, self.settings)
-
-        include_makefile(self.source_path, self.build_path)
-
-        from dan.cxx import target_toolchain
+        target_toolchain = self.context.get('cxx_target_toolchain')
         target_toolchain.build_type = build_type
         if self.for_install:
             library_dest = Path(self.settings.install.destination) / \
@@ -157,26 +152,24 @@ class Make(Logging):
 
     @functools.cached_property
     def targets(self) -> list[Target]:
-        from dan.core.include import context
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
-            for target in context.root.all_targets:
+            for target in self.root.all_targets:
                 if self.__matches(target):
                     items.append(target)
         else:
-            items = context.root.all_default
+            items = self.root.all_default
         return items
 
     @functools.cached_property
     def tests(self) -> list[Test]:
-        from dan.core.include import context
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for required in self.required_targets:
                 test_name, *test_case = required.split(':')
                 test_case = test_case[0] if len(test_case) else None
 
-                for test in context.root.all_tests:
+                for test in self.root.all_tests:
                     
                     if fnmatch.fnmatch(test.fullname, f'*{test_name}*'):
                         if len(test) > 1 and test_case is not None:
@@ -188,28 +181,26 @@ class Make(Logging):
                         
                         items.append(test)
         else:
-            for test in context.root.all_tests:
+            for test in self.root.all_tests:
                 items.append(test)
         return items
 
     @property
     def all_options(self) -> list[Option]:
-        from dan.core.include import context
         opts = []
         for target in self.targets:
             for o in target.options:
                 opts.append(o)
-        for makefile in context.all_makefiles:
+        for makefile in self.context.all_makefiles:
             for o in makefile.options:
                 opts.append(o)
         return opts
 
     async def target_of(self, source):
-        from dan.core.include import context
         from dan.cxx.targets import CXXObjectsTarget
 
         source = Path(source)
-        for target in [target for target in context.root.all_targets if isinstance(target, CXXObjectsTarget)]:            
+        for target in [target for target in self.root.all_targets if isinstance(target, CXXObjectsTarget)]:            
             if target.source_path not in source.parents:
                 continue
             target._init_sources()
@@ -311,7 +302,6 @@ class Make(Logging):
             value = getattr(setting, parts[-1])
             return setting, value, type(setting)
         self._apply_inputs(settings, get_setting, lambda k, v: self.info(f'setting: {k} = {v}'))
-        pass
 
 
     @staticmethod
@@ -363,7 +353,8 @@ class Make(Logging):
     async def build(self):
         await self.initialize()
 
-        with self.progress('building', self.targets, lambda t: t.build(), self.no_progress) as tasks:
+        with self.context.make_current(), \
+             self.progress('building', self.targets, lambda t: t.build(), self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
@@ -378,19 +369,19 @@ class Make(Logging):
 
     async def install(self, mode: InstallMode = InstallMode.user):
         await self.initialize()
-        from dan.core.include import context
 
         self.for_install = True
         await self.initialize()
-        targets = context.root.all_installed
+        targets = self.root.all_installed
 
         await self.build()
 
-        with self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
+        with self.context.make_current(), \
+             self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
             manifest_path = self.settings.install.data_destination / \
-                'dan' / f'{context.root.name}-manifest.txt'
+                'dan' / f'{self.root.name}-manifest.txt'
             manifest_path.parent.mkdir(parents=True, exist_ok=True)
 
             async with aiofiles.open(manifest_path, 'w') as f:
@@ -409,25 +400,28 @@ class Make(Logging):
 
     async def run(self):
         await self.initialize()
-        results = await asyncio.gather(*[t.execute(log=True) for t in self.executable_targets])
-        for result in results:
-            if result[2] != 0:
-                return result[2]
+        with self.context.make_current():
+            results = await asyncio.gather(*[t.execute(log=True) for t in self.executable_targets])
+            for result in results:
+                if result[2] != 0:
+                    return result[2]
         return 0
 
     async def test(self):
         await self.initialize()
-        with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
-            results = await asyncio.gather(*tasks)
-            if all(results):
-                self.info('Success !')
-                return 0
-            else:
-                self.error('Failed !')
-                return 255
+        with self.context.make_current():
+            with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
+                results = await asyncio.gather(*tasks)
+                if all(results):
+                    self.info('Success !')
+                    return 0
+                else:
+                    self.error('Failed !')
+                    return 255
 
     async def clean(self):
         await self.initialize()
-        await asyncio.gather(*[t.clean() for t in self.targets])
-        from dan.cxx import target_toolchain
-        target_toolchain.compile_commands.clear()
+        with self.context.make_current():
+            await asyncio.gather(*[t.clean() for t in self.targets])
+            # from dan.cxx import target_toolchain
+            # target_toolchain.compile_commands.clear()

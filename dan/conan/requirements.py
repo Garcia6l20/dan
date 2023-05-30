@@ -54,6 +54,8 @@ class Requirements(Target, internal=True):
         self.conanfile = ConanFile(makefile=makefile)
         self.preload_dependencies.add(self.conanfile)
 
+        self.toolchain = self.context.get('cxx_target_toolchain')
+
     def _get_version(self, toolchain):
         from dan.cxx.msvc_toolchain import MSVCToolchain
         match toolchain:
@@ -66,16 +68,15 @@ class Requirements(Target, internal=True):
         self.conanfile.add(pkg)
 
     async def __build__(self):
-        from dan.cxx import target_toolchain
         dest = self.output.parent
         dest.mkdir(exist_ok=True, parents=True)
         await async_run([
             'conan', 'install', '.',
             f'--output-folder={dest}',
-            '-s', f'build_type={target_toolchain.build_type.name.title()}',
-            '-s', f'compiler={target_toolchain.type}',
-            '-s', f'compiler.version={self._get_version(target_toolchain)}',
-            '-s', f'compiler.cppstd={target_toolchain.cpp_std}',
+            '-s', f'build_type={self.toolchain.build_type.name.title()}',
+            '-s', f'compiler={self.toolchain.type}',
+            '-s', f'compiler.version={self._get_version(self.toolchain)}',
+            '-s', f'compiler.cppstd={self.toolchain.cpp_std}',
             '--build=missing'],
             logger=self._logger, cwd=self.build_path)
 

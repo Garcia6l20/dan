@@ -13,6 +13,7 @@ from dan.core.target import Target
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
+from dan.cxx.toolchain import Toolchain
 
 
 class CXXObject(Target, internal=True):
@@ -20,8 +21,7 @@ class CXXObject(Target, internal=True):
         super().__init__(source.stem, parent=parent, default=False)
         self.parent = parent
         self.source = self.source_path / source
-        from . import target_toolchain
-        self.toolchain = target_toolchain
+        self.toolchain = self.context.get('cxx_target_toolchain')
         self.__dirty = False
 
     @property
@@ -167,8 +167,7 @@ class CXXTarget(Target, internal=True):
                  *args,
                  **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        from . import target_toolchain
-        self.toolchain = target_toolchain
+        self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
 
         self.includes = OptionSet(self, 'includes',
                                 #   self.public_includes, self.private_includes,
@@ -285,11 +284,11 @@ class CXXObjectsTarget(CXXTarget, internal=True):
                 group.create_task(dep.build())
 
 
-class LibraryType(Enum):
-    AUTO = 0
-    STATIC = 1
-    SHARED = 2
-    INTERFACE = 3
+class LibraryType(str, Enum):
+    AUTO = 'auto'
+    STATIC = 'static'
+    SHARED = 'shared'
+    INTERFACE = 'interface'
 
 
 class Library(CXXObjectsTarget, internal=True):
@@ -330,7 +329,6 @@ class Library(CXXObjectsTarget, internal=True):
             self.compile_definitions.add(f'{self.name.upper()}_EXPORT=1')
 
         if self.library_type != LibraryType.INTERFACE:
-            self.dependencies.update(self.objs)
             self.output = self.toolchain.make_library_name(self.name, self.shared)
         else:
             self.output = f"lib{self.name}.stamp"
@@ -365,11 +363,6 @@ class Library(CXXObjectsTarget, internal=True):
         self.info(
             f'creating {self.library_type.name.lower()} library {self.output}...')
 
-        objs = self.objs
-        for dep in self.cxx_dependencies:
-            if isinstance(dep, CXXObjectsTarget) and not isinstance(dep, Library):
-                objs.update(dep.objs)
-
         if self.static:
             await self.toolchain.static_lib([obj.output for obj in self.objs], self.output, self.libs)
         elif self.shared:
@@ -401,19 +394,18 @@ class Library(CXXObjectsTarget, internal=True):
             if dest.exists() and dest.younger_than(src):
                 self.info(f'{dest} is up-to-date')
             else:
-                self.info(f'installing {dest}')
+                self.debug(f'installing {dest}')
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 await aiofiles.copy(src, dest)
             return dest
 
         dest = settings.libraries_destination / self.output.name
+        self.info(f'installing {self.name} to {dest}')
+
         if not self.interface:
             tasks.append(do_install(self.output, dest))
 
         if mode == InstallMode.dev:
-            for dependency in self.library_dependencies:
-                tasks.append(dependency.install(settings, mode))
-
             header_expr = re.compile(self.header_match)
             includes_dest = settings.includes_destination
             for public_include_dir in self.includes.public_raw:

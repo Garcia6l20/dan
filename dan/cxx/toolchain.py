@@ -76,11 +76,11 @@ class Toolchain(Logging):
         osi = OSInfo()
         self.cache['is_host'] = self.system == osi.name and self.arch == osi.arch
     
-    @property
-    def compile_commands(self):
-        if not self._compile_commands:
-            self._compile_commands = CompileCommands()
-        return self._compile_commands
+    # @property
+    # def compile_commands(self):
+    #     if not self._compile_commands:
+    #         self._compile_commands = CompileCommands()
+    #     return self._compile_commands
 
     def init(self):
         self.__update_cache()
@@ -125,7 +125,7 @@ class Toolchain(Logging):
 
     async def compile(self, sourcefile: Path, output: Path, options: set[str], **kwds):
         commands = self.make_compile_commands(sourcefile, output, options)
-        self.compile_commands.insert(sourcefile, output.parent, commands[0])
+        # self.compile_commands.insert(sourcefile, output.parent, commands[0])
         for index, command in enumerate(commands):
             await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
         return commands

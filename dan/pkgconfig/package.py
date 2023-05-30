@@ -161,11 +161,10 @@ class Package(CXXTarget, internal=True):
     @property
     def cxx_flags(self):
         if self.__cflags is None:
-            from dan.cxx import target_toolchain
             cflags = self.data.get('cflags')
             if cflags is not None:
                 cflags = cmdline2list(cflags)
-                cflags = target_toolchain.from_unix_flags(cflags)
+                cflags = self.toolchain.from_unix_flags(cflags)
             else:
                 cflags = list()
             for dep in self.cxx_dependencies:
@@ -180,12 +179,11 @@ class Package(CXXTarget, internal=True):
     @property
     def libs(self):
         if self.__libs is None:
-            from dan.cxx import target_toolchain
             tmp = list()
             libs = self.data.get('libs')
             if libs is not None:
                 libs = cmdline2list(libs)
-                libs = target_toolchain.from_unix_flags(libs)
+                libs = self.toolchain.from_unix_flags(libs)
                 tmp.extend(libs)
             for pkg in self.package_dependencies:
                 tmp.extend(pkg.libs)
@@ -239,7 +237,6 @@ def _get_jinja_env():
 
 
 async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
-    from dan.cxx import target_toolchain
     dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
 
@@ -250,15 +247,15 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
         else:
             requires.append(req.name)
 
-    libs = target_toolchain.make_link_options(
+    libs = lib.toolchain.make_link_options(
         [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
-    libs = target_toolchain.to_unix_flags(libs)
+    libs = lib.toolchain.to_unix_flags(libs)
 
     cflags = lib.compile_definitions.public
-    cflags.extend(target_toolchain.make_include_options(['${includedir}']))
-    cflags = target_toolchain.to_unix_flags(cflags)
+    cflags.extend(lib.toolchain.make_include_options(['${includedir}']))
+    cflags = lib.toolchain.to_unix_flags(cflags)
 
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\

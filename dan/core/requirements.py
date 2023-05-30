@@ -1,12 +1,11 @@
 
 import functools
-import re
 import typing as t
 from dan.core import asyncio
 from dan.core.pm import re_match
 from dan.core.settings import InstallMode, InstallSettings
 
-from dan.core.version import Version, VersionSpec
+from dan.core.version import VersionSpec
 from dan.logging import Logging
 
 def parse_package(name: str) -> tuple[str, str, str]:
@@ -87,7 +86,6 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
 
     from dan.pkgconfig.package import find_package
     from dan.logging import _get_makefile_logger
-    from dan.core.include import context
     from dan.io import Package
 
     if logger is None:
@@ -109,7 +107,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 resolved.append(req)
                 continue
 
-            t = context.root.find(req.name)
+            t = makefile.context.root.find(req.name)
             if t and not t.is_requirement and req.is_compatible(t):
                 logger.debug('%s: already fullfilled by %s', req, t.fullname)
                 req.target = t
@@ -129,7 +127,8 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                         raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
-                    t = Package(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
+                    with makefile.context.make_current():
+                        t = Package(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
                     logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)
                 group.create_task(t.install(deps_settings, InstallMode.dev))

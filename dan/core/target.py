@@ -193,6 +193,14 @@ class Options:
                 self[k] = v
             else:
                 self.add(k, v, help)
+    
+    @property
+    def sha1(self):
+        import hashlib
+        sha1 = hashlib.sha1()
+        for o in self.__items:
+            sha1.update(o.fullname.encode() + str(o.value).encode())
+        return sha1.hexdigest()
 
     def items(self):
         for o in self.__items:
@@ -391,6 +399,8 @@ class Target(Logging, MakefileRegister, internal=True):
             return False
         elif self.dependencies.modification_time > self.modification_time:
             return False
+        elif 'options_sha1' in self.cache and self.cache['options_sha1'] != self.options.sha1:
+            return False
         return True
 
     async def _build_dependencies(self):
@@ -418,7 +428,8 @@ class Target(Logging, MakefileRegister, internal=True):
             self.info('building...')
             result = self.__build__()
             if inspect.iscoroutine(result):
-                return await result
+                result = await result
+            self.cache['options_sha1'] = self.options.sha1
             return result
 
     @property

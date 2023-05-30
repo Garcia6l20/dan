@@ -39,6 +39,18 @@ class Cache(t.Generic[T]):
         self.__dirty = False
         self.__caches[self.name] = self
     
+    @classmethod
+    def instance(cls, path: Path|str, *args, cache_name:str = None, **kwargs):
+        cache_name = cache_name or path.stem
+        if cache_name in cls.__caches:
+            return cls.__caches[cache_name]
+        return cls(path, *args, cache_name=cache_name, **kwargs)
+
+    @classmethod
+    def clear_all(cls):
+        del cls.__caches
+        cls.__caches = dict()
+    
     def _dump(self):
         if self.dataclass == dict:
             return json.dumps(self.data, indent=self.indent)
@@ -71,6 +83,7 @@ class Cache(t.Generic[T]):
                 self.path.parent.mkdir(exist_ok=True, parents=True)
                 async with aiofiles.open(self.path, 'w') as f:
                     await f.write(self.__state)
+                self.__dirty = False
 
     @classmethod
     async def save_all(cls):
