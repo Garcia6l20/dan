@@ -83,6 +83,7 @@ class Cache(t.Generic[T]):
                 self.path.parent.mkdir(exist_ok=True, parents=True)
                 async with aiofiles.open(self.path, 'w') as f:
                     await f.write(self.__state)
+                self.__dirty = False
 
     @classmethod
     async def save_all(cls):
