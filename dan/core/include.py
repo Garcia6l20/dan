@@ -90,7 +90,7 @@ class Context(Logging):
         self.__prev_ctx = None
 
 
-context: Context = None
+context: Context = Context()
 
 
 def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):
