@@ -6,7 +6,7 @@ import sys
 import tempfile
 import functools
 
-import yaml
+import json
 from dan.core.find import find_executable
 
 from dan.core.osinfo import info as osinfo
@@ -488,7 +488,7 @@ def get_dan_path():
 
 
 def get_toolchain_path():
-    return get_dan_path() / 'toolchains.yaml'
+    return get_dan_path() / 'toolchains.json'
 
 
 def load_env_toolchain(script: Path = None, name: str = None):
@@ -524,16 +524,15 @@ def save_toolchain(name, toolchain):
     if toolchains_path.exists():
         with open(toolchains_path, 'r+') as f:
             logger.info(f'updating toolchains file {toolchains_path}')
-            data = yaml.load(f.read(), Loader=yaml.FullLoader)
+            data = json.load(f)
             toolchains = data['toolchains']
             toolchains[name] = toolchain
             f.seek(0)
             f.truncate()
-            f.write(yaml.dump(data))
+            json.dump(data, f)
 
 
 def create_toolchains():
-    import yaml
     from dan.core.find import find_executable
     toolchains_path = get_toolchain_path()
     logger = logging.getLogger('toolchain')
@@ -542,7 +541,7 @@ def create_toolchains():
     if toolchains_path.exists():
         with open(toolchains_path, 'r') as f:
             logger.info(f'updating toolchains file {toolchains_path}')
-            data = yaml.load(f.read(), Loader=yaml.FullLoader)
+            data = json.load(f)
             if data:
                 toolchains = data['toolchains']
                 tools = data['tools']
@@ -577,16 +576,15 @@ def create_toolchains():
     if not 'default' in data:
         data['default'] = list(toolchains.keys())[0]
     with open(toolchains_path, 'w') as f:
-        f.write(yaml.dump(data))
+        json.dump(data, f)
     return data
 
 
 def get_toolchains():
-    import yaml
     toolchains_path = get_toolchain_path()
     if not toolchains_path.exists():
         return create_toolchains()
 
     with open(toolchains_path) as f:
-        data = yaml.load(f, yaml.FullLoader)
+        data = json.load(f)
         return data if data else create_toolchains()
