@@ -1,5 +1,6 @@
 import functools
 import json
+import pickle
 import aiofiles
 import typing as t
 
@@ -18,14 +19,15 @@ class Cache(t.Generic[T]):
         cls.dataclass = t.get_args(cls.__orig_bases__[0])[0]
         return super().__init_subclass__()
 
-    def __init__(self, path: Path|str, *args, cache_name:str = None, **kwargs):
+    def __init__(self, path: Path|str, *args, cache_name:str = None, binary=False, **kwargs):
         self.__path = Path(path)     
         self.__name = cache_name or path.stem   
+        self.__serializer = json if not binary else pickle
         assert not self.name in self.__caches, 'a cache type should be unique'
         if self.path.exists():
-            with open(self.path, 'r') as f:
+            with open(self.path, 'rb') as f:
                 if self.dataclass == dict:
-                    self.__data = json.load(f)
+                    self.__data = self.__serializer.load(f)
                 else:
                     self.__data = self.dataclass.from_json(f.read())
                 if not isinstance(self.__data, self.dataclass):
@@ -51,11 +53,14 @@ class Cache(t.Generic[T]):
         del cls.__caches
         cls.__caches = dict()
     
-    def _dump(self):
-        if self.dataclass == dict:
-            return json.dumps(self.data, indent=self.indent)
+    def _dump(self):        
+        if self.__serializer is pickle:
+            return self.__serializer.dumps(self.data)
         else:
-            return self.data.to_json(indent=self.indent)
+            if self.dataclass == dict:
+                return self.__serializer.dumps(self.data).encode()
+            else:
+                return self.data.to_json(indent=self.indent).encode()
 
     
     @property
@@ -81,7 +86,7 @@ class Cache(t.Generic[T]):
         if self.path and (self.dirty or force):
             if self.__state:
                 self.path.parent.mkdir(exist_ok=True, parents=True)
-                async with aiofiles.open(self.path, 'w') as f:
+                async with aiofiles.open(self.path, 'wb') as f:
                     await f.write(self.__state)
                 self.__dirty = False
 

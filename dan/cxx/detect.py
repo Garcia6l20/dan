@@ -7,6 +7,7 @@ import tempfile
 import functools
 
 import json
+import pickle
 from dan.core.find import find_executable
 
 from dan.core.osinfo import info as osinfo
@@ -488,7 +489,7 @@ def get_dan_path():
 
 
 def get_toolchain_path():
-    return get_dan_path() / 'toolchains.json'
+    return get_dan_path() / 'toolchains.dat'
 
 
 def load_env_toolchain(script: Path = None, name: str = None):
@@ -522,14 +523,14 @@ def save_toolchain(name, toolchain):
     logger = logging.getLogger('toolchain')
     logger.setLevel(logging.INFO)
     if toolchains_path.exists():
-        with open(toolchains_path, 'r+') as f:
+        with open(toolchains_path, 'rb+') as f:
             logger.info(f'updating toolchains file {toolchains_path}')
-            data = json.load(f)
+            data = pickle.load(f)
             toolchains = data['toolchains']
             toolchains[name] = toolchain
             f.seek(0)
             f.truncate()
-            json.dump(data, f)
+            pickle.dump(data, f)
 
 
 def create_toolchains():
@@ -539,9 +540,9 @@ def create_toolchains():
     logger.setLevel(logging.INFO)
     data = None
     if toolchains_path.exists():
-        with open(toolchains_path, 'r') as f:
+        with open(toolchains_path, 'rb') as f:
             logger.info(f'updating toolchains file {toolchains_path}')
-            data = json.load(f)
+            data = pickle.load(f)
             if data:
                 toolchains = data['toolchains']
                 tools = data['tools']
@@ -575,8 +576,11 @@ def create_toolchains():
     data['toolchains'] = toolchains
     if not 'default' in data:
         data['default'] = list(toolchains.keys())[0]
-    with open(toolchains_path, 'w') as f:
-        json.dump(data, f)
+        
+    json_toolchain_path = toolchains_path.with_suffix('.json')
+    with open(json_toolchain_path, 'w') as jf, open(toolchains_path, 'wb') as pf:
+        pickle.dump(data, pf)
+        json.dump(data, jf)
     return data
 
 
@@ -584,7 +588,23 @@ def get_toolchains():
     toolchains_path = get_toolchain_path()
     if not toolchains_path.exists():
         return create_toolchains()
+    
+    json_toolchain_path = toolchains_path.with_suffix('.json')
 
-    with open(toolchains_path) as f:
-        data = json.load(f)
-        return data if data else create_toolchains()
+    with open(toolchains_path, 'rb') as f:
+        data = pickle.load(f)
+    
+    # pickle/json synchronization
+    if not json_toolchain_path.exists() or json_toolchain_path.older_than(toolchains_path):
+        logger = logging.getLogger('toolchain')
+        logger.info(f'Updating {json_toolchain_path.name}')
+        with open(json_toolchain_path, 'w') as f:
+            json.dump(data, f)
+    elif json_toolchain_path.exists() and json_toolchain_path.younger_than(toolchains_path):
+        logger = logging.getLogger('toolchain')
+        logger.info(f'Updating {toolchains_path.name} ({json_toolchain_path.name} changed)')
+        with open(json_toolchain_path, 'r') as jf, open(toolchains_path, 'wb') as pf:
+            data = json.load(jf)
+            pickle.dump(data, pf)
+
+    return data

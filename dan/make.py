@@ -11,6 +11,7 @@ from dataclasses_json import dataclass_json
 import sys
 import tqdm
 import typing as t
+from collections.abc import Iterable
 
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
@@ -25,7 +26,6 @@ from dan.logging import Logging
 from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
-from collections.abc import Iterable
 
 
 def make_target_name(name: str):
