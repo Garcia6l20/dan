@@ -1,3 +1,4 @@
+import os
 import unittest
 from dan.logging import Logging
 
@@ -16,7 +17,7 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
     source_path = root_path / 'examples'
     build_path = tests_path / 'build-unittest'
 
-    def __init__(self, subproject: str = None, methodName: str = None) -> None:
+    def __init__(self, subproject: str = None, methodName: str = None, source_path: Path = None) -> None:
         Logging.__init__(self, self.__class__.__name__)
         unittest.IsolatedAsyncioTestCase.__init__(self, methodName)
         PyMakeBaseTest.build_path.mkdir(exist_ok=True, parents=False)
@@ -24,6 +25,9 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         if self.subproject:
             self.source_path = PyMakeBaseTest.source_path / self.subproject
             self.build_path = PyMakeBaseTest.build_path / self.subproject
+        elif source_path is not None:
+            self.source_path = source_path
+            self.build_path = source_path / 'build'
 
     def setUp(self) -> None:
         return super().setUp()
@@ -38,12 +42,14 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
         def __init__(self,
                      test: 'PyMakeBaseTest',
                      desc: str,
+                     targets: list[str],
                      options: list[str],
                      settings: list[str],
                      clean: bool,
                      init: bool) -> None:
             self.test = test
             self.desc = desc
+            self.targets = targets
             self.clean = clean
             self.options = options
             self.settings = settings
@@ -55,10 +61,10 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
                   f"\n{self.__section_separator}\n")
             if self.clean:
                 await self.test.clean()
-                make = Make(self.test.build_path, verbose=True)
-                await make.configure(self.test.source_path, get_default_toolchain())
+                make = Make(self.test.build_path, verbose=True, targets=self.targets)
+                await make.configure(self.test.source_path, os.getenv('DAN_TOOLCHAIN', 'default'))
             else:
-                make = Make(self.test.build_path, verbose=True)
+                make = Make(self.test.build_path, verbose=True, targets=self.targets)
             if len(self.options) or len(self.settings):
                 if len(self.options):
                     await make.apply_options(*self.options)
@@ -75,8 +81,8 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
             await Cache.save_all()
             Cache.clear_all()
 
-    def section(self, desc: str, options=list(), settings=list(), clean=False, init=True):
-        return self.__MakeSection(self, desc, options, settings, clean, init)
+    def section(self, desc: str, targets: list[str] = None, options=list(), settings=list(), clean=False, init=True):
+        return self.__MakeSection(self, desc, targets, options, settings, clean, init)
 
     async def clean(self):
         if self.build_path.exists():
