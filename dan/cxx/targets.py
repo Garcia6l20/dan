@@ -13,7 +13,7 @@ from dan.core.target import Target
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.toolchain import CompilationFailure, LinkageFailure, Toolchain
 
 
 class CXXObject(Target, internal=True):
@@ -74,7 +74,11 @@ class CXXObject(Target, internal=True):
 
     async def __build__(self):
         self.info(f'generating {self.output}...')
-        commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+        try:
+            commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+        except CompilationFailure as err:
+            err.target = self
+            raise
         self.cache['compile_args'] = [str(a) for a in commands[0]]
         self.info(f'scanning dependencies of {self.source}')
         deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
@@ -469,8 +473,12 @@ class Executable(CXXObjectsTarget, internal=True):
 
         # link
         self.info(f'linking {self.output}...')
-        commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
-                                             [*self.libs, *self.link_options.public, *self.link_options.private])
+        try:
+            commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
+                                                [*self.libs, *self.link_options.public, *self.link_options.private])
+        except LinkageFailure as err:
+            err.target = self
+            raise
         self.cache['link_args'] = [str(a) for a in commands[0]]
         self.debug(f'done')
 

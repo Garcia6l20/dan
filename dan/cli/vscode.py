@@ -1,13 +1,14 @@
 import json
 import os
+from pathlib import Path
 
 from dan.core.asyncio import ExceptionGroup
 from dan.core.pm import re_match
-from dan.cxx.toolchain import CompilationFailure, Toolchain
+from dan.cxx.toolchain import CompilationFailure, LinkageFailure, Toolchain
 
 from dan.make import Make
 from dan.cxx.targets import CXXObject
-
+from dan.logging import Logging
 
 def get_intellisense_mode(toolchain : Toolchain):
     mode = list()
@@ -17,10 +18,11 @@ def get_intellisense_mode(toolchain : Toolchain):
     mode.append(toolchain.arch)
     return '-'.join(mode)
 
-class Code:
+class Code(Logging):
     def __init__(self, make: Make) -> None:
         self.make = make
-    
+        super().__init__('code')
+
     def get_test_suites(self, pretty):
         from dan.core.include import MakeFile
         from dan.core.test import Test, Case
@@ -175,6 +177,35 @@ class Code:
             })
         return e.sourcefile, diags
 
+    def _generate_link_errors(self, e: LinkageFailure):
+        diags = dict()
+        for err in e.errors:
+            for s in e.target.sources:
+                if Path(s).name == err.filename:
+                    key = e.target.source_path / s
+                    break
+            assert key is not None and key.exists()
+            key = str(key)
+            entry = {
+                'range': {
+                    'start': {
+                        'line': 0,
+                        'character': 0,
+                    },
+                    'end': {
+                        'line': 0,
+                        'character': 0,
+                    }
+                },
+                'message': err.message,
+                'severity': err.severity,
+            }
+            if key not in diags:
+                diags[key] = [entry]
+            else:
+                diags[key].append(entry)
+        return diags
+    
     def _generate_diagnostics(self, e: Exception) -> list:
         diags = dict()
         match e:
@@ -184,22 +215,10 @@ class Code:
             case CompilationFailure():
                 f, e = self._generate_compile_errors(e)
                 diags[str(f)] = e
+            case LinkageFailure():
+                diags.update(self._generate_link_errors(e))
             case _:
-                pass
-                # diags.append({
-                #     'range': {
-                #         'start': {
-                #             'line': 0,
-                #             'character': 0,
-                #         },
-                #         'end': {
-                #             'line': 0,
-                #             'character': 0,
-                #         }
-                #     },
-                #     'message': str(e),
-                #     'severity': 'error',
-                # })
+                self.debug('not generating any diagnostic for %s', str(type(e)))
         return diags
 
 

@@ -20,27 +20,54 @@ class RuntimeType(Enum):
     static = 0
     dynamic = 1
 
-class CompilationFailure(Exception):
-    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain') -> None:
-        super().__init__(f'failed to compile {sourcefile}: {err.stderr}')
-        self.sourcefile = sourcefile
+class BaseFailure(RuntimeError):
+    def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', target = None) -> None:
+        super().__init__(msg)
         self.options = options
         self.command = command
         self.toolchain = toolchain
         self.stdout = err.stdout
         self.stderr = err.stderr
+        self.target = None
     
-    def __iter__(self) -> t.Iterable['CompileError']:
+
+class CompilationFailure(BaseFailure):
+    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain', target = None) -> None:
+        super().__init__(f'failed to compile {sourcefile}: {err.stderr}', err, options, command, toolchain)
+        self.sourcefile = sourcefile
+    
+    @property
+    def errors(self) -> t.Iterable['CompileError']:
         return self.toolchain.gen_errors(self)
 
+
+class LinkageFailure(BaseFailure):
+    def __init__(self, err: CommandError, objects: set[Path], options: set[str], command: str, toolchain: 'Toolchain', target = None) -> None:
+        super().__init__(f'failed to link {", ".join(objects)}: {err.stderr}', err, options, command, toolchain)
+        self.objects = objects
+    
+    @property
+    def errors(self) -> t.Iterable['LinkError']:
+        return self.toolchain.gen_errors(self)
+
+
 class CompileError:
-    def __init__(self, line, message, severity = 'error', code = None, char = None) -> None:
+    def __init__(self, line, message, code = None, char = None, severity = 'error') -> None:
         self.line = line
         self.char = char
         self.message = message
         self.severity = severity
         self.code = code
 
+
+class LinkError:
+    def __init__(self, filename, function, message, section = None, section_offset = None, severity = 'error') -> None:
+        self.filename = filename
+        self.function = function
+        self.message = message
+        self.severity = severity
+        self.section = section
+        self.section_offset = section_offset
 
 class Toolchain(Logging):
     def __init__(self, data: dict[str,str], tools: dict, settings: ToolchainSettings, cache: dict = None) -> None:
@@ -127,8 +154,8 @@ class Toolchain(Logging):
     def make_executable_name(self, basename: str) -> str:
         raise NotImplementedError()
     
-    def gen_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
-        '''Handle CompilationFailure'''
+    def gen_errors(self, err: BaseFailure) -> t.Iterable[CompileError]:
+        '''Handle BaseFailure'''
         raise NotImplementedError()
     
     async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
@@ -158,7 +185,7 @@ class Toolchain(Logging):
             try:
                 await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
             except CommandError as err:
-                raise CompilationFailure(err, sourcefile, options, command, self)
+                raise CompilationFailure(err, sourcefile, options, command, self) from err
         return commands
 
     def make_link_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
@@ -167,7 +194,10 @@ class Toolchain(Logging):
     async def link(self, objects: set[Path], output: Path, options: set[str], **kwds):
         commands = self.make_link_commands(objects, output, options)
         for index, command in enumerate(commands):
-            await self.run(f'link{index}', output, command, **kwds, cwd=output.parent)
+            try:
+                await self.run(f'link{index}', output, command, **kwds, cwd=output.parent)
+            except CommandError as err:
+                raise LinkageFailure(err, objects, options, command, self) from None
         return commands
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
@@ -176,7 +206,10 @@ class Toolchain(Logging):
     async def static_lib(self, objects: set[Path], output: Path, options: set[str], **kwds):
         commands = self.make_static_lib_commands(objects, output, options)
         for index, command in enumerate(commands):
-            await self.run(f'static_lib{index}', output, command, **kwds, cwd=output.parent)
+            try:
+                await self.run(f'static_lib{index}', output, command, **kwds, cwd=output.parent)
+            except CommandError as err:
+                raise LinkageFailure(err, objects, options, command, self) from None
         return commands
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:

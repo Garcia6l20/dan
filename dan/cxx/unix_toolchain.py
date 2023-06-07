@@ -1,8 +1,9 @@
 from functools import cached_property
+import re
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import CommandArgsList, CompilationFailure, CompileError, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import BaseFailure, CommandArgsList, CompilationFailure, CompileError, LinkError, LinkageFailure, Toolchain, Path, FileDependency
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
 
@@ -158,20 +159,44 @@ class UnixToolchain(Toolchain):
             commands.append([self.strip, output])
         return commands
 
-    def _gen_gcc_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
-        for line in err.stderr.splitlines():
+    def _gen_ld_errors(self, err: LinkageFailure) -> t.Iterable[LinkError]:
+        lines = iter(err.stderr.splitlines())
+        function = None
+        while (line := next(lines, None)) is not None:
             match re_match(line):
-                case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
-                    yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
+                case r'.+: in function `(.+)\':$' as m:
+                    function = m[1]
+                case r'(?:.+: )?(.+):\((.+)\+(.+)\): (.+)$' as m:
+                    filename = m[1]
+                    section = m[2]
+                    section_offset = int(m[3], 0)
+                    message = m[4]
+                    yield LinkError(filename, function, message, section, section_offset)
+                case _:
+                    self._logger.debug(f'unhandled line: {line}')
+
+    def _gen_gcc_errors(self, err: BaseFailure) -> t.Iterable[CompileError|LinkError]:
+        match err:
+            case CompilationFailure():
+                for line in err.stderr.splitlines():
+                    match re_match(line):
+                        case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
+                            yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
+            case LinkageFailure():
+                yield from self._gen_ld_errors(err)
     
-    def _gen_clang_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
-        for line in err.stderr.splitlines():
-            match re_match(line):
-                case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
-                    yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
+    def _gen_clang_errors(self, err: BaseFailure) -> t.Iterable[CompileError|LinkError]:
+        match err:
+            case CompilationFailure():
+                for line in err.stderr.splitlines():
+                    match re_match(line):
+                        case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
+                            yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
+            case LinkageFailure():
+                yield from self._gen_ld_errors(err)
 
 
-    def gen_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
+    def gen_errors(self, err: BaseFailure) -> t.Iterable[CompileError|LinkError]:
         match self.type:
             case 'gcc':
                 return self._gen_gcc_errors(err)

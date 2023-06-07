@@ -28,10 +28,6 @@ from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
 
 
-def make_target_name(name: str):
-    return name.replace('_', '-')
-
-
 def flatten(list_of_lists):
     if len(list_of_lists) == 0:
         return list_of_lists
