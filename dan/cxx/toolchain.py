@@ -52,7 +52,7 @@ class LinkageFailure(BaseFailure):
 
 
 class CompileError:
-    def __init__(self, line, message, code = None, char = None, severity = 'error') -> None:
+    def __init__(self, line: int, message: str, code: int|str = None, char: int = None, severity: str = 'error') -> None:
         self.line = line
         self.char = char
         self.message = message
@@ -61,13 +61,19 @@ class CompileError:
 
 
 class LinkError:
-    def __init__(self, filename, function, message, section = None, section_offset = None, severity = 'error') -> None:
+    def __init__(self, filename: str, obj: str, function: str, message: str, section: str = None, section_offset: int = None, severity: str = 'error') -> None:
         self.filename = filename
+        self.object = obj
         self.function = function
         self.message = message
         self.severity = severity
         self.section = section
         self.section_offset = section_offset
+    
+    @property
+    def is_global(self):
+        return self.filename == self.object
+
 
 class Toolchain(Logging):
     def __init__(self, data: dict[str,str], tools: dict, settings: ToolchainSettings, cache: dict = None) -> None:
