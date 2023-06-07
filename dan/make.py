@@ -359,13 +359,13 @@ class Make(Logging):
             errors = list()
             for result in results:
                 if isinstance(result, Exception):
-                    self._logger.exception(result)
+                    self._logger.error(str(result))
                     errors.append(result)
             err_count = len(errors)
             if err_count == 1:
                 raise errors[0]
             elif err_count > 1:
-                raise RuntimeError('One or more targets failed, check log...')
+                raise asyncio.ExceptionGroup('Multiple errors occured while building the project', errors=errors)
 
     async def install(self, mode: InstallMode = InstallMode.user):
         await self.initialize()
