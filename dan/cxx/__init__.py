@@ -58,7 +58,7 @@ def init_toolchains(name: str = None, settings: Settings = None):
         case _:
             raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
     target_settings = settings.target
-    cache = Cache.get('dan.cache').data
+    cache = Cache.get('dan').data
     if not 'toolchains' in cache:
         cache['toolchains'] = {
             'host': dict(),

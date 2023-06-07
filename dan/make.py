@@ -53,7 +53,7 @@ class ConfigCache(Cache[Config]):
 
 class Make(Logging):
     _config_name = 'dan.config.json'
-    _cache_name = 'dan.cache.json'
+    _cache_name = 'dan.cache'
 
     def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
 
@@ -81,7 +81,7 @@ class Make(Logging):
         self.required_targets = targets
         sys.pycache_prefix = str(build_path / '__pycache__')
         self._config = ConfigCache.instance(self.config_path)
-        self.cache = Cache.instance(self.cache_path)
+        self.cache = Cache.instance(self.cache_path, binary=True)
         
         self.debug(f'jobs: {jobs}')
         
