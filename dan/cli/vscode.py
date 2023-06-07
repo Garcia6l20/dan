@@ -1,7 +1,9 @@
 import json
 import os
+
+from dan.core.asyncio import ExceptionGroup
 from dan.core.pm import re_match
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.toolchain import CompilationFailure, Toolchain
 
 from dan.make import Make
 from dan.cxx.targets import CXXObject
@@ -153,3 +155,64 @@ class Code:
             'standard': f'c++{toolchain.cpp_std}'
         }
         return json.dumps(result)
+    
+    def _generate_compile_errors(self, e: CompilationFailure):
+        diags = list()
+        for err in e:
+            diags.append({
+                'range': {
+                    'start': {
+                        'line': err.line,
+                        'character': 0,
+                    },
+                    'end': {
+                        'line': err.line,
+                        'character': 0,
+                    }
+                },
+                'message': err.message,
+                'severity': err.severity,
+            })
+        return e.sourcefile, diags
+
+    def _generate_diagnostics(self, e: Exception) -> list:
+        diags = dict()
+        match e:
+            case ExceptionGroup():
+                for sub in e.errors:
+                    diags.update(self._generate_diagnostics(sub))
+            case CompilationFailure():
+                f, e = self._generate_compile_errors(e)
+                diags[str(f)] = e
+            case _:
+                pass
+                # diags.append({
+                #     'range': {
+                #         'start': {
+                #             'line': 0,
+                #             'character': 0,
+                #         },
+                #         'end': {
+                #             'line': 0,
+                #             'character': 0,
+                #         }
+                #     },
+                #     'message': str(e),
+                #     'severity': 'error',
+                # })
+        return diags
+
+
+    async def generate_diagnostics(self, e: Exception) -> int:
+        # range: Range;
+        # message: string;
+        # severity: DiagnosticSeverity;
+        # source?: string;
+        # code?: string | number | {
+        #     value: string | number;
+        #     target: Uri;
+        # };
+        # relatedInformation?: DiagnosticRelatedInformation[];
+        # tags?: DiagnosticTag[];
+        diags = self._generate_diagnostics(e)
+        return json.dumps(diags)

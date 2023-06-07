@@ -345,6 +345,21 @@ def get_toolchains(**kwargs):
 
 
 @code.command()
+@click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
+@common_opts
+@pass_context
+async def build(ctx: CommandsContext, **kwds):
+    """Build targets (vscode version)"""
+    ctx(**kwds)  # update kwds
+    try:
+        await ctx.make.build()
+    except Exception as e:
+        code = Code(ctx.make)
+        diags = await code.generate_diagnostics(e)
+        click.echo(diags)
+
+
+@code.command()
 @minimal_options
 @click.argument('SOURCES', nargs=-1)
 @pass_context

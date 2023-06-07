@@ -1,11 +1,12 @@
 from functools import cached_property
 import json
+import typing as t
 
 import aiofiles
 from dan.core.runners import sync_run
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, CompilationFailure, CompileError, RuntimeType, Toolchain, Path, FileDependency
 from dan.core.pm import re_match
 
 
@@ -161,3 +162,9 @@ class MSVCToolchain(Toolchain):
             objs.append(obj.name)
         return [[self.lnk, *self.common_flags,
                 f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']]
+
+    def gen_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
+        for line in err.stdout.splitlines():
+            match re_match(line):
+                case r'.+\((\d+)\):\serror\s(\w\d+):\s(.+)$' as m:
+                    yield CompileError(line=int(m[1]), message=m[3], code=m[2])

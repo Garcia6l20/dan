@@ -9,6 +9,8 @@ from dan.core.version import Version
 from dan.logging import Logging
 from dan.cxx.compile_commands import CompileCommands
 
+import typing as t
+
 import tempfile
 
 CommandArgs = list[str|Path]
@@ -17,6 +19,27 @@ CommandArgsList = list[CommandArgs]
 class RuntimeType(Enum):
     static = 0
     dynamic = 1
+
+class CompilationFailure(Exception):
+    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain') -> None:
+        super().__init__(f'failed to compile {sourcefile}: {err.stderr}')
+        self.sourcefile = sourcefile
+        self.options = options
+        self.command = command
+        self.toolchain = toolchain
+        self.stdout = err.stdout
+        self.stderr = err.stderr
+    
+    def __iter__(self):
+        return self.toolchain.gen_errors(self)
+
+class CompileError:
+    def __init__(self, line, message, severity = 'error', code = None) -> None:
+        self.line = line
+        self.message = message
+        self.severity = severity
+        self.code = code
+
 
 class Toolchain(Logging):
     def __init__(self, data: dict[str,str], tools: dict, settings: ToolchainSettings, cache: dict = None) -> None:
@@ -103,6 +126,10 @@ class Toolchain(Logging):
     def make_executable_name(self, basename: str) -> str:
         raise NotImplementedError()
     
+    def gen_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
+        '''Handle CompilationFailure'''
+        raise NotImplementedError()
+    
     async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
         raise NotImplementedError()
 
@@ -127,7 +154,10 @@ class Toolchain(Logging):
         commands = self.make_compile_commands(sourcefile, output, options)
         # self.compile_commands.insert(sourcefile, output.parent, commands[0])
         for index, command in enumerate(commands):
-            await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
+            try:
+                await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
+            except CommandError as err:
+                raise CompilationFailure(err, sourcefile, options, command, self)
         return commands
 
     def make_link_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
