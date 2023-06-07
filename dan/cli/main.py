@@ -8,8 +8,9 @@ from dan.core.pathlib import Path
 from dan.cli import click
 
 from dan.core.cache import Cache
-from dan.cxx.targets import Executable
 from dan.core.settings import Settings
+from dan.core.asyncio import ExceptionGroup
+from dan.cxx.targets import Executable
 
 
 from dan.make import ConfigCache, InstallMode, Make
@@ -353,10 +354,10 @@ async def build(ctx: CommandsContext, **kwds):
     ctx(**kwds)  # update kwds
     try:
         await ctx.make.build()
-    except Exception as e:
+    except (RuntimeError, ExceptionGroup) as e:
         code = Code(ctx.make)
         diags = await code.generate_diagnostics(e)
-        click.echo(diags)
+        click.echo(f'DIAGNOSTICS: {diags}')
 
 
 @code.command()
@@ -391,7 +392,7 @@ def main():
     import sys
     try:
         cli(auto_envvar_prefix='DAN')
-    except Exception as err:
+    except RuntimeError as err:
         click.logger.error(str(err))
         _ex_type, _ex, tb = sys.exc_info()
         import traceback
@@ -399,6 +400,6 @@ def main():
         try:
             # wait asyncio loop to terminate
             asyncio.get_running_loop().run_until_complete()
-        except Exception:
+        except RuntimeError:
             pass
         return -1
