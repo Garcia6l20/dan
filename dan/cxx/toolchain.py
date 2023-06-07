@@ -30,12 +30,13 @@ class CompilationFailure(Exception):
         self.stdout = err.stdout
         self.stderr = err.stderr
     
-    def __iter__(self):
+    def __iter__(self) -> t.Iterable['CompileError']:
         return self.toolchain.gen_errors(self)
 
 class CompileError:
-    def __init__(self, line, message, severity = 'error', code = None) -> None:
+    def __init__(self, line, message, severity = 'error', code = None, char = None) -> None:
         self.line = line
+        self.char = char
         self.message = message
         self.severity = severity
         self.code = code

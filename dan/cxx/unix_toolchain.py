@@ -1,9 +1,12 @@
 from functools import cached_property
-from dan.core.settings import BuildType, ToolchainSettings
+from dan.core.pm import re_match
+from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, CompilationFailure, CompileError, Toolchain, Path, FileDependency
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
+
+import typing as t
 
 cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
@@ -154,3 +157,25 @@ class UnixToolchain(Toolchain):
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
         return commands
+
+    def _gen_gcc_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
+        for line in err.stderr.splitlines():
+            match re_match(line):
+                case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
+                    yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
+    
+    def _gen_clang_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
+        for line in err.stderr.splitlines():
+            match re_match(line):
+                case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
+                    yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
+
+
+    def gen_errors(self, err: CompilationFailure) -> t.Iterable[CompileError]:
+        match self.type:
+            case 'gcc':
+                return self._gen_gcc_errors(err)
+            case 'clang':
+                return self._gen_clang_errors(err)
+            case _:
+                raise NotImplementedError(f'gen errors not implemented for {self.type}')

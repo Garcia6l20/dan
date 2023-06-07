@@ -163,11 +163,11 @@ class Code:
                 'range': {
                     'start': {
                         'line': err.line,
-                        'character': 0,
+                        'character': err.char,
                     },
                     'end': {
                         'line': err.line,
-                        'character': 0,
+                        'character': err.char,
                     }
                 },
                 'message': err.message,
