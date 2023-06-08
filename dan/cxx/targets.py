@@ -289,6 +289,12 @@ class CXXObjectsTarget(CXXTarget, internal=True):
             for dep in self.objs:
                 group.create_task(dep.build())
 
+    async def __clean__(self):
+        async with asyncio.TaskGroup(f'cleaning {self.name}\'s objects') as group:
+            for dep in self.objs:
+                group.create_task(dep.clean())
+        return await super().__clean__()
+
 
 class LibraryType(str, Enum):
     AUTO = 'auto'
