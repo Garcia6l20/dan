@@ -13,6 +13,7 @@ import tqdm
 import typing as t
 from collections.abc import Iterable
 
+from dan.core import diagnostics as diags
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
@@ -51,7 +52,7 @@ class Make(Logging):
     _config_name = 'dan.config.json'
     _cache_name = 'dan.cache'
 
-    def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
+    def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False, diags=False):
 
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
@@ -66,6 +67,10 @@ class Make(Logging):
         logging.getLogger().setLevel(log_level)
 
         super().__init__('make')
+
+        if diags:
+            from dan.core.diagnostics import enabled as diags_en
+            diags_en = True
 
         self.no_progress = no_progress
         self.for_install = for_install
@@ -191,6 +196,14 @@ class Make(Logging):
             for o in makefile.options:
                 opts.append(o)
         return opts
+    
+    @property
+    def diagnostics(self):
+        result: diags.DiagnosticCollection = diags.DiagnosticCollection()
+        for target in self.root.all_targets:
+            result.update(target.diagnostics)
+        return result
+
 
     async def target_of(self, source):
         from dan.cxx.targets import CXXObjectsTarget

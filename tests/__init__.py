@@ -46,7 +46,8 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
                      options: list[str],
                      settings: list[str],
                      clean: bool,
-                     init: bool) -> None:
+                     init: bool,
+                     diags: bool) -> None:
             self.test = test
             self.desc = desc
             self.targets = targets
@@ -54,6 +55,7 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
             self.options = options
             self.settings = settings
             self.init = init
+            self.diags = diags
 
         async def __aenter__(self):
             print(f"\n{self.__section_separator}\n"
@@ -61,10 +63,10 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
                   f"\n{self.__section_separator}\n")
             if self.clean:
                 await self.test.clean()
-                make = Make(self.test.build_path, verbose=True, targets=self.targets)
+                make = Make(self.test.build_path, verbose=True, targets=self.targets, diags=self.diags)
                 await make.configure(self.test.source_path, os.getenv('DAN_TOOLCHAIN', 'default'))
             else:
-                make = Make(self.test.build_path, verbose=True, targets=self.targets)
+                make = Make(self.test.build_path, verbose=True, targets=self.targets, diags=self.diags)
             if len(self.options) or len(self.settings):
                 if len(self.options):
                     await make.apply_options(*self.options)
@@ -81,8 +83,8 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
             await Cache.save_all()
             Cache.clear_all()
 
-    def section(self, desc: str, targets: list[str] = None, options=list(), settings=list(), clean=False, init=True):
-        return self.__MakeSection(self, desc, targets, options, settings, clean, init)
+    def section(self, desc: str, targets: list[str] = None, options=list(), settings=list(), clean=False, init=True, diags=False):
+        return self.__MakeSection(self, desc, targets, options, settings, clean, init, diags)
 
     async def clean(self):
         if self.build_path.exists():

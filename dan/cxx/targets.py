@@ -35,7 +35,7 @@ class CXXObject(Target, internal=True):
     @property
     def includes(self):
         return self.parent.includes
-    
+
     @property
     def compile_definitions(self):
         return self.parent.compile_definitions
@@ -73,14 +73,16 @@ class CXXObject(Target, internal=True):
         return res
 
     async def __build__(self):
-        self.info(f'generating {self.output}...')
+        self.info('generating %s...', self.output.name)
         try:
-            commands = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+            commands, diags = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+            self.parent.diagnostics[str(self.source)] = diags
         except CompilationFailure as err:
+            self.parent.diagnostics[str(self.source)] = err.diags
             err.target = self
             raise
         self.cache['compile_args'] = [str(a) for a in commands[0]]
-        self.info(f'scanning dependencies of {self.source}')
+        self.debug('scanning dependencies of %s', self.source.name)
         deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
         deps = [d for d in deps
                 if self.makefile.root.source_path in Path(d).parents
@@ -365,7 +367,7 @@ class Library(CXXObjectsTarget, internal=True):
         await super().__build__()
 
         self.info(
-            f'creating {self.library_type.name.lower()} library {self.output}...')
+            'creating %s library %s...', self.library_type.name.lower(), self.output.name)
 
         if self.static:
             await self.toolchain.static_lib([obj.output for obj in self.objs], self.output, self.libs)
@@ -379,7 +381,7 @@ class Library(CXXObjectsTarget, internal=True):
             assert self.interface
             self.output.touch()
 
-        self.debug(f'done')
+        self.debug('done')
 
     @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
@@ -396,15 +398,15 @@ class Library(CXXObjectsTarget, internal=True):
 
         async def do_install(src: Path, dest: Path):
             if dest.exists() and dest.younger_than(src):
-                self.info(f'{dest} is up-to-date')
+                self.info('%s is up-to-date', dest)
             else:
-                self.debug(f'installing {dest}')
+                self.debug('installing %s', dest)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 await aiofiles.copy(src, dest)
             return dest
 
         dest = settings.libraries_destination / self.output.name
-        self.info(f'installing {self.name} to {dest}')
+        self.info('installing %s to %s', self.name, dest)
 
         if not self.interface:
             tasks.append(do_install(self.output, dest))
@@ -472,23 +474,25 @@ class Executable(CXXObjectsTarget, internal=True):
         await super().__build__()
 
         # link
-        self.info(f'linking {self.output}...')
+        self.info('linking %s...', self.output.name)
         try:
-            commands = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
-                                                [*self.libs, *self.link_options.public, *self.link_options.private])
+            commands, diags = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
+                                                        [*self.libs, *self.link_options.public, *self.link_options.private])
+            self.diagnostics[str(self.output)] = diags
         except LinkageFailure as err:
+            self.diagnostics[str(self.output)] = err.diags
             err.target = self
             raise
         self.cache['link_args'] = [str(a) for a in commands[0]]
-        self.debug(f'done')
+        self.debug('done')
 
     @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
         dest = settings.runtime_destination / self.output.name
         if dest.exists() and dest.younger_than(self.output):
-            self.info(f'{dest} is up-to-date')
+            self.info('%s is up-to-date', dest)
         else:
-            self.info(f'installing {dest}')
+            self.info('installing %s', dest)
             dest.parent.mkdir(parents=True, exist_ok=True)
             await aiofiles.copy(self.output, dest)
         return [dest]

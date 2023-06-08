@@ -6,7 +6,8 @@ import aiofiles
 from dan.core.runners import sync_run
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import BaseFailure, CommandArgsList, CompilationFailure, CompileError, LinkError, LinkageFailure, RuntimeType, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
+from dan.core import diagnostics as diag
 from dan.core.pm import re_match
 
 
@@ -163,29 +164,21 @@ class MSVCToolchain(Toolchain):
         return [[self.lnk, *self.common_flags,
                 f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']]
 
-    def gen_errors(self, err: BaseFailure) -> t.Iterable[CompileError]:
-        match err:
-            case CompilationFailure():
-                for line in err.stdout.splitlines():
-                    match re_match(line):
-                        case r'.+\((\d+)\):\s+(?:fatal\s+)error\s(\w+\d+):\s(.+)$' as m:
-                            yield CompileError(line=int(m[1]), message=m[3], code=m[2])
-            case LinkageFailure():
-                for line in err.stdout.splitlines():
-                    match re_match(line):
-                        case r'(.+?)\s?:\serror\s(\w+\d+):\s(.+)$' as m:
-                            filename=Path(m[1])
-                            kwargs = dict()
-                            if filename.suffix == '.obj':
-                                kwargs['object'] = str(filename)
-                                for s in err.target.sources:
-                                    if Path(s).stem == filename.stem:
-                                        kwargs['filename'] = str(s)
-                                        break
-                            else:
-                                kwargs['filename'] = str(filename)
-                            yield LinkError(message=m[3], code=m[2], **kwargs)
-                        case r'LINK\s?:\s?fatal\s+error\s+(\w+\d+):\s+(.+)$' as m:
-                            yield LinkError(filename=err.target.output, object=err.target.output, message=m[2], code=m[1])
-                        case _:
-                            self._logger.debug('Unhandled line: %s', line)
+    async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        async for line in lines:
+            match re_match(line):
+                case r'.+\((\d+)\):\s+(?:fatal\s+)error\s(\w+\d+):\s(.+)$' as m:
+                    yield diag.Diagnostic(
+                        message=m[3],
+                        range=diag.Range(start=diag.Position(line=int(m[1]))),
+                        code=m[2])
+
+    async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        async for line in lines:
+            match re_match(line):
+                case r'(.+?)\s?:\serror\s(\w+\d+):\s(.+)$' as m:
+                    yield diag.Diagnostic(message=m[3], code=m[2])
+                case r'LINK\s?:\s?fatal\s+error\s+(\w+\d+):\s+(.+)$' as m:
+                    yield diag.Diagnostic(message=m[2], code=m[1])
+                case _:
+                    self._logger.debug('Unhandled line: %s', line)

@@ -1,9 +1,9 @@
 from functools import cached_property
-import re
+from dan.core import diagnostics as diag
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import BaseFailure, CommandArgsList, CompilationFailure, CompileError, LinkError, LinkageFailure, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
 
@@ -23,8 +23,8 @@ class UnixToolchain(Toolchain):
         self.as_ = data['readelf'] if 'readelf' in data else tools['readelf']
         self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
         self.env = data['env'] if 'env' in data else None
-        self.debug(f'cc compiler is {self.type} {self.version} ({self.cc})')
-        self.debug(f'cxx compiler is {self.type} {self.version} ({self.cxx})')
+        self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cc)
+        self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cxx)
 
     @cached_property
     def default_cflags(self):
@@ -159,11 +159,28 @@ class UnixToolchain(Toolchain):
             commands.append([self.strip, output])
         return commands
 
-    def _gen_ld_errors(self, err: LinkageFailure) -> t.Iterable[LinkError]:
-        lines = iter(err.stderr.splitlines())
+    async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
+        async for line in lines:
+            match re_match(line):
+                case r'.+:(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
+                    yield diag.Diagnostic(
+                        message=m[4],
+                        range=diag.Range(start=diag.Position(line=int(m[1]), character=int(m[2]))),
+                        severity=diag.Severity(m[3])
+                    )
+
+    async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        match self.type:
+            case 'gcc'|'clang':
+                async for d in self._gen_gcc_compile_diags(lines):
+                    yield d
+            case _:
+                raise NotImplementedError(f'gen errors not implemented for {self.type}')
+    
+    async def _gen_ld_link_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         function = None
         object = None
-        while (line := next(lines, None)) is not None:
+        async for line in lines:
             match re_match(line):
                 case r'(.+): in function `(.+)\':$' as m:
                     object = m[1]
@@ -175,36 +192,17 @@ class UnixToolchain(Toolchain):
                     section = m[2]
                     section_offset = int(m[3], 0)
                     message = m[4]
-                    yield LinkError(filename, object, function, message, section, section_offset)
+                    yield diag.Diagnostic(
+                        message=message,
+                    )
+                    # yield LinkError(filename, object, function, message, section, section_offset)
                 case _:
                     self._logger.debug('unhandled line: %s', line)
 
-    def _gen_gcc_errors(self, err: BaseFailure) -> t.Iterable[CompileError|LinkError]:
-        match err:
-            case CompilationFailure():
-                for line in err.stderr.splitlines():
-                    match re_match(line):
-                        case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
-                            yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
-            case LinkageFailure():
-                yield from self._gen_ld_errors(err)
-    
-    def _gen_clang_errors(self, err: BaseFailure) -> t.Iterable[CompileError|LinkError]:
-        match err:
-            case CompilationFailure():
-                for line in err.stderr.splitlines():
-                    match re_match(line):
-                        case r'.+:(\d+):(\d+):\serror:\s(.+)$' as m:
-                            yield CompileError(line=int(m[1]), message=m[3], char=int(m[2]))
-            case LinkageFailure():
-                yield from self._gen_ld_errors(err)
-
-
-    def gen_errors(self, err: BaseFailure) -> t.Iterable[CompileError|LinkError]:
+    async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         match self.type:
-            case 'gcc':
-                return self._gen_gcc_errors(err)
-            case 'clang':
-                return self._gen_clang_errors(err)
+            case 'gcc'|'clang':
+                async for d in self._gen_ld_link_diags(lines):
+                    yield d
             case _:
                 raise NotImplementedError(f'gen errors not implemented for {self.type}')

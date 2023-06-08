@@ -12,56 +12,55 @@ class CXXSimpleErrors(PyMakeBaseTest):
         super().__init__(methodName=methodName, source_path=base_path / 'simple')
 
     async def test_invalid_syntax(self):
-        async with self.section('invalid-syntax', targets=['InvalidSyntax'], clean=True) as make:
+        async with self.section('invalid-syntax', targets=['InvalidSyntax'], clean=True, diags=True) as make:
             try:
                 await make.build()
                 self.fail('No exception raised')
             except ExceptionGroup as err:
                 # Note: CompilationFailure always within a group, because all objects are built in parallel
                 self.assertEqual(len(err.errors), 1, 'Error not detected')
-                err = err.errors.pop()
+                err : CompilationFailure = err.errors.pop()
                 self.assertTrue(isinstance(err, CompilationFailure))
-                errors = list(err.errors)
-                self.assertGreaterEqual(len(errors), 1, 'Error not detected')
+                self.assertEqual(err.sourcefile.name, 'invalid-syntax.cpp')
+                diags = list(err.diags)
+                self.assertGreaterEqual(len(diags), 1, 'Error not detected')
             except RuntimeError as err:
                 self.fail(f'Wrong exception raised: {err} ({type(err)})')
 
     async def test_no_main(self):
-        async with self.section('no-main', targets=['NoMain'], clean=True) as make:
+        async with self.section('no-main', targets=['NoMain'], clean=True, diags=True) as make:
             try:
                 await make.build()
                 self.fail('No exception raised')
             except LinkageFailure as err:
-                errors = list(err.errors)
-                self.assertEqual(len(errors), 1, 'Error not detected')
-                error = errors[0]
-                self.assertTrue(error.is_global)
+                diags = list(err.diags)
+                self.assertEqual(len(diags), 1, 'Error not detected')
+                diag = diags[0]
                 if make.toolchain.type == 'msvc':
-                    self.assertTrue(error.code == 'LNK1561')
+                    self.assertTrue(diag.code == 'LNK1561')
                 else:
-                    self.assertTrue('undefined reference' in error.message)
-                    self.assertTrue('main' in error.message)
+                    self.assertTrue('undefined reference' in diag.message)
+                    self.assertTrue('main' in diag.message)
             except RuntimeError:
                 self.fail('Wrong exception raised')
 
     async def test_undefined_reference(self):
-        async with self.section('undefined-reference', targets=['UndefinedReference'], clean=True) as make:
+        async with self.section('undefined-reference', targets=['UndefinedReference'], clean=True, diags=True) as make:
             try:
                 await make.build()
                 self.fail('No exception raised')
             except LinkageFailure as err:
-                errors = list(err.errors)
-                self.assertEqual(len(errors), 2, 'Error not detected')
+                diags = err.diags
+                self.assertEqual(len(diags), 2, 'Error not detected')
                 undefined_vars = ['undefined1', 'undefined2']
-                for error in errors:
-                    self.assertTrue(not error.is_global)
-                    self.assertTrue(Path(error.filename).name == 'undefined-reference.cpp')
+                for diag in diags:
+                    # self.assertTrue(Path(error.filename).name == 'undefined-reference.cpp')
                     if make.toolchain.type == 'msvc':
-                        self.assertTrue(error.code == 'LNK2001')
+                        self.assertTrue(diag.code == 'LNK2001')
                     else:
-                        self.assertTrue(error.function == 'main')
-                        self.assertTrue('undefined reference' in error.message)
+                        # self.assertTrue(diag.function == 'main')
+                        self.assertTrue('undefined reference' in diag.message)
                     # Note: may not be ordered
-                    self.assertTrue(any(var_name in error.message for var_name in undefined_vars))
+                    self.assertTrue(any(var_name in diag.message for var_name in undefined_vars))
             except RuntimeError:
                 self.fail('Wrong exception raised')

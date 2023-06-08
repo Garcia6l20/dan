@@ -1,6 +1,5 @@
 from enum import Enum
-from dan.core.asyncio import sync_wait
-from dan.core.cache import Cache
+from dan.core.diagnostics import Diagnostic
 from dan.core.pathlib import Path
 from dan.core.settings import BuildType, ToolchainSettings
 from dan.core.target import FileDependency
@@ -20,60 +19,29 @@ class RuntimeType(Enum):
     static = 0
     dynamic = 1
 
+
 class BaseFailure(RuntimeError):
-    def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', target = None) -> None:
+    def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', diags: list[Diagnostic], target = None) -> None:
         super().__init__(msg)
         self.options = options
         self.command = command
         self.toolchain = toolchain
         self.stdout = err.stdout
         self.stderr = err.stderr
-        self.target = None
+        self.diags = diags
+        self.target = target
     
 
 class CompilationFailure(BaseFailure):
-    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain', target = None) -> None:
-        super().__init__(f'failed to compile {sourcefile}: {err.stderr}', err, options, command, toolchain)
+    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain', diags: list[Diagnostic], target = None) -> None:
+        super().__init__(f'failed to compile {sourcefile}: {err.stderr}', err, options, command, toolchain, diags, target)
         self.sourcefile = sourcefile
-    
-    @property
-    def errors(self) -> t.Iterable['CompileError']:
-        return self.toolchain.gen_errors(self)
 
 
 class LinkageFailure(BaseFailure):
-    def __init__(self, err: CommandError, objects: set[Path], options: set[str], command: str, toolchain: 'Toolchain', target = None) -> None:
-        super().__init__(f'failed to link {", ".join(objects)}: {err.stderr}', err, options, command, toolchain)
+    def __init__(self, err: CommandError, objects: set[Path], options: set[str], command: str, toolchain: 'Toolchain', diags: list[Diagnostic], target = None) -> None:
+        super().__init__(f'failed to link {", ".join(objects)}: {err.stderr}', err, options, command, toolchain, diags, target)
         self.objects = objects
-    
-    @property
-    def errors(self) -> t.Iterable['LinkError']:
-        return self.toolchain.gen_errors(self)
-
-
-class CompileError:
-    def __init__(self, line: int, message: str, code: int|str = None, char: int = None, severity: str = 'error') -> None:
-        self.line = line
-        self.char = char
-        self.message = message
-        self.severity = severity
-        self.code = code
-
-
-class LinkError:
-    def __init__(self, filename: str = None, object: str = None, function: str = None, message: str = None, section: str = None, section_offset: int = None, code: str|int = None, severity: str = 'error') -> None:
-        self.filename = filename
-        self.object = object
-        self.function = function
-        self.message = message
-        self.severity = severity
-        self.section = section
-        self.section_offset = section_offset
-        self.code = code
-    
-    @property
-    def is_global(self):
-        return self.filename == self.object
 
 
 class Toolchain(Logging):
@@ -160,11 +128,13 @@ class Toolchain(Logging):
 
     def make_executable_name(self, basename: str) -> str:
         raise NotImplementedError()
-    
-    def gen_errors(self, err: BaseFailure) -> t.Iterable[CompileError]:
-        '''Handle BaseFailure'''
+
+    async def _handle_compile_output(self, lines) -> t.Iterable[Diagnostic]:
         raise NotImplementedError()
     
+    async def _handle_link_output(self, lines) -> t.Iterable[Diagnostic]:
+        raise NotImplementedError()
+
     async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
         raise NotImplementedError()
 
@@ -187,25 +157,34 @@ class Toolchain(Logging):
 
     async def compile(self, sourcefile: Path, output: Path, options: set[str], **kwds):
         commands = self.make_compile_commands(sourcefile, output, options)
-        # self.compile_commands.insert(sourcefile, output.parent, commands[0])
+        diags = list()
+        async def capture(stream):
+            with stream as lines:
+                async for diag in self._handle_compile_output(lines):
+                    diags.append(diag)
         for index, command in enumerate(commands):
             try:
-                await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
+                await self.run(f'compile{index}', output, command, **kwds, all_capture=capture, cwd=output.parent)
             except CommandError as err:
-                raise CompilationFailure(err, sourcefile, options, command, self) from err
-        return commands
+                raise CompilationFailure(err, sourcefile, options, command, self, diags) from None
+        return commands, diags
 
     def make_link_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
         raise NotImplementedError()
 
     async def link(self, objects: set[Path], output: Path, options: set[str], **kwds):
         commands = self.make_link_commands(objects, output, options)
+        diags = list()
+        async def capture(stream):
+            with stream as lines:
+                async for diag in self._handle_link_output(lines):
+                    diags.append(diag)
         for index, command in enumerate(commands):
             try:
-                await self.run(f'link{index}', output, command, **kwds, cwd=output.parent)
+                await self.run(f'link{index}', output, command, **kwds, all_capture=capture, cwd=output.parent)
             except CommandError as err:
-                raise LinkageFailure(err, objects, options, command, self) from None
-        return commands
+                raise LinkageFailure(err, objects, options, command, self, diags) from None
+        return commands, diags
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
         raise NotImplementedError()

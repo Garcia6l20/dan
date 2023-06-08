@@ -5,7 +5,7 @@ from dan.core.pathlib import Path
 from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
-from dan.core import asyncio, aiofiles, utils
+from dan.core import asyncio, aiofiles, utils, diagnostics as diags
 from dan.core.requirements import load_requirements
 from dan.core.settings import InstallMode, InstallSettings, safe_load
 from dan.core.version import Version
@@ -290,6 +290,8 @@ class Target(Logging, MakefileRegister, internal=True):
             #   transform it to classproperty for build_path resolution
             output = self.output
             type(self).output = utils.classproperty(lambda: self.build_path / output)
+
+        self.diagnostics = diags.DiagnosticCollection()
 
     
     @property

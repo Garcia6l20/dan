@@ -354,10 +354,8 @@ async def build(ctx: CommandsContext, **kwds):
     ctx(**kwds)  # update kwds
     try:
         await ctx.make.build()
-    except (RuntimeError, ExceptionGroup) as e:
-        code = Code(ctx.make)
-        diags = await code.generate_diagnostics(e)
-        click.echo(f'DIAGNOSTICS: {diags}')
+    finally:
+        click.echo(f'DIAGNOSTICS: {ctx.make.diagnostics.to_json()}')
 
 
 @code.command()
