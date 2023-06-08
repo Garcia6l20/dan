@@ -1,5 +1,5 @@
 from enum import Enum
-from dan.core.diagnostics import Diagnostic
+import dan.core.diagnostics as diag
 from dan.core.pathlib import Path
 from dan.core.settings import BuildType, ToolchainSettings
 from dan.core.target import FileDependency
@@ -21,7 +21,7 @@ class RuntimeType(Enum):
 
 
 class BaseFailure(RuntimeError):
-    def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', diags: list[Diagnostic], target = None) -> None:
+    def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic], target = None) -> None:
         super().__init__(msg)
         self.options = options
         self.command = command
@@ -33,13 +33,13 @@ class BaseFailure(RuntimeError):
     
 
 class CompilationFailure(BaseFailure):
-    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain', diags: list[Diagnostic], target = None) -> None:
+    def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic] = [], target = None) -> None:
         super().__init__(f'failed to compile {sourcefile}: {err.stderr}', err, options, command, toolchain, diags, target)
         self.sourcefile = sourcefile
 
 
 class LinkageFailure(BaseFailure):
-    def __init__(self, err: CommandError, objects: set[Path], options: set[str], command: str, toolchain: 'Toolchain', diags: list[Diagnostic], target = None) -> None:
+    def __init__(self, err: CommandError, objects: set[Path], options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic] = [], target = None) -> None:
         super().__init__(f'failed to link {", ".join(objects)}: {err.stderr}', err, options, command, toolchain, diags, target)
         self.objects = objects
 
@@ -129,10 +129,10 @@ class Toolchain(Logging):
     def make_executable_name(self, basename: str) -> str:
         raise NotImplementedError()
 
-    async def _handle_compile_output(self, lines) -> t.Iterable[Diagnostic]:
+    async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         raise NotImplementedError()
     
-    async def _handle_link_output(self, lines) -> t.Iterable[Diagnostic]:
+    async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         raise NotImplementedError()
 
     async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
@@ -157,14 +157,16 @@ class Toolchain(Logging):
 
     async def compile(self, sourcefile: Path, output: Path, options: set[str], **kwds):
         commands = self.make_compile_commands(sourcefile, output, options)
-        diags = list()
-        async def capture(stream):
-            with stream as lines:
-                async for diag in self._handle_compile_output(lines):
-                    diags.append(diag)
+        diags = []
+        if diag.enabled:
+            async def capture(stream):
+                with stream as lines:
+                    async for diag in self._handle_compile_output(lines):
+                        diags.append(diag)
+            kwds['all_capture'] = capture
         for index, command in enumerate(commands):
             try:
-                await self.run(f'compile{index}', output, command, **kwds, all_capture=capture, cwd=output.parent)
+                await self.run(f'compile{index}', output, command, **kwds, cwd=output.parent)
             except CommandError as err:
                 raise CompilationFailure(err, sourcefile, options, command, self, diags) from None
         return commands, diags
@@ -174,14 +176,16 @@ class Toolchain(Logging):
 
     async def link(self, objects: set[Path], output: Path, options: set[str], **kwds):
         commands = self.make_link_commands(objects, output, options)
-        diags = list()
-        async def capture(stream):
-            with stream as lines:
-                async for diag in self._handle_link_output(lines):
-                    diags.append(diag)
+        diags = []
+        if diag.enabled:
+            async def capture(stream):
+                with stream as lines:
+                    async for diag in self._handle_link_output(lines):
+                        diags.append(diag)
+            kwds['all_capture'] = capture
         for index, command in enumerate(commands):
             try:
-                await self.run(f'link{index}', output, command, **kwds, all_capture=capture, cwd=output.parent)
+                await self.run(f'link{index}', output, command, **kwds, cwd=output.parent)
             except CommandError as err:
                 raise LinkageFailure(err, objects, options, command, self, diags) from None
         return commands, diags

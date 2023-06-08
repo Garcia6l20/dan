@@ -351,7 +351,7 @@ def get_toolchains(**kwargs):
 @pass_context
 async def build(ctx: CommandsContext, **kwds):
     """Build targets (vscode version)"""
-    ctx(**kwds)  # update kwds
+    ctx(**kwds, diags=True)  # update kwds
     try:
         await ctx.make.build()
     finally:

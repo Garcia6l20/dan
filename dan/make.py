@@ -13,7 +13,7 @@ import tqdm
 import typing as t
 from collections.abc import Iterable
 
-from dan.core import diagnostics as diags
+from dan.core import diagnostics as diag
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
@@ -69,8 +69,7 @@ class Make(Logging):
         super().__init__('make')
 
         if diags:
-            from dan.core.diagnostics import enabled as diags_en
-            diags_en = True
+            diag.enabled = True
 
         self.no_progress = no_progress
         self.for_install = for_install
@@ -199,7 +198,7 @@ class Make(Logging):
     
     @property
     def diagnostics(self):
-        result: diags.DiagnosticCollection = diags.DiagnosticCollection()
+        result: diag.DiagnosticCollection = diag.DiagnosticCollection()
         for target in self.root.all_targets:
             result.update(target.diagnostics)
         return result
