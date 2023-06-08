@@ -162,20 +162,20 @@ class UnixToolchain(Toolchain):
     def _gen_ld_errors(self, err: LinkageFailure) -> t.Iterable[LinkError]:
         lines = iter(err.stderr.splitlines())
         function = None
-        obj = None
+        object = None
         while (line := next(lines, None)) is not None:
             match re_match(line):
                 case r'(.+): in function `(.+)\':$' as m:
-                    obj = m[1]
+                    object = m[1]
                     function = m[2]
                 case r'(?:.+: )?(?:(.+):)?\((.+)\+(.+)\): (.+)$' as m:
                     # link error may not be associated to a source file,
                     # in which case the associated file is the object
-                    filename = m[1] or obj
+                    filename = m[1] or object
                     section = m[2]
                     section_offset = int(m[3], 0)
                     message = m[4]
-                    yield LinkError(filename, obj, function, message, section, section_offset)
+                    yield LinkError(filename, object, function, message, section, section_offset)
                 case _:
                     self._logger.debug('unhandled line: %s', line)
 

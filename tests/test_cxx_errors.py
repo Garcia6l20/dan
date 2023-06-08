@@ -36,8 +36,11 @@ class CXXSimpleErrors(PyMakeBaseTest):
                 self.assertEqual(len(errors), 1, 'Error not detected')
                 error = errors[0]
                 self.assertTrue(error.is_global)
-                self.assertTrue('undefined reference' in error.message)
-                self.assertTrue('main' in error.message)
+                if make.toolchain.type == 'msvc':
+                    self.assertTrue(error.code == 'LNK1561')
+                else:
+                    self.assertTrue('undefined reference' in error.message)
+                    self.assertTrue('main' in error.message)
             except RuntimeError:
                 self.fail('Wrong exception raised')
 
@@ -53,8 +56,11 @@ class CXXSimpleErrors(PyMakeBaseTest):
                 for error in errors:
                     self.assertTrue(not error.is_global)
                     self.assertTrue(Path(error.filename).name == 'undefined-reference.cpp')
-                    self.assertTrue(error.function == 'main')
-                    self.assertTrue('undefined reference' in error.message)
+                    if make.toolchain.type == 'msvc':
+                        self.assertTrue(error.code == 'LNK2001')
+                    else:
+                        self.assertTrue(error.function == 'main')
+                        self.assertTrue('undefined reference' in error.message)
                     # Note: may not be ordered
                     self.assertTrue(any(var_name in error.message for var_name in undefined_vars))
             except RuntimeError:

@@ -61,14 +61,15 @@ class CompileError:
 
 
 class LinkError:
-    def __init__(self, filename: str, obj: str, function: str, message: str, section: str = None, section_offset: int = None, severity: str = 'error') -> None:
+    def __init__(self, filename: str = None, object: str = None, function: str = None, message: str = None, section: str = None, section_offset: int = None, code: str|int = None, severity: str = 'error') -> None:
         self.filename = filename
-        self.object = obj
+        self.object = object
         self.function = function
         self.message = message
         self.severity = severity
         self.section = section
         self.section_offset = section_offset
+        self.code = code
     
     @property
     def is_global(self):

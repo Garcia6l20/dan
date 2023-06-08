@@ -97,7 +97,7 @@ class Make(Logging):
         
     @property
     def toolchain(self):
-        return self.config.toolchain
+        return self.context.get('cxx_target_toolchain')
     
     @property
     def root(self) -> MakeFile:

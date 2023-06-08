@@ -160,7 +160,7 @@ class Code(Logging):
     
     def _generate_compile_errors(self, e: CompilationFailure):
         diags = list()
-        for err in e:
+        for err in e.errors:
             diags.append({
                 'range': {
                     'start': {
@@ -180,11 +180,13 @@ class Code(Logging):
     def _generate_link_errors(self, e: LinkageFailure):
         diags = dict()
         for err in e.errors:
+            key = None
             for s in e.target.sources:
                 if Path(s).name == err.filename:
                     key = e.target.source_path / s
                     break
-            assert key is not None and key.exists()
+            if key is None:
+                key = e.target.output
             key = str(key)
             entry = {
                 'range': {
