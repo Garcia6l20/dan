@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 from dataclasses_json import DataClassJsonMixin, config, LetterCase
 from enum import Enum
 import typing as t
@@ -11,6 +12,15 @@ class Severity(str, Enum):
     INFO = 'information'
     HINT = 'hint'
 
+@dataclass(init=False)
+class Uri:
+    """Javascript-friendly URI"""
+    scheme: str = 'file'
+    path: str
+    fragment: str = ''
+
+    def __init__(self, path: str|Path) -> None:
+        self.path = str(path)
 
 @dataclass
 class Position:
@@ -25,19 +35,19 @@ class Range:
 
 @dataclass
 class Location:
-    uri: str
+    uri: Uri
     range: Range
 
 
 @dataclass
 class RelatedInformation:
-    localtion: Location
+    location: Location
     message: str
 
 
 @dataclass
 class Diagnostic(DataClassJsonMixin):
-    dataclass_json_config = config(letter_case=LetterCase.CAMEL)
+    dataclass_json_config = config(letter_case=LetterCase.CAMEL)['dataclasses_json']
     message: str
     range: Range = field(default_factory=Range)
     severity: Severity = Severity.ERROR

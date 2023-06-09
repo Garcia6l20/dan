@@ -53,8 +53,14 @@ def gen_python_diags(err: Exception):
     match err:
         case MakeFileError():
             cause = err.__cause__
+            related = None
             if isinstance(cause, MakeFileError):
-                diagnostics.update(gen_python_diags(cause))
+                related = list()
+                cause_diags = gen_python_diags(cause)
+                for filename, diagns in cause_diags.items():
+                    for d in diagns:
+                        related.append(diag.RelatedInformation(diag.Location(diag.Uri(filename), d.range), d.message))
+                diagnostics.update(cause_diags)
                 filename = str(err.path)
                 for f, (lineno, end_lineno, colno, end_colno) in traceback._walk_tb_with_full_positions(cause.__traceback__):
                     if f.f_code.co_filename == filename:
@@ -67,7 +73,8 @@ def gen_python_diags(err: Exception):
                 message=str(cause),
                 range=diag.Range(start=diag.Position(tb_entry.lineno - 1, tb_entry.colno), end=diag.Position(tb_entry.end_lineno - 1, tb_entry.end_colno)),
                 code=cause.__class__.__name__,
-                source='dan.make'
+                source='dan.make',
+                related_information=related
             )
         case _:
             tb_entry = traceback.extract_tb(err.__traceback__, -1)[0]
