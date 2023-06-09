@@ -46,5 +46,16 @@ class Diagnostic(DataClassJsonMixin):
     related_information: t.Optional[list[RelatedInformation]] = None
 
 
-class DiagnosticCollection(dict[str, Diagnostic], DataClassJsonMixin):
-    pass
+class DiagnosticCollection(dict[str, list[Diagnostic]], DataClassJsonMixin):
+    
+    def __setitem__(self, key: str, value: list[Diagnostic]) -> None:
+        match value:
+            case list():
+                return super().__setitem__(key, value)
+            case Diagnostic():
+                if not key in self:
+                    super().__setitem__(key, list())
+                return self[key].append(value)
+            case _:
+                raise ValueError(f'Unallowed assignment: {type(value)}')
+

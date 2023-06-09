@@ -92,6 +92,11 @@ class Context(Logging):
 
 context: Context = Context()
 
+class MakeFileError(RuntimeError):
+    def __init__(self, path) -> None:
+        self.path = Path(path)
+        super().__init__(f'failed to load {self.path}')
+
 
 def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):
     global context
@@ -122,7 +127,10 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
     module = importlib.util.module_from_spec(spec)
     context.imported_makefiles[module_path] = module
     _init_makefile(module, name, build_path, requirements, parent)
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as err:
+        raise MakeFileError(module_path) from err
     context.up()
     return module
 
@@ -170,6 +178,8 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     except TargetNotFound as err:
         if len(context.missing) == 0:
             raise err
+    except Exception as err:
+        raise MakeFileError(module_path) from err
     context.up()
 
 

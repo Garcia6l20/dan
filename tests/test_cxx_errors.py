@@ -5,11 +5,11 @@ from dan.cxx.toolchain import CompilationFailure, LinkageFailure
 from dan.core.asyncio import ExceptionGroup
 
 
-base_path = Path(__file__).parent / 'errors'
+base_path = Path(__file__).parent / 'errors' / 'cxx'
 
 class CXXSimpleErrors(PyMakeBaseTest):
     def __init__(self, methodName: str = None) -> None:
-        super().__init__(methodName=methodName, source_path=base_path / 'simple')
+        super().__init__(methodName=methodName, source_path=base_path)
 
     async def test_invalid_syntax(self):
         async with self.section('invalid-syntax', targets=['InvalidSyntax'], clean=True, diags=True) as make:

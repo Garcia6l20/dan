@@ -169,9 +169,10 @@ class MSVCToolchain(Toolchain):
             match re_match(line):
                 case r'.+\((\d+)\):\s+error\s(\w+\d+):\s(.+)$' as m:
                     yield diag.Diagnostic(
-                        message=m[3],
-                        range=diag.Range(start=diag.Position(line=int(m[1]))),
-                        code=m[2])
+                        message=m[3].strip(),
+                        range=diag.Range(start=diag.Position(line=int(m[1])-1)),
+                        code=m[2],
+                        source=self.type)
                 case _:
                     self._logger.debug('Unhandled line: %s', line)
 
@@ -179,8 +180,8 @@ class MSVCToolchain(Toolchain):
         async for line in lines:
             match re_match(line):
                 case r'(.+?)\s?:\serror\s(\w+\d+):\s(.+)$' as m:
-                    yield diag.Diagnostic(message=m[3], code=m[2])
+                    yield diag.Diagnostic(message=m[3].strip(), code=m[2], source=self.type)
                 case r'LINK\s?:\s?fatal\s+error\s+(\w+\d+):\s+(.+)$' as m:
-                    yield diag.Diagnostic(message=m[2], code=m[1])
+                    yield diag.Diagnostic(message=m[2].strip(), code=m[1], source=self.type)
                 case _:
                     self._logger.debug('Unhandled line: %s', line)

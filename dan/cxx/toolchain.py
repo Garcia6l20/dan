@@ -34,13 +34,13 @@ class BaseFailure(RuntimeError):
 
 class CompilationFailure(BaseFailure):
     def __init__(self, err: CommandError, sourcefile: Path, options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic] = [], target = None) -> None:
-        super().__init__(f'failed to compile {sourcefile}: {err.stderr}', err, options, command, toolchain, diags, target)
+        super().__init__(f'failed to compile {sourcefile}: {err.stdout}{err.stderr}', err, options, command, toolchain, diags, target)
         self.sourcefile = sourcefile
 
 
 class LinkageFailure(BaseFailure):
     def __init__(self, err: CommandError, objects: set[Path], options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic] = [], target = None) -> None:
-        super().__init__(f'failed to link {", ".join(objects)}: {err.stderr}', err, options, command, toolchain, diags, target)
+        super().__init__(f'failed to link {", ".join(objects)}: {err.stdout}{err.stderr}', err, options, command, toolchain, diags, target)
         self.objects = objects
 
 

@@ -165,8 +165,9 @@ class UnixToolchain(Toolchain):
                 case r'.+:(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
                     yield diag.Diagnostic(
                         message=m[4],
-                        range=diag.Range(start=diag.Position(line=int(m[1]), character=int(m[2]))),
-                        severity=diag.Severity(m[3])
+                        range=diag.Range(start=diag.Position(line=int(m[1])-1, character=int(m[2]))),
+                        severity=diag.Severity(m[3]),
+                        source=self.type
                     )
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
@@ -175,7 +176,7 @@ class UnixToolchain(Toolchain):
                 async for d in self._gen_gcc_compile_diags(lines):
                     yield d
             case _:
-                raise NotImplementedError(f'gen errors not implemented for {self.type}')
+                raise NotImplementedError(f'handle_compile_output errors not implemented for {self.type}')
     
     async def _gen_ld_link_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         function = None
@@ -194,8 +195,8 @@ class UnixToolchain(Toolchain):
                     message = m[4]
                     yield diag.Diagnostic(
                         message=message,
+                        source=self.type
                     )
-                    # yield LinkError(filename, object, function, message, section, section_offset)
                 case _:
                     self._logger.debug('unhandled line: %s', line)
 
@@ -205,4 +206,4 @@ class UnixToolchain(Toolchain):
                 async for d in self._gen_ld_link_diags(lines):
                     yield d
             case _:
-                raise NotImplementedError(f'gen errors not implemented for {self.type}')
+                raise NotImplementedError(f'handle_link_output not implemented for {self.type}')
