@@ -6,11 +6,11 @@ import typing as t
 
 enabled = False
 
-class Severity(str, Enum):
-    ERROR = 'error'
-    WARNING = 'warning'
-    INFO = 'information'
-    HINT = 'hint'
+class Severity(Enum):
+    ERROR = 0
+    WARNING = 1
+    INFO = 2
+    HINT = 3
 
 @dataclass(init=False)
 class Uri:

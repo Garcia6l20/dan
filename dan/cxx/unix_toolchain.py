@@ -166,7 +166,7 @@ class UnixToolchain(Toolchain):
                     yield diag.Diagnostic(
                         message=m[4],
                         range=diag.Range(start=diag.Position(line=int(m[1])-1, character=int(m[2]))),
-                        severity=diag.Severity(m[3]),
+                        severity=diag.Severity[m[3].upper()],
                         source=self.type
                     )
 
