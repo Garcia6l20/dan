@@ -4,6 +4,15 @@ from dataclasses_json import DataClassJsonMixin, config, LetterCase
 from enum import Enum
 import typing as t
 
+
+def hidden_field(*args, **kwargs):
+    """Return an object to identify dataclass fields, but is will not be serialized.
+    
+    See: dataclasses.field"""
+    metadata = config(kwargs.pop('metadata', None), exclude=lambda _:True)
+    return field(*args, metadata=metadata, **kwargs)
+
+
 enabled = False
 
 class Severity(Enum):
@@ -54,6 +63,7 @@ class Diagnostic(DataClassJsonMixin):
     code: t.Optional[str|int] = None
     source: t.Optional[str] = None
     related_information: t.Optional[list[RelatedInformation]] = None
+    filename: t.Optional[str] = hidden_field(default=None)
 
 
 class DiagnosticCollection(dict[str, list[Diagnostic]], DataClassJsonMixin):
@@ -69,3 +79,6 @@ class DiagnosticCollection(dict[str, list[Diagnostic]], DataClassJsonMixin):
             case _:
                 raise ValueError(f'Unallowed assignment: {type(value)}')
 
+    def insert(self, diagnostics: list[Diagnostic],  default_key: str):
+        for diagnostic in diagnostics:
+            self[default_key if diagnostic.filename is None else diagnostic.filename] = diagnostic

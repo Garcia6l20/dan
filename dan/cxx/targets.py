@@ -76,9 +76,9 @@ class CXXObject(Target, internal=True):
         self.info('generating %s...', self.output.name)
         try:
             commands, diags = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
-            self.parent.diagnostics[str(self.source)] = diags
+            self.parent.diagnostics.insert(diags, str(self.source))
         except CompilationFailure as err:
-            self.parent.diagnostics[str(self.source)] = err.diags
+            self.parent.diagnostics.insert(diags, str(self.source))
             err.target = self
             raise
         self.cache['compile_args'] = [str(a) for a in commands[0]]
@@ -484,9 +484,9 @@ class Executable(CXXObjectsTarget, internal=True):
         try:
             commands, diags = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
                                                         [*self.libs, *self.link_options.public, *self.link_options.private])
-            self.diagnostics[str(self.output)] = diags
+            self.diagnostics.insert(diags, str(self.output))
         except LinkageFailure as err:
-            self.diagnostics[str(self.output)] = err.diags
+            self.diagnostics.insert(diags, str(self.output))
             err.target = self
             raise
         self.cache['link_args'] = [str(a) for a in commands[0]]

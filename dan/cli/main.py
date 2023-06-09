@@ -7,13 +7,13 @@ from dan.core.find import find_file
 from dan.core.pathlib import Path
 from dan.cli import click
 
+from dan.core import diagnostics
 from dan.core.cache import Cache
 from dan.core.settings import Settings
-from dan.core.asyncio import ExceptionGroup
 from dan.cxx.targets import Executable
 
 
-from dan.make import ConfigCache, InstallMode, Make
+from dan.make import InstallMode, Make
 from dan.cli.vscode import Code
 
 
@@ -393,10 +393,11 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
 @cli.result_callback()
 @pass_context
 def process_result(ctx, result, **kwargs):
+    if diagnostics.enabled:
+        diags = ctx.make.diagnostics
+        if diags:
+            click.echo(f'DIAGNOSTICS: {ctx.make.diagnostics.to_json()}')
     asyncio.run(Cache.save_all())
-    diags = ctx.make.diagnostics
-    if diags:
-        click.echo(f'DIAGNOSTICS: {ctx.make.diagnostics.to_json()}')
 
 
 def main():

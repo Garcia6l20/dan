@@ -162,12 +162,13 @@ class UnixToolchain(Toolchain):
     async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         async for line in lines:
             match re_match(line):
-                case r'.+:(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
+                case r'(.+):(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
                     yield diag.Diagnostic(
                         message=m[4],
-                        range=diag.Range(start=diag.Position(line=int(m[1])-1, character=int(m[2]))),
-                        severity=diag.Severity[m[3].upper()],
-                        source=self.type
+                        range=diag.Range(start=diag.Position(line=int(m[2])-1, character=int(m[3]))),
+                        severity=diag.Severity[m[4].upper()],
+                        source=self.type,
+                        filename=m[1]
                     )
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:

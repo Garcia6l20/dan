@@ -168,13 +168,14 @@ class MSVCToolchain(Toolchain):
         async for line in lines:
             line = line.strip()
             match re_match(line):
-                case r'.+\((\d+)\):\s+(?:fatal\s+)?(error|warning)\s(\w+\d+):\s(.+)$' as m:
+                case r'(.+)\((\d+)\):\s+(?:fatal\s+)?(error|warning)\s(\w+\d+):\s(.+)$' as m:
                     yield diag.Diagnostic(
-                        message=m[4].strip(),
-                        range=diag.Range(start=diag.Position(line=int(m[1])-1)),
-                        code=m[3],
-                        severity=diag.Severity[m[2].upper()],
-                        source=self.type)
+                        message=m[5].strip(),
+                        range=diag.Range(start=diag.Position(line=int(m[2])-1)),
+                        code=m[4],
+                        severity=diag.Severity[m[3].upper()],
+                        source=self.type,
+                        filename=m[1])
                 case _:
                     self._logger.debug('Unhandled line: %s', line)
 
@@ -182,7 +183,7 @@ class MSVCToolchain(Toolchain):
         async for line in lines:
             match re_match(line):
                 case r'(.+?)\s?:\serror\s(\w+\d+):\s(.+)$' as m:
-                    yield diag.Diagnostic(message=m[3].strip(), code=m[2], source=self.type)
+                    yield diag.Diagnostic(message=m[3].strip(), code=m[2], source=self.type, filename=m[1])
                 case r'LINK\s?:\s?fatal\s+error\s+(\w+\d+):\s+(.+)$' as m:
                     yield diag.Diagnostic(message=m[2].strip(), code=m[1], source=self.type)
                 case _:
