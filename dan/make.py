@@ -50,6 +50,8 @@ class ConfigCache(Cache[Config]):
 
 def gen_python_diags(err: Exception):
     diagnostics = diag.DiagnosticCollection()
+    if not diag.enabled:
+        return diagnostics
     match err:
         case MakeFileError():
             cause = err.__cause__
