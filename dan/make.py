@@ -316,9 +316,9 @@ class Make(Logging):
                         out_value.update(in_value)
                     case (set(), '-', set()):
                         out_value = out_value - in_value
-                    case (list(), '+', set()):
-                        out_value.insert(in_value)
-                    case (list(), '-', set()):
+                    case (list(), '+', set()|list()):
+                        out_value.extend(in_value)
+                    case (list(), '-', set()|list()):
                         for v in in_value:
                             out_value.remove(v)
                     case (_, '+' | '-', _):
