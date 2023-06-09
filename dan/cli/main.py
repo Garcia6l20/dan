@@ -126,10 +126,14 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
 @cli.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
+@click.option('--force', '-f', is_flag=True,
+              help='Clean before building')
 @pass_context
-async def build(ctx: CommandsContext, **kwds):
+async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets"""
     ctx(**kwds)  # update kwds
+    if force:
+        await ctx.make.clean()
     await ctx.make.build()
     # from dan.cxx import target_toolchain
     # target_toolchain.compile_commands.update()
@@ -352,10 +356,14 @@ def get_toolchains(**kwargs):
 @code.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
+@click.option('--force', '-f', is_flag=True,
+              help='Clean before building')
 @pass_context
-async def build(ctx: CommandsContext, **kwds):
+async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets (vscode version)"""
     ctx(**kwds, diags=True)  # update kwds
+    if force:
+        await ctx.make.clean()
     await ctx.make.build()
 
 
