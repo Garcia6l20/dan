@@ -249,26 +249,30 @@ def toolchains(**kwargs):
 
 @cli.command()
 @common_opts
-async def clean(**kwargs):
+@pass_context
+async def clean(ctx, **kwargs):
     """Clean generated stuff"""
-    await Make(**kwargs).clean()
+    ctx(**kwargs)
+    await ctx.make.clean()
 
 
 @cli.command()
 @common_opts
-async def run(**kwargs):
+@pass_context
+async def run(ctx, **kwargs):
     """Run executable(s)"""
-    make = Make(**kwargs)
-    rc = await make.run()
+    ctx(**kwargs)
+    rc = await ctx.make.run()
     sys.exit(rc)
 
 
 @cli.command()
 @common_opts
-async def test(**kwargs):
+@pass_context
+async def test(ctx, **kwargs):
     """Run tests"""
-    make = Make(**kwargs)
-    rc = await make.test()
+    ctx(**kwargs)
+    rc = await ctx.make.test()
     sys.exit(rc)
 
 
@@ -293,7 +297,7 @@ def code():
 @common_opts
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     out = []
@@ -314,7 +318,7 @@ async def get_targets(ctx: CommandsContext, **kwargs):
 @common_opts
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     import json
@@ -332,7 +336,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 @click.option('--pretty', is_flag=True)
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
@@ -352,10 +356,7 @@ def get_toolchains(**kwargs):
 async def build(ctx: CommandsContext, **kwds):
     """Build targets (vscode version)"""
     ctx(**kwds, diags=True)  # update kwds
-    try:
-        await ctx.make.build()
-    finally:
-        click.echo(f'DIAGNOSTICS: {ctx.make.diagnostics.to_json()}')
+    await ctx.make.build()
 
 
 @code.command()
@@ -363,7 +364,7 @@ async def build(ctx: CommandsContext, **kwds):
 @click.argument('SOURCES', nargs=-1)
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
@@ -374,7 +375,7 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
 @minimal_options
 @pass_context
 async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
@@ -382,8 +383,12 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
 
 
 @cli.result_callback()
-def process_result(result, **kwargs):
+@pass_context
+def process_result(ctx, result, **kwargs):
     asyncio.run(Cache.save_all())
+    diags = ctx.make.diagnostics
+    if diags:
+        click.echo(f'DIAGNOSTICS: {ctx.make.diagnostics.to_json()}')
 
 
 def main():
