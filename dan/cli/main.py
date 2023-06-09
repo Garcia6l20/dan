@@ -392,12 +392,12 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
 
 @cli.result_callback()
 @pass_context
-def process_result(ctx, result, **kwargs):
+async def process_result(ctx, result, **kwargs):
     if diagnostics.enabled:
         diags = ctx.make.diagnostics
         if diags:
-            click.echo(f'DIAGNOSTICS: {ctx.make.diagnostics.to_json()}')
-    asyncio.run(Cache.save_all())
+            click.echo(f'DIAGNOSTICS: {diags.to_json()}')
+    await Cache.save_all()
 
 
 def main():

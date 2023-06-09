@@ -1,3 +1,4 @@
+import dataclasses
 import functools
 import json
 import pickle
@@ -12,7 +13,7 @@ T = t.TypeVar('T', bound=dict)
 
 class Cache(t.Generic[T]):
     dataclass: T = dict
-    indent = 0
+    indent = None
     __caches: dict[str, 'Cache'] = dict()
 
     def __init_subclass__(cls) -> None:
@@ -26,10 +27,10 @@ class Cache(t.Generic[T]):
         assert not self.name in self.__caches, 'a cache type should be unique'
         if self.path.exists():
             with open(self.path, 'rb') as f:
-                if self.dataclass == dict:
-                    self.__data = self.__serializer.load(f)
-                else:
+                if dataclasses.is_dataclass(self.dataclass):
                     self.__data = self.dataclass.from_json(f.read())
+                else:
+                    self.__data = self.__serializer.load(f)
                 if not isinstance(self.__data, self.dataclass):
                     self.__data = self.dataclass(**self.__data)
                 self.__modification_date = self.path.modification_time

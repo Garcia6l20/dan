@@ -6,6 +6,7 @@ from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
 from dan.core import asyncio, aiofiles, utils, diagnostics as diags
+from dan.core.cache import Cache
 from dan.core.requirements import load_requirements
 from dan.core.settings import InstallMode, InstallSettings, safe_load
 from dan.core.version import Version
@@ -219,6 +220,8 @@ class Options:
     def __iter__(self):
         return iter(self.__items)
 
+class DiagnosticCache(Cache[diags.DiagnosticCollection]):
+    pass
 
 class Target(Logging, MakefileRegister, internal=True):
     name: str = None
@@ -291,9 +294,14 @@ class Target(Logging, MakefileRegister, internal=True):
             output = self.output
             type(self).output = utils.classproperty(lambda: self.build_path / output)
 
-        self.diagnostics = diags.DiagnosticCollection()
+        self._diagnostics_cache : DiagnosticCache = None
 
-    
+    @property
+    def diagnostics(self) -> diags.DiagnosticCollection:
+        if self._diagnostics_cache is None:
+            self._diagnostics_cache = DiagnosticCache(self.build_path / f'{self.name}-diags.cache', binary=True)
+        return self._diagnostics_cache.data
+
     @property
     def output(self):
         if self._output is None:
@@ -428,6 +436,8 @@ class Target(Logging, MakefileRegister, internal=True):
 
         with utils.chdir(self.build_path):
             self.info('building...')
+            if diags.enabled:
+                self.diagnostics.clear()
             result = self.__build__()
             if inspect.iscoroutine(result):
                 result = await result
