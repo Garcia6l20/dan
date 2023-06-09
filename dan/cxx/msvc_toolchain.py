@@ -167,11 +167,13 @@ class MSVCToolchain(Toolchain):
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         async for line in lines:
             match re_match(line):
-                case r'.+\((\d+)\):\s+(?:fatal\s+)error\s(\w+\d+):\s(.+)$' as m:
+                case r'.+\((\d+)\):\s+error\s(\w+\d+):\s(.+)$' as m:
                     yield diag.Diagnostic(
                         message=m[3],
                         range=diag.Range(start=diag.Position(line=int(m[1]))),
                         code=m[2])
+                case _:
+                    self._logger.debug('Unhandled line: %s', line)
 
     async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         async for line in lines:
