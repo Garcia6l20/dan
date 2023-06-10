@@ -49,8 +49,9 @@ class ConfigCache(Cache[Config]):
     indent = 4
 
 def _get_code_position(code, instruction_index):
-    if instruction_index < 0:
-        return (None, None, None, None)
+    if instruction_index < 0 \
+        or not hasattr(code, 'co_positions'): # Python <= 3.10 does not have co_position
+        return (None, 0, 0, 0)
     positions_gen = code.co_positions()
     return next(itertools.islice(positions_gen, instruction_index // 2, None))
 
