@@ -380,7 +380,7 @@ class Make(Logging):
         self._apply_inputs(options, get_option, lambda k, v: self.info(f'option: {k} = {v}'))
 
     async def apply_settings(self, *settings):
-        await self.initialize()
+        # dont init for settings
         def get_setting(name):
             parts = name.split('.')
             setting = self.settings

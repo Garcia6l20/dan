@@ -118,16 +118,18 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
     ctx(**kwds)  # update kwds
     if toolchain is None and ctx.make.config.toolchain is None:
         toolchain = click.prompt('Toolchain', type=_toolchain_choice, default='default')
+
     await ctx.make.configure(source_path, toolchain)
 
-    if len(settings) or len(options):
-        await ctx.make.initialize()
+    if len(settings):
+        await ctx.make.apply_settings(*settings)
 
-        if len(options):
-            await ctx.make.apply_options(*options)
+    # NOTE: intializing make after applying setting
+    #       to check settings are valid implicitly (cache save skipped)
+    await ctx.make.initialize()
 
-        if len(settings):
-            await ctx.make.apply_settings(*settings)
+    if len(options):
+        await ctx.make.apply_options(*options)
 
 
 @cli.command()
