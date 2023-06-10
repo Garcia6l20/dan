@@ -116,7 +116,7 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
 async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
     ctx(**kwds)  # update kwds
-    if toolchain is None and ctx.make.toolchain is None:
+    if toolchain is None and ctx.make.config.toolchain is None:
         toolchain = click.prompt('Toolchain', type=_toolchain_choice, default='default')
     await ctx.make.configure(source_path, toolchain)
 
