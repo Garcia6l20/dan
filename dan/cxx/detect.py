@@ -262,6 +262,9 @@ def parse_compiler_defines(output: str):
     return defines
 
 def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None):
+    if env is None:
+        env = dict()
+    env['LC_LOCAL'] = 'C'
     with tempfile.TemporaryDirectory(prefix='dan-dci-') as tmpdir:
         output, _, rc = sync_run(
                 [executable, *detectors[compiler_type], *options, str(__empty_source)], env=env, cwd=tmpdir)
@@ -269,6 +272,9 @@ def get_compiler_defines(executable: str, compiler_type: str, options: list[str]
 
 
 def detect_compiler_id(executable, env=None):
+    if env is None:
+        env = dict()
+    env['LC_LOCAL'] = 'C'
     # use a temporary file, as /dev/null might not be available on all platforms
     with tempfile.TemporaryDirectory(prefix='dan-dci-') as tmpdir:
         for name, detector in detectors.items():
