@@ -164,7 +164,7 @@ class UnixToolchain(Toolchain):
             match re_match(line):
                 case r'(.+):(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
                     yield diag.Diagnostic(
-                        message=m[4],
+                        message=m[5],
                         range=diag.Range(start=diag.Position(line=int(m[2])-1, character=int(m[3]))),
                         severity=diag.Severity[m[4].upper()],
                         source=self.type,
