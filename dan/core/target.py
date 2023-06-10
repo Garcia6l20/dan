@@ -299,7 +299,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @property
     def diagnostics(self) -> diags.DiagnosticCollection:
         if self._diagnostics_cache is None:
-            self._diagnostics_cache = DiagnosticCache(self.build_path / f'{self.name}-diags.cache', binary=True)
+            self._diagnostics_cache = DiagnosticCache(self.build_path / f'{self.name}-diags.cache', cache_name=self.fullname, binary=True)
         return self._diagnostics_cache.data
 
     @property

@@ -24,7 +24,13 @@ class Cache(t.Generic[T]):
         self.__path = Path(path)     
         self.__name = cache_name or path.stem   
         self.__serializer = json if not binary else pickle
-        assert not self.name in self.__caches, 'a cache type should be unique'
+        if self.name in self.__caches:
+            other = Cache.get(self.name)
+            if other.path == self.path:
+                raise RuntimeError(f'Cache {self.name} already created, use Cache.instance')
+            else:
+                raise RuntimeError(f'Cache {self.name} is not unique, use cache_name to distinguish {other.path} from {self.path}')
+        assert not self.name in self.__caches, 'a cache should be unique'
         if self.path.exists():
             with open(self.path, 'rb') as f:
                 if dataclasses.is_dataclass(self.dataclass):
