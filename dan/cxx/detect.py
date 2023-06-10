@@ -606,6 +606,7 @@ def get_toolchains():
         logger.info(f'Updating {json_toolchain_path.name}')
         with open(json_toolchain_path, 'w') as f:
             json.dump(data, f)
+            toolchains_path.touch()
     elif json_toolchain_path.exists() and json_toolchain_path.younger_than(toolchains_path):
         logger = logging.getLogger('toolchain')
         logger.info(f'Updating {toolchains_path.name} ({json_toolchain_path.name} changed)')
