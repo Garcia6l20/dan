@@ -467,7 +467,7 @@ class Make(Logging):
 
     async def _install_target(self, t: Target, mode: InstallMode):
         try:
-            await t.install(self.settings.install, mode)
+            return await t.install(self.settings.install, mode)
         except Exception as err:
             self._diagnostics.update(gen_python_diags(err))
             raise
