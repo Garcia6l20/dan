@@ -17,18 +17,6 @@ from dan.make import InstallMode, Make
 from dan.cli.vscode import Code
 
 
-class DiagReportContext(click.AsyncContext):
-    def invoke(__self, __callback, *args, **kwargs):
-        try:
-            ret = super().invoke(__callback, *args, **kwargs)
-        except Exception:
-            ctx = click.get_current_context()
-            show_diags(ctx.obj)
-            raise
-
-
-click.BaseCommand.context_class = DiagReportContext
-
 _minimal_options = [
     click.option('--build-path', '-B', help='Path where dan has been initialized.',
                  type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH'),
@@ -84,6 +72,12 @@ class CommandsContext:
 
 pass_context = click.make_pass_decorator(CommandsContext)
 
+@pass_context
+def show_diags(ctx: CommandsContext):
+    if diagnostics.enabled:
+        diags = ctx.make.diagnostics
+        if diags:
+            click.echo(f'DIAGNOSTICS: {diags.to_json()}')
 
 @click.group()
 @click.version_option(package_name='dan-build')
@@ -94,8 +88,9 @@ pass_context = click.make_pass_decorator(CommandsContext)
 @click.option('--jobs', '-j',
               help='Maximum jobs', default=None, type=int)
 @click.pass_context
-def cli(ctx, **kwds):
+def cli(ctx: click.AsyncContext, **kwds):
     ctx.obj = CommandsContext(**kwds)
+    ctx.call_on_close(show_diags)
 
 
 def available_toolchains():
@@ -401,16 +396,9 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
     code = Code(ctx.make)
     click.echo(await code.get_workspace_browse_configuration())
 
-def show_diags(ctx):
-    if diagnostics.enabled:
-        diags = ctx.make.diagnostics
-        if diags:
-            click.echo(f'DIAGNOSTICS: {diags.to_json()}')
-
 @cli.result_callback()
 @pass_context
 async def process_result(ctx, result, **kwargs):
-    show_diags(ctx)
     await Cache.save_all()
 
 
