@@ -26,8 +26,8 @@ class _QtMoccer:
             await pkg.initialize()
             self.dependencies.add(pkg)
 
-        mocs = self.cache.get('mocs', list())
-        for moc_name in mocs:
+        self.mocs = self.cache.get('mocs', list())
+        for moc_name in self.mocs:
             moc_path = self.build_path / moc_name
             self.objs.append(
                 CXXObject(moc_path, self))
@@ -37,11 +37,9 @@ class _QtMoccer:
 
     async def __clean__(self):
         await super().__clean__()
-        self.cache.reset('mocs')
+        self.cache['mocs'] = list()
 
     async def __build__(self):
-
-        mocs = list()
         moc_objs = list()
 
         async def do_moc(file: Path):
@@ -56,10 +54,10 @@ class _QtMoccer:
                 if rc == 0 and len(out):
                     async with aiofiles.open(moc_file_path, 'w') as f:
                         await f.write(out)
-                        if not moc_name in mocs:
+                        if not moc_name in self.mocs:
                             moc_objs.append(
                                 CXXObject(moc_file_path, self))
-                            mocs.append(moc_name)
+                            self.mocs.append(moc_name)
 
         # we have to generate objects first in order to get files dependencies,
         # which are used later to moc those dependencies (whenever they are within the same source directory)
@@ -81,7 +79,7 @@ class _QtMoccer:
         self.objs.extend(moc_objs)
 
         # update cache
-        self.cache['mocs'] = mocs
+        self.cache['mocs'] = self.mocs
 
         # continue parent build process
         await super().__build__()

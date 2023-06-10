@@ -57,7 +57,7 @@ class MakeFile(sys.__class__):
             assert issubclass(
                 new_cls, cls), 'Target wrapper must inherit from original target'
             for t in self.__targets:
-                if isinstance(t, cls):
+                if type(t) == cls:
                     self.__targets.remove(t)
                     return cls
             assert False, 'Original target has not been registered'
