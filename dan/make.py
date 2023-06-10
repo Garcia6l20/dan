@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 import functools
+import itertools
 import logging
 import os
 import fnmatch
@@ -12,7 +13,6 @@ import sys
 import tqdm
 import typing as t
 from collections.abc import Iterable
-import traceback
 
 from dan.core import diagnostics as diag
 from dan.core.cache import Cache
@@ -48,6 +48,39 @@ class Config:
 class ConfigCache(Cache[Config]):
     indent = 4
 
+def _get_code_position(code, instruction_index):
+    if instruction_index < 0:
+        return (None, None, None, None)
+    positions_gen = code.co_positions()
+    return next(itertools.islice(positions_gen, instruction_index // 2, None))
+
+def _tb_entries(tb):
+    entries = list()
+    while tb is not None:
+        entries.append(tb)
+        tb = tb.tb_next
+    return entries
+
+
+def _walk_tb(tb, reverse=True):
+    if isinstance(tb, Exception):
+        tb = tb.__traceback__
+
+    entries = _tb_entries(tb)
+    
+    if reverse:
+        entries = reversed(entries)
+    
+    for tb in entries:
+        positions = _get_code_position(tb.tb_frame.f_code, tb.tb_lasti)
+        # Yield tb_lineno when co_positions does not have a line number to
+        # maintain behavior with walk_tb.
+        if positions[0] is None:
+            yield tb.tb_frame.f_code.co_filename, (tb.tb_lineno, ) + positions[1:]
+        else:
+            yield tb.tb_frame.f_code.co_filename, positions
+
+
 def gen_python_diags(err: Exception):
     diagnostics = diag.DiagnosticCollection()
     if not diag.enabled:
@@ -63,26 +96,26 @@ def gen_python_diags(err: Exception):
                     for d in diagns:
                         related.append(diag.RelatedInformation(diag.Location(diag.Uri(filename), d.range), d.message))
                 diagnostics.update(cause_diags)
-                filename = str(err.path)
-                for f, (lineno, end_lineno, colno, end_colno) in traceback._walk_tb_with_full_positions(cause.__traceback__):
-                    if f.f_code.co_filename == filename:
-                        name = f.f_code.co_name
-                        tb_entry = traceback.FrameSummary(filename, name=name, lineno=lineno, colno=colno, end_lineno=end_lineno, end_colno=end_colno)
+                err_filename = str(err.path)
+                for filename, (lineno, end_lineno, colno, end_colno) in _walk_tb(cause):
+                    if filename == err_filename:
                         break
             else:
-                tb_entry = traceback.extract_tb(cause.__traceback__, -1)[0]
-            diagnostics[tb_entry.filename] = diag.Diagnostic(
+                for filename, (lineno, end_lineno, colno, end_colno) in _walk_tb(cause):
+                    break
+            diagnostics[filename] = diag.Diagnostic(
                 message=str(cause),
-                range=diag.Range(start=diag.Position(tb_entry.lineno - 1, tb_entry.colno), end=diag.Position(tb_entry.end_lineno - 1, tb_entry.end_colno)),
+                range=diag.Range(start=diag.Position(lineno - 1, colno), end=diag.Position(end_lineno - 1, end_colno)),
                 code=cause.__class__.__name__,
                 source='dan.make',
                 related_information=related
             )
         case _:
-            tb_entry = traceback.extract_tb(err.__traceback__, -1)[0]
-            diagnostics[tb_entry.filename] = diag.Diagnostic(
+            for filename, (lineno, end_lineno, colno, end_colno) in _walk_tb(err):
+                break
+            diagnostics[filename] = diag.Diagnostic(
                 message=str(err),
-                range=diag.Range(start=diag.Position(tb_entry.lineno - 1, tb_entry.colno), end=diag.Position(tb_entry.end_lineno - 1, tb_entry.end_colno)),
+                range=diag.Range(start=diag.Position(lineno - 1, colno), end=diag.Position(end_lineno - 1, end_colno)),
                 code=err.__class__.__name__,
                 source='dan.make'
             )
@@ -246,8 +279,9 @@ class Make(Logging):
     @property
     def diagnostics(self):
         result: diag.DiagnosticCollection = diag.DiagnosticCollection()
-        for target in self.root.all_targets:
-            result.update(target.diagnostics)
+        if self.root:
+            for target in self.root.all_targets:
+                result.update(target.diagnostics)
         result.update(self._diagnostics)
         return result
 
