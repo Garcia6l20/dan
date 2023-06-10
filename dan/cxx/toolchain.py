@@ -212,7 +212,7 @@ class Toolchain(Logging):
         return commands
 
     async def run(self, name: str, output: Path, args, quiet=False, **kwds):
-        return await async_run(args, env=self.env, logger=self if not quiet else None, **kwds)
+        return await async_run(args, env={**(self.env or dict()), 'LC_ALL': 'C'}, logger=self if not quiet else None, **kwds)
 
     @property
     def cxxmodules_flags(self) -> list[str]:
