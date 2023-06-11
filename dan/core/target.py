@@ -164,13 +164,13 @@ class Options:
         if not 'options' in cache:
             cache['options'] = dict()
         self._cache = cache['options']
-        self.__items: set[Option] = set()
+        self.__items: list[Option] = list()
         self.update(default)
 
     def add(self, name: str, default_value, help=None):
         opt = Option(self, f'{self.__parent.fullname}.{name}',
                      default_value, help=help)
-        self.__items.add(opt)
+        self.__items.append(opt)
         return opt
 
     def get(self, name: str):
