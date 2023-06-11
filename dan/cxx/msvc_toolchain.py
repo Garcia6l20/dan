@@ -1,11 +1,13 @@
 from functools import cached_property
 import json
+import typing as t
 
 import aiofiles
 from dan.core.runners import sync_run
 from dan.core.settings import BuildType
 from dan.core.utils import unique
 from dan.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
+from dan.core import diagnostics as diag
 from dan.core.pm import re_match
 
 
@@ -161,3 +163,28 @@ class MSVCToolchain(Toolchain):
             objs.append(obj.name)
         return [[self.lnk, *self.common_flags,
                 f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']]
+
+    async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        async for line in lines:
+            line = line.strip()
+            match re_match(line):
+                case r'(.+)\((\d+)\):\s+(?:fatal\s+)?(error|warning)\s(\w+\d+):\s(.+)$' as m:
+                    yield diag.Diagnostic(
+                        message=m[5].strip(),
+                        range=diag.Range(start=diag.Position(line=int(m[2])-1)),
+                        code=m[4],
+                        severity=diag.Severity[m[3].upper()],
+                        source=self.type,
+                        filename=m[1])
+                case _:
+                    self._logger.debug('Unhandled line: %s', line)
+
+    async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        async for line in lines:
+            match re_match(line):
+                case r'(.+?)\s?:\serror\s(\w+\d+):\s(.+)$' as m:
+                    yield diag.Diagnostic(message=m[3].strip(), code=m[2], source=self.type, filename=m[1])
+                case r'LINK\s?:\s?fatal\s+error\s+(\w+\d+):\s+(.+)$' as m:
+                    yield diag.Diagnostic(message=m[2].strip(), code=m[1], source=self.type)
+                case _:
+                    self._logger.debug('Unhandled line: %s', line)

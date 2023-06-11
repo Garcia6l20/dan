@@ -22,14 +22,56 @@ _encoding = 'cp1252' if os.name == 'nt' else 'utf-8'
 
 
 async def log_stream(stream, *files):
-    while not stream.at_eof():
-        data = await stream.readline()
-        line = data.decode(_encoding)
-        for file in files:
-            if file in [sys.stdout, sys.stderr]:
-                tqdm.tqdm.write(line, end='', file=file)
-            else:
-                file.write(line)
+    with stream as lines:
+        async for line in lines:
+            for file in files:
+                if file in [sys.stdout, sys.stderr]:
+                    tqdm.tqdm.write(line, end='', file=file)
+                else:
+                    file.write(line)
+
+
+class AsyncStreamProducer:
+    
+    class Iterator:
+        def __init__(self) -> None:
+            self.q = asyncio.Queue()
+
+        async def __aiter__(self):
+            while True:
+                line = await self.q.get()
+                if line is None:
+                    self.q.task_done()
+                    return
+                yield line
+                self.q.task_done()
+
+    def __init__(self, stream) -> None:
+        self.stream = stream
+        self.__iterators: list[AsyncStreamProducer.Iterator] = list()
+
+    async def __notify(self, data):
+        asyncio.gather(*[it.q.put(data) for it in self.__iterators])
+        asyncio.gather(*[it.q.join() for it in self.__iterators])
+    
+    async def consume(self):
+        while not self.stream.at_eof():
+            data = await self.stream.readline()
+            if len(data) == 0:
+                continue
+            line = data.decode(_encoding)
+            await self.__notify(line)
+
+        await self.__notify(None)
+    
+    def __enter__(self):
+        it = self.Iterator()
+        self.__iterators.append(it)
+        return it
+
+    def __exit__(self, *exc):
+        pass
+
 
 _jobs_sem: asyncio.Semaphore = None
 
@@ -107,7 +149,7 @@ def cmdline2list(s: str):
 
     return result
 
-async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None):
+async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None, out_capture=None, err_capture=None, all_capture=None):
     if _jobs_sem is not None:
         await _jobs_sem.acquire()
     try:
@@ -119,13 +161,12 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
                 e[k] = v
             env = e
         if logger:
-            logger.debug(f'executing: {command}')
+            logger.debug('executing: %s', command)
         proc = await asyncio.subprocess.create_subprocess_shell(command,
                                                                 stdout=asyncio.subprocess.PIPE,
                                                                 stderr=asyncio.subprocess.PIPE,
                                                                 env=env,
                                                                 cwd=cwd)
-
         out = io.StringIO()
         err = io.StringIO()
         outs = [out]
@@ -134,9 +175,30 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
             outs.append(sys.stdout)
             errs.append(sys.stderr)
 
+        out_iter = AsyncStreamProducer(proc.stdout)
+        err_iter = AsyncStreamProducer(proc.stderr)
+
+        futures = [
+            log_stream(out_iter, *outs),
+            log_stream(err_iter, *errs),
+        ]
+
+        if all_capture is not None:
+            out_capture = err_capture = all_capture
+
+        if out_capture is not None:
+            futures.append(out_capture(out_iter))
+
+        if err_capture is not None:
+            futures.append(out_capture(err_iter))
+
+        futures.extend([
+            out_iter.consume(),
+            err_iter.consume(),
+        ])
+    
         await asyncio.gather(
-            log_stream(proc.stdout, *outs),
-            log_stream(proc.stderr, *errs),
+            *futures,
             proc.wait())
         # make sure return code is available
         await proc.communicate()

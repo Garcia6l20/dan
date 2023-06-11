@@ -1,11 +1,14 @@
 import json
 import os
+from pathlib import Path
+
+from dan.core.asyncio import ExceptionGroup
 from dan.core.pm import re_match
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.toolchain import CompilationFailure, LinkageFailure, Toolchain
 
 from dan.make import Make
 from dan.cxx.targets import CXXObject
-
+from dan.logging import Logging
 
 def get_intellisense_mode(toolchain : Toolchain):
     mode = list()
@@ -15,10 +18,11 @@ def get_intellisense_mode(toolchain : Toolchain):
     mode.append(toolchain.arch)
     return '-'.join(mode)
 
-class Code:
+class Code(Logging):
     def __init__(self, make: Make) -> None:
         self.make = make
-    
+        super().__init__('code')
+
     def get_test_suites(self, pretty):
         from dan.core.include import MakeFile
         from dan.core.test import Test, Case

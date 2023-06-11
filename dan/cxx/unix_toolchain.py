@@ -1,9 +1,13 @@
 from functools import cached_property
-from dan.core.settings import BuildType, ToolchainSettings
+from dan.core import diagnostics as diag
+from dan.core.pm import re_match
+from dan.core.settings import BuildType
 from dan.core.utils import unique
 from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
+
+import typing as t
 
 cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
@@ -19,8 +23,8 @@ class UnixToolchain(Toolchain):
         self.as_ = data['readelf'] if 'readelf' in data else tools['readelf']
         self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
         self.env = data['env'] if 'env' in data else None
-        self.debug(f'cc compiler is {self.type} {self.version} ({self.cc})')
-        self.debug(f'cxx compiler is {self.type} {self.version} ({self.cxx})')
+        self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cc)
+        self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cxx)
 
     @cached_property
     def default_cflags(self):
@@ -154,3 +158,53 @@ class UnixToolchain(Toolchain):
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
         return commands
+
+    async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
+        async for line in lines:
+            match re_match(line):
+                case r'(.+):(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
+                    yield diag.Diagnostic(
+                        message=m[5],
+                        range=diag.Range(start=diag.Position(line=int(m[2])-1, character=int(m[3]))),
+                        severity=diag.Severity[m[4].upper()],
+                        source=self.type,
+                        filename=m[1]
+                    )
+
+    async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        match self.type:
+            case 'gcc'|'clang':
+                async for d in self._gen_gcc_compile_diags(lines):
+                    yield d
+            case _:
+                raise NotImplementedError(f'handle_compile_output errors not implemented for {self.type}')
+    
+    async def _gen_ld_link_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
+        function = None
+        object = None
+        async for line in lines:
+            match re_match(line):
+                case r'(.+): in function `(.+)\':$' as m:
+                    object = m[1]
+                    function = m[2]
+                case r'(?:.+: )?(?:(.+):)?\((.+)\+(.+)\): (.+)$' as m:
+                    # link error may not be associated to a source file,
+                    # in which case the associated file is the object
+                    filename = m[1] or object
+                    section = m[2]
+                    section_offset = int(m[3], 0)
+                    message = m[4]
+                    yield diag.Diagnostic(
+                        message=message,
+                        source=self.type
+                    )
+                case _:
+                    self._logger.debug('unhandled line: %s', line)
+
+    async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
+        match self.type:
+            case 'gcc'|'clang':
+                async for d in self._gen_ld_link_diags(lines):
+                    yield d
+            case _:
+                raise NotImplementedError(f'handle_link_output not implemented for {self.type}')

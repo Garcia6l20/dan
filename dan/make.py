@@ -2,6 +2,7 @@
 from dataclasses import dataclass, field
 from enum import Enum
 import functools
+import itertools
 import logging
 import os
 import fnmatch
@@ -11,11 +12,13 @@ from dataclasses_json import dataclass_json
 import sys
 import tqdm
 import typing as t
+from collections.abc import Iterable
 
+from dan.core import diagnostics as diag
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
-from dan.core.include import include_makefile, Context
+from dan.core.include import MakeFileError, include_makefile, Context
 from dan.core import aiofiles, asyncio
 from dan.core.settings import InstallMode, Settings
 from dan.core.test import Test
@@ -25,11 +28,6 @@ from dan.logging import Logging
 from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
-from collections.abc import Iterable
-
-
-def make_target_name(name: str):
-    return name.replace('_', '-')
 
 
 def flatten(list_of_lists):
@@ -50,12 +48,86 @@ class Config:
 class ConfigCache(Cache[Config]):
     indent = 4
 
+def _get_code_position(code, instruction_index):
+    if instruction_index < 0 \
+        or not hasattr(code, 'co_positions'): # Python <= 3.10 does not have co_position
+        return (None, 0, 0, 0)
+    positions_gen = code.co_positions()
+    return next(itertools.islice(positions_gen, instruction_index // 2, None))
+
+def _tb_entries(tb):
+    entries = list()
+    while tb is not None:
+        entries.append(tb)
+        tb = tb.tb_next
+    return entries
+
+
+def _walk_tb(tb, reverse=True):
+    if isinstance(tb, Exception):
+        tb = tb.__traceback__
+
+    entries = _tb_entries(tb)
+    
+    if reverse:
+        entries = reversed(entries)
+    
+    for tb in entries:
+        positions = _get_code_position(tb.tb_frame.f_code, tb.tb_lasti)
+        # Yield tb_lineno when co_positions does not have a line number to
+        # maintain behavior with walk_tb.
+        if positions[0] is None:
+            yield tb.tb_frame.f_code.co_filename, (tb.tb_lineno, ) + positions[1:]
+        else:
+            yield tb.tb_frame.f_code.co_filename, positions
+
+
+def gen_python_diags(err: Exception):
+    diagnostics = diag.DiagnosticCollection()
+    if not diag.enabled:
+        return diagnostics
+    match err:
+        case MakeFileError():
+            cause = err.__cause__
+            related = None
+            if isinstance(cause, MakeFileError):
+                related = list()
+                cause_diags = gen_python_diags(cause)
+                for filename, diagns in cause_diags.items():
+                    for d in diagns:
+                        related.append(diag.RelatedInformation(diag.Location(diag.Uri(filename), d.range), d.message))
+                diagnostics.update(cause_diags)
+                err_filename = str(err.path)
+                for filename, (lineno, end_lineno, colno, end_colno) in _walk_tb(cause):
+                    if filename == err_filename:
+                        break
+            else:
+                for filename, (lineno, end_lineno, colno, end_colno) in _walk_tb(cause):
+                    break
+            diagnostics[filename] = diag.Diagnostic(
+                message=str(cause),
+                range=diag.Range(start=diag.Position(lineno - 1, colno), end=diag.Position(end_lineno - 1, end_colno)),
+                code=cause.__class__.__name__,
+                source='dan.make',
+                related_information=related
+            )
+        case _:
+            for filename, (lineno, end_lineno, colno, end_colno) in _walk_tb(err):
+                break
+            diagnostics[filename] = diag.Diagnostic(
+                message=str(err),
+                range=diag.Range(start=diag.Position(lineno - 1, colno), end=diag.Position(end_lineno - 1, end_colno)),
+                code=err.__class__.__name__,
+                source='dan.make'
+            )
+
+    return diagnostics
 
 class Make(Logging):
     _config_name = 'dan.config.json'
-    _cache_name = 'dan.cache.json'
+    _cache_name = 'dan.cache'
 
-    def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False):
+    def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False, diags=False):
 
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
@@ -71,6 +143,9 @@ class Make(Logging):
 
         super().__init__('make')
 
+        if diags:
+            diag.enabled = True
+
         self.no_progress = no_progress
         self.for_install = for_install
         
@@ -81,10 +156,12 @@ class Make(Logging):
         self.required_targets = targets
         sys.pycache_prefix = str(build_path / '__pycache__')
         self._config = ConfigCache.instance(self.config_path)
-        self.cache = Cache.instance(self.cache_path)
+        self.cache = Cache.instance(self.cache_path, binary=True)
         
         self.debug(f'jobs: {jobs}')
-        
+
+        self._diagnostics = diag.DiagnosticCollection()
+
         self.context = Context()
         
     @property
@@ -101,7 +178,7 @@ class Make(Logging):
         
     @property
     def toolchain(self):
-        return self.config.toolchain
+        return self.context.get('cxx_target_toolchain')
     
     @property
     def root(self) -> MakeFile:
@@ -133,7 +210,11 @@ class Make(Logging):
 
         with self.context:
             init_toolchains(toolchain, self.settings)
-            include_makefile(self.source_path, self.build_path)
+            try:
+                include_makefile(self.source_path, self.build_path)
+            except MakeFileError as err:
+                self._diagnostics.update(gen_python_diags(err))
+                raise
 
         target_toolchain = self.context.get('cxx_target_toolchain')
         target_toolchain.build_type = build_type
@@ -195,6 +276,16 @@ class Make(Logging):
             for o in makefile.options:
                 opts.append(o)
         return opts
+    
+    @property
+    def diagnostics(self):
+        result: diag.DiagnosticCollection = diag.DiagnosticCollection()
+        if self.root:
+            for target in self.root.all_targets:
+                result.update(target.diagnostics)
+        result.update(self._diagnostics)
+        return result
+
 
     async def target_of(self, source):
         from dan.cxx.targets import CXXObjectsTarget
@@ -262,9 +353,9 @@ class Make(Logging):
                         out_value.update(in_value)
                     case (set(), '-', set()):
                         out_value = out_value - in_value
-                    case (list(), '+', set()):
-                        out_value.insert(in_value)
-                    case (list(), '-', set()):
+                    case (list(), '+', set()|list()):
+                        out_value.extend(in_value)
+                    case (list(), '-', set()|list()):
                         for v in in_value:
                             out_value.remove(v)
                     case (_, '+' | '-', _):
@@ -289,7 +380,7 @@ class Make(Logging):
         self._apply_inputs(options, get_option, lambda k, v: self.info(f'option: {k} = {v}'))
 
     async def apply_settings(self, *settings):
-        await self.initialize()
+        # dont init for settings
         def get_setting(name):
             parts = name.split('.')
             setting = self.settings
@@ -349,23 +440,37 @@ class Make(Logging):
             self.pbar.set_description_str(self.desc + ' done')
             self.pbar.refresh()
             return
+        
+    async def _build_target(self, t: Target):
+        try:
+            await t.build()
+        except Exception as err:
+            self._diagnostics.update(gen_python_diags(err))
+            raise
 
     async def build(self):
         await self.initialize()
 
         with self.context, \
-             self.progress('building', self.targets, lambda t: t.build(), self.no_progress) as tasks:
+             self.progress('building', self.targets, self._build_target, self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
                 if isinstance(result, Exception):
-                    self._logger.exception(result)
+                    self._logger.error(str(result))
                     errors.append(result)
             err_count = len(errors)
             if err_count == 1:
                 raise errors[0]
             elif err_count > 1:
-                raise RuntimeError('One or more targets failed, check log...')
+                raise asyncio.ExceptionGroup('Multiple errors occured while building the project', errors=errors)
+
+    async def _install_target(self, t: Target, mode: InstallMode):
+        try:
+            return await t.install(self.settings.install, mode)
+        except Exception as err:
+            self._diagnostics.update(gen_python_diags(err))
+            raise
 
     async def install(self, mode: InstallMode = InstallMode.user):
         await self.initialize()
@@ -377,7 +482,7 @@ class Make(Logging):
         await self.build()
 
         with self.context, \
-             self.progress('installing', targets, lambda t: t.install(self.settings.install, mode), self.no_progress) as tasks:
+             self.progress('installing', targets, lambda t: self._install_target(t, mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
             manifest_path = self.settings.install.data_destination / \
@@ -407,10 +512,17 @@ class Make(Logging):
                     return result[2]
         return 0
 
+    async def _test_target(self, t: Test):
+        try:
+            return await t.run_test()
+        except Exception as err:
+            self._diagnostics.update(gen_python_diags(err))
+            raise
+
     async def test(self):
         await self.initialize()
         with self.context:
-            with self.progress('testing', self.tests, lambda t: t.run_test(), self.no_progress) as tasks:
+            with self.progress('testing', self.tests, self._test_target, self.no_progress) as tasks:
                 results = await asyncio.gather(*tasks)
                 if all(results):
                     self.info('Success !')

@@ -58,7 +58,7 @@ def init_toolchains(name: str = None, settings: Settings = None):
         case _:
             raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
     target_settings = settings.target
-    cache = Cache.get('dan.cache').data
+    cache = Cache.get('dan').data
     if not 'toolchains' in cache:
         cache['toolchains'] = {
             'host': dict(),
@@ -77,24 +77,6 @@ def init_toolchains(name: str = None, settings: Settings = None):
     context.set('cxx_target_toolchain', target_toolchain)
     context.set('cxx_host_toolchain', host_toolchain)
 
-# def __pick_arg(*names, env=None, default=None):
-#     import sys
-#     import os
-#     if env:
-#         value = os.getenv(env, None)
-#         if value:
-#             return value
-#     for name in names:
-#         try:
-#             return sys.argv[sys.argv.index(name) + 1]
-#         except ValueError:
-#             continue
-#     return default
-
-#def __init_toolchains():
-#    init_toolchains(__pick_arg('-t', '--toolchain', env='DAN_TOOLCHAIN'))
-
-#__init_toolchains()
 
 from .targets import Executable, Library, LibraryType, Module
 from .targets import CXXObjectsTarget as Objects

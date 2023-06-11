@@ -6,15 +6,17 @@ import inspect
 
 
 class generator:
-    def __init__(self, output: str, dependencies: TargetDependencyLike = list(), name=None):
+    def __init__(self, output: str, dependencies: TargetDependencyLike = None, options: dict = None):
         self.output = Path(output)
-        self.dependencies = dependencies
+        self.dependencies = list() if dependencies is None else dependencies
+        self.options = dict() if options is None else options
 
     def __call__(self, fn: Callable):
         class Generator(Target):
             name = self.output.stem
             output = self.output
             dependencies = set(self.dependencies)
+            options = self.options
 
             def __build__(self):
                 arg_spec = inspect.getfullargspec(fn)

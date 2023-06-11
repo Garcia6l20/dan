@@ -7,12 +7,13 @@ from dan.core.find import find_file
 from dan.core.pathlib import Path
 from dan.cli import click
 
+from dan.core import diagnostics
 from dan.core.cache import Cache
-from dan.cxx.targets import Executable
 from dan.core.settings import Settings
+from dan.cxx.targets import Executable
 
 
-from dan.make import ConfigCache, InstallMode, Make
+from dan.make import InstallMode, Make
 from dan.cli.vscode import Code
 
 
@@ -71,6 +72,12 @@ class CommandsContext:
 
 pass_context = click.make_pass_decorator(CommandsContext)
 
+@pass_context
+def show_diags(ctx: CommandsContext):
+    if diagnostics.enabled:
+        diags = ctx.make.diagnostics
+        if diags:
+            click.echo(f'DIAGNOSTICS: {diags.to_json()}')
 
 @click.group()
 @click.version_option(package_name='dan-build')
@@ -81,8 +88,9 @@ pass_context = click.make_pass_decorator(CommandsContext)
 @click.option('--jobs', '-j',
               help='Maximum jobs', default=None, type=int)
 @click.pass_context
-def cli(ctx, **kwds):
+def cli(ctx: click.AsyncContext, **kwds):
     ctx.obj = CommandsContext(**kwds)
+    ctx.call_on_close(show_diags)
 
 
 def available_toolchains():
@@ -108,27 +116,33 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
 async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
     ctx(**kwds)  # update kwds
-    if toolchain is None and ctx.make.toolchain is None:
+    if toolchain is None and ctx.make.config.toolchain is None:
         toolchain = click.prompt('Toolchain', type=_toolchain_choice, default='default')
+
     await ctx.make.configure(source_path, toolchain)
 
-    if len(settings) or len(options):
-        await ctx.make.initialize()
+    if len(settings):
+        await ctx.make.apply_settings(*settings)
 
-        if len(options):
-            await ctx.make.apply_options(*options)
+    # NOTE: intializing make after applying setting
+    #       to check settings are valid implicitly (cache save skipped)
+    await ctx.make.initialize()
 
-        if len(settings):
-            await ctx.make.apply_settings(*settings)
+    if len(options):
+        await ctx.make.apply_options(*options)
 
 
 @cli.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
+@click.option('--force', '-f', is_flag=True,
+              help='Clean before building')
 @pass_context
-async def build(ctx: CommandsContext, **kwds):
+async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets"""
     ctx(**kwds)  # update kwds
+    if force:
+        await ctx.make.clean()
     await ctx.make.build()
     # from dan.cxx import target_toolchain
     # target_toolchain.compile_commands.update()
@@ -248,26 +262,30 @@ def toolchains(**kwargs):
 
 @cli.command()
 @common_opts
-async def clean(**kwargs):
+@pass_context
+async def clean(ctx, **kwargs):
     """Clean generated stuff"""
-    await Make(**kwargs).clean()
+    ctx(**kwargs)
+    await ctx.make.clean()
 
 
 @cli.command()
 @common_opts
-async def run(**kwargs):
+@pass_context
+async def run(ctx, **kwargs):
     """Run executable(s)"""
-    make = Make(**kwargs)
-    rc = await make.run()
+    ctx(**kwargs)
+    rc = await ctx.make.run()
     sys.exit(rc)
 
 
 @cli.command()
 @common_opts
-async def test(**kwargs):
+@pass_context
+async def test(ctx, **kwargs):
     """Run tests"""
-    make = Make(**kwargs)
-    rc = await make.test()
+    ctx(**kwargs)
+    rc = await ctx.make.test()
     sys.exit(rc)
 
 
@@ -292,7 +310,7 @@ def code():
 @common_opts
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     out = []
@@ -313,7 +331,7 @@ async def get_targets(ctx: CommandsContext, **kwargs):
 @common_opts
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     import json
@@ -331,7 +349,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 @click.option('--pretty', is_flag=True)
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
@@ -345,11 +363,25 @@ def get_toolchains(**kwargs):
 
 
 @code.command()
+@click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
+@common_opts
+@click.option('--force', '-f', is_flag=True,
+              help='Clean before building')
+@pass_context
+async def build(ctx: CommandsContext, force=False, **kwds):
+    """Build targets (vscode version)"""
+    ctx(**kwds, diags=True)  # update kwds
+    if force:
+        await ctx.make.clean()
+    await ctx.make.build()
+
+
+@code.command()
 @minimal_options
 @click.argument('SOURCES', nargs=-1)
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
@@ -360,16 +392,16 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
 @minimal_options
 @pass_context
 async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
-    kwargs['quiet'] = True
+    kwargs.update({'quiet': True, 'diags': True})
     ctx(**kwargs)
     await ctx.make.initialize()
     code = Code(ctx.make)
     click.echo(await code.get_workspace_browse_configuration())
 
-
 @cli.result_callback()
-def process_result(result, **kwargs):
-    asyncio.run(Cache.save_all())
+@pass_context
+async def process_result(ctx, result, **kwargs):
+    await Cache.save_all()
 
 
 def main():
