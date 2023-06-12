@@ -1,6 +1,5 @@
 import os
-import shutil
-from dan import self
+from dan.core.pm import re_match
 from dan.cxx import Library, target_toolchain
 from dan.src import GitSources
 from dan.cmake import ConfigureFile
@@ -94,82 +93,60 @@ class Catch2(Library):
 
 
 @Catch2.utility
-def discover_tests(self, exe):
+def discover_tests(self, exe_class):
     from dan.cxx import Executable
-    if not issubclass(exe, Executable):
+    if not issubclass(exe_class, Executable):
         raise RuntimeError(
-            f'catch2.discover_tests requires an Executable class, not a {exe.__name__}')
-    import yaml
-    exe: Executable = self.makefile.find(exe)
+            f'catch2.discover_tests requires an Executable class, not a {exe_class.__name__}')
+
+    exe: Executable = exe_class.get_static_makefile().find(exe_class)
     output = exe.build_path / f'{exe.name}-tests.yaml'
     filepath = exe.source_path / exe.sources[0]
-    if not output.exists() or output.older_than(filepath):
-        import re
-        test_macros = [
-            'TEST_CASE',
-            'SCENARIO',
-            'TEMPLATE_TEST_CASE'
-        ]
-        expr = re.compile(
-            fr"({'|'.join(test_macros)})\(\s?\"(.*?)\"[\s,]{{0,}}(?:\"(.*?)\")?")
-        tests = dict()
-
-        def is_commented(pos: int, content: str):
-            linestart = content.rfind('\n', 0, pos)
-            if linestart != -1 and content.find('//', linestart + 1, pos) != -1:
-                return True
-            blockstart = content.rfind('/*', 0, pos)
-            if blockstart != -1 and content.find('*/', blockstart + 2, pos) == -1:
-                return True
-            return False
-
-        with open(filepath, 'r') as f:
-            content = f.read()
-            prev_pos = 0
-            lineno = 0
-            for m in expr.finditer(content):
-                pos = m.span()[0]
-                if is_commented(pos, content):
-                    continue
-
-                macro = m.group(1)
-                title = m.group(2)
-                if macro == 'SCENARIO':
-                    title = 'Scenario: ' + title
-                lineno = content.count('\n', prev_pos, pos) + lineno
-                prev_pos = pos
-                tags = m.group(3)
-                if macro == 'TEMPLATE_TEST_CASE':
-                    targs_start = m.span()[1] + 1
-                    targs_end = content.find(')', targs_start)
-                    targs = content[targs_start:targs_end]
-                    targs = [a.strip() for a in targs.split(',')]
-                    for targ in targs:
-                        tests[f'{title} - {targ}'] = {
-                            'filepath': str(filepath),
-                            'lineno': lineno,
-                        }
-                else:
-                    tests[title] = {
-                        'filepath': str(filepath),
-                        'lineno': lineno,
-                    }
-                    if tags:
-                        tests[title]['tags'] = tags
-
-        with open(output, 'w') as f:
-            f.write(yaml.dump(tests))
-
-    with open(output, 'r') as f:
-        from dan.testing import Test, Case
-        tests: dict = yaml.load(f.read(), yaml.Loader)
-        test_cases = list()
-        for title, data in tests.items():
-            test_cases.append(Case(title, expected_result=0, file = data['filepath'], lineno=data['lineno']))
-        
-        class Catch2Test(Test):
-            name = exe.name
-            executable = exe
-            cases = test_cases
     
+
+    from dan.core.pathlib import Path
+    from dan.testing import Test, Case
+    from dan.core.target import Target
+    class Catch2Test(Test, Target):
+        name = f'{exe.name}-tests'
+        executable = exe
+        dependencies = [exe]
+
+        def __init__(self, *args, **kwargs):
+            Test.__init__(self, *args, **kwargs)
+            Target.__init__(self, *args, **kwargs)
+            cases = self.cache.get('cases')
+            if cases is not None:
+                self.cases = cases
+                self._up_to_date = True
+            else:
+                self._up_to_date = False
+        
+        @property
+        def up_to_date(self):
+            return self._up_to_date and super().up_to_date
+
+        async def __initialize__(self):
+            if self.executable.output.exists():
+                out, err, rc = await self.executable.execute('--list-tests', no_raise=True, log=False)                
+                self.cases = list()
+                for line in out.splitlines():
+                    match re_match(line):
+                        case r'  ([^\s]+)' as m:
+                            self.cases.append(Case(m[1], m[1], file=filepath))
+                # search lineno
+                from dan.core import aiofiles
+                async with aiofiles.open(filepath, 'r') as f:
+                    for lineno, line in enumerate(await f.readlines(), 1):
+                        match re_match(line):
+                            case r"(TEST_CASE|SCENARIO|TEMPLATE_TEST_CASE)\(\s?\"(.*?)\".+" as m:
+                                macro = m[1]
+                                name = m[2]
+                                for case in self.cases:
+                                    if case.name == name:
+                                        case.lineno = lineno
+                                        break
+                self.cache['cases'] = self.cases
+
+            await super().__initialize__()
     return type[exe]
