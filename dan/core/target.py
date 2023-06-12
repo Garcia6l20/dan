@@ -399,11 +399,13 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def modification_time(self):
-        return self.output.stat().st_mtime if self.output.exists() else 0.0
+        output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output  
+        return output.stat().st_mtime if output.exists() else 0.0
 
     @property
     def up_to_date(self):
-        if self.output and not self.output.exists():
+        output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
+        if output and not output.exists():
             return False
         elif not self.dependencies.up_to_date:
             return False
@@ -431,7 +433,7 @@ class Target(Logging, MakefileRegister, internal=True):
         if self.up_to_date:
             self.info('up to date !')
             return
-        elif self.output.exists():
+        elif self.output is not None and self.output.exists():
             self.info('outdated !')
 
         with utils.chdir(self.build_path):
@@ -441,6 +443,8 @@ class Target(Logging, MakefileRegister, internal=True):
             result = self.__build__()
             if inspect.iscoroutine(result):
                 result = await result
+            if self.output is None:
+                (self.build_path / f'{self.name}.stamp').touch()
             self.cache['options_sha1'] = self.options.sha1
             return result
 
@@ -456,12 +460,13 @@ class Target(Logging, MakefileRegister, internal=True):
     async def clean(self):
         await self.initialize()
         async with asyncio.TaskGroup(f'cleaning {self.name} outputs') as group:
-            if self.output and self.output.exists():
+            output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
+            if output and output.exists():
                 self.info('cleaning...')
-                if self.output.is_dir():
-                    group.create_task(aiofiles.rmtree(self.output))
+                if output.is_dir():
+                    group.create_task(aiofiles.rmtree(output, force=True))
                 else:
-                    group.create_task(aiofiles.os.remove(self.output))
+                    group.create_task(aiofiles.os.remove(output))
             for f in self.other_generated_files:
                 if f.exists():
                     group.create_task(aiofiles.os.remove(f))
