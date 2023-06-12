@@ -503,6 +503,7 @@ class Executable(CXXObjectsTarget, internal=True):
             await aiofiles.copy(self.output, dest)
         return [dest]
 
-    async def execute(self, *args, **kwargs):
-        await self.build()
+    async def execute(self, *args, build=True, **kwargs):
+        if build:
+            await self.build()
         return await async_run([self.output, *args], logger=self, env=self.toolchain.env, **kwargs)

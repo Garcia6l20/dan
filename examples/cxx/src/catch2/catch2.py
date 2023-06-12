@@ -99,22 +99,16 @@ def discover_tests(self, exe_class):
         raise RuntimeError(
             f'catch2.discover_tests requires an Executable class, not a {exe_class.__name__}')
 
-    exe: Executable = exe_class.get_static_makefile().find(exe_class)
-    output = exe.build_path / f'{exe.name}-tests.yaml'
-    filepath = exe.source_path / exe.sources[0]
-    
+    makefile = exe_class.get_static_makefile()
 
-    from dan.core.pathlib import Path
     from dan.testing import Test, Case
-    from dan.core.target import Target
-    class Catch2Test(Test, Target):
-        name = f'{exe.name}-tests'
-        executable = exe
-        dependencies = [exe]
+    @makefile.wraps(exe_class)
+    class Catch2Test(Test, exe_class):
+        name = exe_class.name or exe_class.__name__
 
         def __init__(self, *args, **kwargs):
             Test.__init__(self, *args, **kwargs)
-            Target.__init__(self, *args, **kwargs)
+            exe_class.__init__(self, *args, **kwargs)
             cases = self.cache.get('cases')
             if cases is not None:
                 self.cases = cases
@@ -126,10 +120,12 @@ def discover_tests(self, exe_class):
         def up_to_date(self):
             return self._up_to_date and super().up_to_date
 
-        async def __initialize__(self):
-            if self.executable.output.exists():
-                out, err, rc = await self.executable.execute('--list-tests', no_raise=True, log=False)                
+        async def __build__(self):
+            await super().__build__()
+            if self.output.exists():
+                out, err, rc = await self.execute('--list-tests', no_raise=True, log=False, build=False)
                 self.cases = list()
+                filepath = self.source_path / self.sources[0]
                 for line in out.splitlines():
                     match re_match(line):
                         case r'  ([^\s]+)' as m:
@@ -140,13 +136,12 @@ def discover_tests(self, exe_class):
                     for lineno, line in enumerate(await f.readlines(), 1):
                         match re_match(line):
                             case r"(TEST_CASE|SCENARIO|TEMPLATE_TEST_CASE)\(\s?\"(.*?)\".+" as m:
-                                macro = m[1]
+                                # macro = m[1]
                                 name = m[2]
                                 for case in self.cases:
                                     if case.name == name:
                                         case.lineno = lineno
                                         break
+                self.debug('test cases found: %s', ', '.join([c.name for c in self.cases]))
                 self.cache['cases'] = self.cases
-
-            await super().__initialize__()
-    return type[exe]
+    return Catch2Test
