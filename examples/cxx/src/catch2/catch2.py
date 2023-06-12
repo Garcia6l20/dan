@@ -93,22 +93,24 @@ class Catch2(Library):
 
 
 @Catch2.utility
-def discover_tests(self, exe_class):
+def discover_tests(self, ExecutableClass):
     from dan.cxx import Executable
-    if not issubclass(exe_class, Executable):
-        raise RuntimeError(
-            f'catch2.discover_tests requires an Executable class, not a {exe_class.__name__}')
+    from dan.core.pm import re_match
 
-    makefile = exe_class.get_static_makefile()
+    if not issubclass(ExecutableClass, Executable):
+        raise RuntimeError(
+            f'catch2.discover_tests requires an Executable class, not a {ExecutableClass.__name__}')
+
+    makefile = ExecutableClass.get_static_makefile()
 
     from dan.testing import Test, Case
-    @makefile.wraps(exe_class)
-    class Catch2Test(Test, exe_class):
-        name = exe_class.name or exe_class.__name__
+    @makefile.wraps(ExecutableClass)
+    class Catch2Test(Test, ExecutableClass):
+        name = ExecutableClass.name or ExecutableClass.__name__
 
         def __init__(self, *args, **kwargs):
             Test.__init__(self, *args, **kwargs)
-            exe_class.__init__(self, *args, **kwargs)
+            ExecutableClass.__init__(self, *args, **kwargs)
             cases = self.cache.get('cases')
             if cases is not None:
                 self.cases = cases
@@ -128,7 +130,7 @@ def discover_tests(self, exe_class):
                 filepath = self.source_path / self.sources[0]
                 for line in out.splitlines():
                     match re_match(line):
-                        case r'  ([^\s]+)' as m:
+                        case r'  (\w.+)$' as m:
                             self.cases.append(Case(m[1], m[1], file=filepath))
                 # search lineno
                 from dan.core import aiofiles
