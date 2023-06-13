@@ -617,8 +617,18 @@ def create_toolchains(paths = None):
     data['tools'] = tools
     data['toolchains'] = toolchains
     if not 'default' in data:
-        data['default'] = list(toolchains.keys())[0]
-        
+        from dan.core.osinfo import OSInfo
+        osi = OSInfo()
+        default_toolchain = None
+        for name, toolchain in toolchains.items():
+            if toolchain['system'] == osi.name and toolchain['arch'] == osi.arch:
+                default_toolchain = name
+                break
+        if default_toolchain is None:
+            default_toolchain = list(toolchains.keys())[0]
+        logger.debug('selected default toolchain: %s', default_toolchain)
+        data['default'] = default_toolchain
+
     json_toolchain_path = toolchains_path.with_suffix('.json')
     with open(json_toolchain_path, 'w') as jf, open(toolchains_path, 'wb') as pf:
         pickle.dump(data, pf)
