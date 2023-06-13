@@ -28,7 +28,7 @@ def requires(*requirements) -> list[Target]:
     # return [parse_requirement(req) for req in requirements]
     global context
     requirements = [parse_requirement(req) for req in requirements]
-    sync_wait(load_requirements(requirements, makefile=context.current, install=True))
+    sync_wait(load_requirements(requirements, makefile=context.current, install=False))
     return requirements
 
 
