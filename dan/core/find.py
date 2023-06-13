@@ -43,18 +43,21 @@ def find_files(expr, paths) -> list[Path]:
     return files
 
 
-def find_include_path(name, paths=list()) -> Path:
+def find_include_path(name, paths: list[str|Path] = None) -> Path:
+    paths = paths or list()
     return find_file(name, [*paths, *include_paths_lookup])
 
 
-def find_library(name, paths=list()) -> Path:
+def find_library(name, paths: list[str|Path] = None) -> Path:
+    paths = paths or list()
     if os.name == 'posix':
         expr = fr'lib{name}\.(so|a)'
     elif os.name == 'nt':
         expr = fr'lib{name}\.(lib|dll)'
     return find_file(expr, [*paths, *library_paths_lookup])
 
-def find_executable(name, paths=list(), default_paths=True) -> Path:
+def find_executable(name, paths: list[str|Path] = None, default_paths=True) -> Path:
+    paths = paths or list()
     if os.name == 'posix':
         expr = name + '$'
     elif os.name == 'nt':
@@ -63,7 +66,8 @@ def find_executable(name, paths=list(), default_paths=True) -> Path:
         paths.extend(programs_paths_lookup)
     return find_file(expr, paths)
 
-def find_executables(name, paths=list(), default_paths=True) -> list[Path]:
+def find_executables(name, paths: list[str|Path] = None, default_paths=True) -> list[Path]:
+    paths = paths or list()
     if os.name == 'posix':
         expr = name + '$'
     elif os.name == 'nt':

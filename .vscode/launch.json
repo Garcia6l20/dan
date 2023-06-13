@@ -311,7 +311,7 @@
             "module": "dan",
             "justMyCode": true,
             "args": [
-                "scan-toolchains"
+                "scan-toolchains", "-v"
             ],
             "cwd": "${workspaceFolder}/examples",
             "env": {

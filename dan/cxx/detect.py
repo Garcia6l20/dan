@@ -400,13 +400,12 @@ def get_environment_from_batch_command(env_cmd, initial=None):
 
 def get_compilers(logger: logging.Logger, paths = None):
     if paths is None:
-        paths = list()
         default_paths = True
     else:
         default_paths = False
     from dan.core.find import find_executables, find_executable, find_file
     compilers: set[Compiler] = set()
-    if len(paths) == 0 and os.name == 'nt':
+    if paths is None and os.name == 'nt':
         infos = vswhere()
         for info in infos:
             logger.info(f'Loading Visual Studio: {info["displayName"]}')
@@ -430,11 +429,11 @@ def get_compilers(logger: logging.Logger, paths = None):
                     logger.warning(
                         f'Cannot load msvc with {arch} architecture')
     else:
-        logger.debug('looking for gcc in %s', logging.lazy_fmt(lambda: ', '.join(paths)))
+        logger.debug('looking for gcc%s', logging.lazy_fmt(lambda: '' if paths is None else ' in' + ', '.join(paths)))
         for gcc in find_executables(r'gcc(-\d+)?(\.exe)?', paths, default_paths):
             gcc = gcc.resolve()
             compilers.add(Compiler(gcc, logger=logger))
-        logger.debug('looking for clang in %s', logging.lazy_fmt(lambda: ', '.join(paths)))
+        logger.debug('looking for clang%s', logging.lazy_fmt(lambda: '' if paths is None else ' in' + ', '.join(paths)))
         for clang in find_executables(r'clang(-\d+)?(\.exe)?', paths, default_paths):
             clang = clang.resolve()
             compilers.add(Compiler(clang, logger=logger))
@@ -457,7 +456,10 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         'version': str(compiler.version),
         'cc': str(compiler.path),
     }
-    extension = compiler.path.suffixes[-1]
+    if len(compiler.path.suffixes):
+        extension = compiler.path.suffixes[-1]
+    else:
+        extension = ''
     pos = compiler.path.stem.rfind(compiler.name)
     if pos >= 0:
         prefix = None if pos == 0 else compiler.path.stem[:pos]
@@ -565,7 +567,6 @@ def save_toolchain(name, toolchain):
 
 def create_toolchains(paths = None):
     if paths is None:
-        paths = list()
         default_paths = True
     else:
         default_paths = False
