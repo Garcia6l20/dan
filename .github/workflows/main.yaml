@@ -32,6 +32,10 @@ jobs:
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
@@ -62,9 +66,9 @@ jobs:
       - name: Configure
         run: |
           cd examples
-          dan configure -v \
-              -t default  \
-              -s install.destination=dist
+          dan configure -v                \
+            -t default                    \
+            -s install.destination=dist
 
       - name: Build
         run: |
