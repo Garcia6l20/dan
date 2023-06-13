@@ -411,8 +411,13 @@ def get_compilers(logger: logging.Logger, paths = None):
             vcvars = find_file(r'vcvarsall.bat$', paths=paths)
             archs = [('x86_64', 'x64'), ('x86', 'x86')]
             for arch, vc_arch in archs:
+                logger.debug('Loading Visual Studio environment: %s (%s)', vcvars, vc_arch)
                 env = get_environment_from_batch_command([vcvars, vc_arch])
-                paths = env['PATH'].split(';')
+                logger.debug('Visual Studio environment: %s', env)
+                paths = env.get('PATH', env.get('Path', None))
+                if paths is None:
+                    raise RuntimeError('Cannot get PATH in Visual Studio environment')
+                paths = paths.split(os.pathsep)
                 cl = find_executable('cl', paths=paths, default_paths=False)
                 link = find_executable(
                     'link', paths=[cl.parent], default_paths=False)
