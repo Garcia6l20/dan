@@ -301,12 +301,10 @@ class Compiler:
         if env is None:
             env = dict()
         env['LC_LOCAL'] = 'C'
-        epath = env.get('PATH', None)
-        if epath is None:
-            epath = str(path.parent)
-        elif not str(path.parent) in epath:
-            epath = str(path.parent) + os.pathsep + epath
-        env['PATH'] = epath
+        epath = env.get('PATH', os.environ['PATH']).split(os.pathsep)
+        if not str(path.parent) in epath:
+            epath.insert(0, str(path.parent))
+        env['PATH'] = os.pathsep.join(epath)
         self.compiler_id = detect_compiler_id(path, env=env, logger=logger)
         if self.compiler_id is None:
             raise RuntimeError(f'Cannot detect compiler ID of {self.path}')
