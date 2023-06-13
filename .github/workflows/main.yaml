@@ -17,7 +17,19 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: ${ { matrix.config.name } }
+    runs-on: ${ { matrix.config.os } }
+
+    matrix:
+        config:
+        - {
+            name: "Windows MSVC",
+            os: windows-latest
+          }
+        - {
+            name: "Ubuntu",
+            os: ubuntu-latest
+          }
 
     steps:
       - uses: actions/checkout@v3
