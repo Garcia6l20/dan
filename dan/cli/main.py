@@ -1,6 +1,6 @@
 import os
 import sys
-import logging
+from dan import logging
 import asyncio
 
 from dan.core.find import find_file
@@ -95,7 +95,7 @@ def cli(ctx: click.AsyncContext, **kwds):
 
 def available_toolchains():
     from dan.cxx.detect import get_toolchains
-    return ['default', *[name for name in get_toolchains()['toolchains'].keys()]]
+    return ['default', *[name for name in get_toolchains(create=False)['toolchains'].keys()]]
 
 
 _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
@@ -290,14 +290,20 @@ async def test(ctx, **kwargs):
 
 
 @cli.command()
-@click.option('-s', '--script', help='Use a source script to resolve compilation environment')
-def scan_toolchains(script: str, **kwargs):
+@click.option('-s', '--script',
+              help='Use a source script to resolve compilation environment')
+@click.option('-p', '--path', 'paths',
+              help='Use given path for compilers lookup', multiple=True, type=click.Path(exists=True, file_okay=False))
+@click.option('--verbose', '-v', is_flag=True,
+              help='Pring debug informations.', envvar='DAN_VERBOSE')
+def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
     """Scan system toolchains"""
+    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     from dan.cxx.detect import create_toolchains, load_env_toolchain
     if script:
         load_env_toolchain(script)
     else:
-        create_toolchains()
+        create_toolchains(paths)
 
 
 @cli.group()

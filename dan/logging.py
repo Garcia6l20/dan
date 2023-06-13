@@ -2,6 +2,8 @@ import tqdm
 from logging import *
 from termcolor import colored
 
+# default level
+getLogger().setLevel(INFO)
 
 def merge(lhs, rhs):
     if type(lhs) != type(rhs):
@@ -141,3 +143,10 @@ def error(*args, **kwds):
 
 def critical(*args, **kwds):
     return _get_makefile_logger().critical(*args, **kwds)
+
+
+class lazy_fmt():    
+    def __init__(self, fn):
+        self.__fn=fn
+    def __str__(self):
+        return self.__fn()
