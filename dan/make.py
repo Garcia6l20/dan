@@ -315,6 +315,8 @@ class Make(Logging):
             for sub in value.split(';'):
                 result.append(cls._parse_str_value(name, sub, tp))
             return orig(result)
+        elif orig == bool:
+            return value.lower() in ('true', 'yes', 'on', '1')
         else:
             if tp is not None:
                 raise TypeError(f'unhandled type {orig}[{tp}]')
