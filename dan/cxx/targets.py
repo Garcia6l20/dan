@@ -254,12 +254,16 @@ class CXXObjectsTarget(CXXTarget, internal=True):
         if not isinstance(self.sources, Iterable):
             assert callable(
                 self.sources), f'{self.name} sources parameter should be an iterable or a callable returning an iterable'
+        sources = list()
         for source in self.sources:
             source = Path(source)
             if not source.is_absolute():
                 source = self.source_path / source
+            sources.append(source)
             self.objs.append(
                 CXXObject(Path(source), self))
+        self.sources = sources
+            
 
     @property
     def file_dependencies(self):
