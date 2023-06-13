@@ -303,7 +303,7 @@ def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
     if script:
         load_env_toolchain(script)
     else:
-        create_toolchains(paths)
+        create_toolchains(paths if len(paths) else None)
 
 
 @cli.group()
