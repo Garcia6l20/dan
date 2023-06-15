@@ -457,6 +457,8 @@ class Module(CXXObjectsTarget, internal=True):
 
 class Executable(CXXObjectsTarget, internal=True):
 
+    installed = True
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
