@@ -287,15 +287,28 @@ class Make(Logging):
         return result
 
 
-    async def target_of(self, source):
+    async def target_of(self, source: Path):
         from dan.cxx.targets import CXXObjectsTarget
 
         source = Path(source)
+        if source.suffix[1].lower() == 'h':
+            def check(t: CXXObjectsTarget):
+                for p in [*t.includes.private_raw, *t.includes.public_raw]:
+                    p: Path = p
+                    if p not in source.parents:
+                        continue
+                    return True
+                return False
+        else:
+            def check(t: CXXObjectsTarget):
+                t._init_sources()
+                if source.name in [Path(s).name for s in target.sources]:
+                    return True
+                return False
         for target in [target for target in self.root.all_targets if isinstance(target, CXXObjectsTarget)]:            
             if target.source_path not in source.parents:
                 continue
-            target._init_sources()
-            if source.name in [str(s) for s in target.sources]:
+            if check(target):
                 return target
 
 
