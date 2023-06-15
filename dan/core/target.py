@@ -220,8 +220,6 @@ class Options:
     def __iter__(self):
         return iter(self.__items)
 
-class DiagnosticCache(Cache[diags.DiagnosticCollection]):
-    pass
 
 class Target(Logging, MakefileRegister, internal=True):
     name: str = None
@@ -294,13 +292,7 @@ class Target(Logging, MakefileRegister, internal=True):
             output = self.output
             type(self).output = utils.classproperty(lambda: self.build_path / output)
 
-        self._diagnostics_cache : DiagnosticCache = None
-
-    @property
-    def diagnostics(self) -> diags.DiagnosticCollection:
-        if self._diagnostics_cache is None:
-            self._diagnostics_cache = DiagnosticCache.instance(self.build_path / f'{self.name}-diags.cache', cache_name=self.fullname, binary=True)
-        return self._diagnostics_cache.data
+        self.diagnostics = diags.DiagnosticCollection()
 
     @property
     def output(self):
