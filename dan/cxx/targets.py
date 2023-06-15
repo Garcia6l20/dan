@@ -21,7 +21,7 @@ class CXXObject(Target, internal=True):
         super().__init__(source.stem, parent=parent, default=False)
         self.parent = parent
         self.source = self.source_path / source
-        self.toolchain = self.context.get('cxx_target_toolchain')
+        self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
         self.__dirty = False
 
     @property

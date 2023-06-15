@@ -149,22 +149,27 @@ def cmdline2list(s: str):
 
     return result
 
-async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None, out_capture=None, err_capture=None, all_capture=None):
+async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None, out_capture=None, err_capture=None, all_capture=None, input: str = None) -> tuple[str, str, int]:
     if _jobs_sem is not None:
         await _jobs_sem.acquire()
     try:
         if not isinstance(command, str):
             command = subprocess.list2cmdline(command)
-        if env:
+        if env is not None:
             e = dict(os.environ)
             for k, v in env.items():
                 e[k] = v
             env = e
-        if logger:
+        if input is not None:
+            stdin = asyncio.subprocess.PIPE
+        else:
+            stdin = None
+        if logger is not None:
             logger.debug('executing: %s', command)
         proc = await asyncio.subprocess.create_subprocess_shell(command,
                                                                 stdout=asyncio.subprocess.PIPE,
                                                                 stderr=asyncio.subprocess.PIPE,
+                                                                stdin=stdin,
                                                                 env=env,
                                                                 cwd=cwd)
         out = io.StringIO()
@@ -196,6 +201,10 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
             out_iter.consume(),
             err_iter.consume(),
         ])
+        
+        if input is not None:
+            proc.stdin.write(input.encode())
+            proc.stdin.write_eof()
     
         await asyncio.gather(
             *futures,

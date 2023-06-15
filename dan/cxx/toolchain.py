@@ -101,7 +101,10 @@ class Toolchain(Logging):
         from dan.core.osinfo import OSInfo
         osi = OSInfo()
         self.cache['is_host'] = self.system == osi.name and self.arch == osi.arch
-    
+
+    async def get_default_defines(self) -> dict[str, str]:
+        return self.cache['defines']
+
     # @property
     # def compile_commands(self):
     #     if not self._compile_commands:
@@ -211,7 +214,7 @@ class Toolchain(Logging):
             await self.run(f'shared_lib{index}', output, command, **kwds, cwd=output.parent)
         return commands
 
-    async def run(self, name: str, output: Path, args, quiet=False, **kwds):
+    async def run(self, name: str, output: Path, args, quiet=False, **kwds) -> tuple[str, str, int]:
         return await async_run(args, env={**(self.env or dict()), 'LC_ALL': 'C'}, logger=self if not quiet else None, **kwds)
 
     @property
@@ -238,3 +241,6 @@ class Toolchain(Logging):
         #error "{d} is not defined"
         #endif''' for d in definitions])
         return self.can_compile(source, options, extension)
+    
+    async def get_default_include_paths(self, lang = 'c++') -> list[str]:
+        return []

@@ -113,8 +113,8 @@ class Code(Logging):
             #   - compilerPath?: string;
             #   - compilerArgs?: string[];
             #   - windowsSdkVersion?: string;
-            includes = []
-            defines = []
+            includes = await target.toolchain.get_default_include_paths()
+            defines = [f'{k}={v}' for k, v in (await target.toolchain.get_default_defines()).items()]
             await target.initialize()
             for flag in target.private_cxx_flags:
                 match re_match(flag):

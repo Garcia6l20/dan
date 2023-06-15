@@ -235,7 +235,7 @@ detectors = {
     'gcc': ['-dM', '-E', '-x', 'c'],
     'clang': ['-dM', '-E', '-x', 'c'],
     'clang-cl': ['--driver-mode=g++', '-dM', '-E', '-x', 'c'],
-    'sun-cc': ['-c', '-xdumpmacros'], 
+    'sun-cc': ['-c', '-xdumpmacros'],
     # cl (Visual Studio, MSVC)
     # "/nologo" Suppress Startup Banner
     # "/E" Preprocess to stdout
@@ -270,7 +270,7 @@ def parse_compiler_defines(output: str):
             break
     return defines
 
-def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None):
+def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None) -> dict[str, str]:
     if env is None:
         env = dict()
     env['LC_LOCAL'] = 'C'

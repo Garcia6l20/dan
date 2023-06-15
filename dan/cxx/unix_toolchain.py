@@ -158,6 +158,23 @@ class UnixToolchain(Toolchain):
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
         return commands
+    
+    async def get_default_include_paths(self, lang = 'c++') -> list[Path]:
+        cache_key = f'default_{lang}_includes'
+        includes = self.cache.get(cache_key, None)
+        if includes is None:
+            args = [self.cc, '-x', lang, '-E', '-Wp,-v', '-']
+            out, err, rc = await self.run(f'get default {lang} includes', None, args, quiet=True, log=False, input='')
+            if rc != 0:
+                self.error('failed to get default %s includes: %s', lang, err)
+                return []
+            includes = []
+            for line in [*out.splitlines(), *err.splitlines()]:
+                match re_match(line):
+                    case r'^ (.+)$' as m:
+                        includes.append(str(Path(m[1]).resolve()))
+            self.cache[cache_key] = includes
+        return includes
 
     async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         async for line in lines:

@@ -9,6 +9,7 @@ from dan.core.utils import unique
 from dan.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
 from dan.core import diagnostics as diag
 from dan.core.pm import re_match
+import os
 
 
 class MSVCToolchain(Toolchain):
@@ -18,7 +19,11 @@ class MSVCToolchain(Toolchain):
         self.cxx = self.cc
         self.lnk = Path(data['link'])
         self.lib = Path(data['lib'])
-        self.env = data['env']
+        self.env: dict[str, str] = data['env']
+        if 'INCLUDE' in self.env:
+            self._default_include_paths = self.env['INCLUDE'].split(os.pathsep)
+        else:
+            self._default_include_paths = list()
     
     @cached_property
     def common_flags(self):
@@ -56,6 +61,9 @@ class MSVCToolchain(Toolchain):
     @property
     def default_cxxflags(self):
         return [f'/std:c++{self.cpp_std}', *self.settings.cxx_flags]
+    
+    async def get_default_include_paths(self, lang = 'c++') -> list[str]:
+        return self._default_include_paths
 
     def has_cxx_compile_options(self, *opts) -> bool:
         _, err, _ = sync_run([self.cxx, *opts], no_raise=True)
