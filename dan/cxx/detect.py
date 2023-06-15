@@ -590,6 +590,9 @@ def create_toolchains(paths = None):
         tools = dict()
 
     compilers = get_compilers(logger, paths)
+    if len(compilers) == 0:
+        logger.warning('no toolchain found')
+        return data
     for cc in compilers:
         k, v = create_toolchain(cc, logger)
         arch_k = f'{k}-{v["arch"]}'
@@ -614,9 +617,6 @@ def create_toolchains(paths = None):
         toolchains[k] = v
     for tool in _required_tools:
         tools[tool] = str(find_executable(tool, paths, default_paths))
-    if not data:
-        logger.warning('no toolchain found')
-        return data
     data['tools'] = tools
     data['toolchains'] = toolchains
     if not 'default' in data:
