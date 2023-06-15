@@ -1,6 +1,6 @@
 import os
 import sys
-import logging
+from dan import logging
 import asyncio
 
 from dan.core.find import find_file
@@ -32,7 +32,6 @@ _common_opts = [
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
     click.option('--no-progress', is_flag=True,
                  help='Disable progress bars', envvar='DAN_NOPROGRESS'),
-    click.argument('TARGETS', nargs=-1),
 ]
 _base_help_ = '''
   PATH          Either build or source directory.
@@ -95,7 +94,7 @@ def cli(ctx: click.AsyncContext, **kwds):
 
 def available_toolchains():
     from dan.cxx.detect import get_toolchains
-    return ['default', *[name for name in get_toolchains()['toolchains'].keys()]]
+    return ['default', *[name for name in get_toolchains(create=False)['toolchains'].keys()]]
 
 
 _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
@@ -109,7 +108,7 @@ _toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True)
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
-              type=click.Path(resolve_path=True, path_type=Path), required=True, default='build')
+              type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH')
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
 @pass_context
@@ -137,6 +136,7 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
 @common_opts
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets"""
@@ -151,6 +151,7 @@ async def build(ctx: CommandsContext, force=False, **kwds):
 @cli.command()
 @common_opts
 @click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def install(ctx: CommandsContext, mode: str, **kwargs):
     """Install targets"""
@@ -208,6 +209,7 @@ def ls(ctx: CommandsContext):
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
     """List targets"""
@@ -225,6 +227,7 @@ async def targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
 
 @ls.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def tests(ctx: CommandsContext, **kwargs):
     """List tests"""
@@ -240,6 +243,7 @@ async def tests(ctx: CommandsContext, **kwargs):
 
 @ls.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def options(ctx: CommandsContext, **kwargs):
     """List tests"""
@@ -262,6 +266,7 @@ def toolchains(**kwargs):
 
 @cli.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def clean(ctx, **kwargs):
     """Clean generated stuff"""
@@ -271,6 +276,7 @@ async def clean(ctx, **kwargs):
 
 @cli.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def run(ctx, **kwargs):
     """Run executable(s)"""
@@ -281,6 +287,7 @@ async def run(ctx, **kwargs):
 
 @cli.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def test(ctx, **kwargs):
     """Run tests"""
@@ -290,14 +297,20 @@ async def test(ctx, **kwargs):
 
 
 @cli.command()
-@click.option('-s', '--script', help='Use a source script to resolve compilation environment')
-def scan_toolchains(script: str, **kwargs):
+@click.option('-s', '--script',
+              help='Use a source script to resolve compilation environment')
+@click.option('-p', '--path', 'paths',
+              help='Use given path for compilers lookup', multiple=True, type=click.Path(exists=True, file_okay=False))
+@click.option('--verbose', '-v', is_flag=True,
+              help='Pring debug informations.', envvar='DAN_VERBOSE')
+def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
     """Scan system toolchains"""
+    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
     from dan.cxx.detect import create_toolchains, load_env_toolchain
     if script:
         load_env_toolchain(script)
     else:
-        create_toolchains()
+        create_toolchains(paths if len(paths) else None)
 
 
 @cli.group()
@@ -308,6 +321,7 @@ def code():
 
 @code.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
@@ -329,6 +343,7 @@ async def get_targets(ctx: CommandsContext, **kwargs):
 
 @code.command()
 @common_opts
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
@@ -347,6 +362,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 @code.command()
 @common_opts
 @click.option('--pretty', is_flag=True)
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
@@ -367,6 +383,7 @@ def get_toolchains(**kwargs):
 @common_opts
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
+@click.argument('TARGETS', nargs=-1)
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets (vscode version)"""

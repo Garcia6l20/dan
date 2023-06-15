@@ -224,6 +224,11 @@ def sync_run(command, pipe=True, logger: logging.Logger = None, no_raise=False, 
         stdout = None
     if logger:
         logger.debug(f'executing: {command}')
+    if env:
+        e = dict(os.environ)
+        for k, v in env.items():
+            e[k] = v
+        env = e
     proc = subprocess.Popen(command,
                             stdout=stdout,
                             stderr=stdout,

@@ -315,6 +315,8 @@ class Make(Logging):
             for sub in value.split(';'):
                 result.append(cls._parse_str_value(name, sub, tp))
             return orig(result)
+        elif orig == bool:
+            return value.lower() in ('true', 'yes', 'on', '1')
         else:
             if tp is not None:
                 raise TypeError(f'unhandled type {orig}[{tp}]')
@@ -404,7 +406,7 @@ class Make(Logging):
 
         def __init__(self, desc, targets, task_builder, disable) -> None:
             self.desc = desc
-            self.targets = targets
+            self.targets = list(targets) # NOTE: need to take a copy of the list
             self.builder = task_builder
             import shutil
             term_cols = shutil.get_terminal_size().columns
@@ -448,11 +450,14 @@ class Make(Logging):
             self._diagnostics.update(gen_python_diags(err))
             raise
 
-    async def build(self):
+    async def build(self, targets: list[Target] = None):
         await self.initialize()
 
+        if targets is None:
+            targets = self.targets
+
         with self.context, \
-             self.progress('building', self.targets, self._build_target, self.no_progress) as tasks:
+             self.progress('building', targets, self._build_target, self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
@@ -477,12 +482,17 @@ class Make(Logging):
 
         self.for_install = True
         await self.initialize()
-        targets = self.root.all_installed
+        targets = []
+        for t in self.targets:
+            if t.installed:
+                targets.append(t)
+            else:
+                self.debug('skipping %s (not marked as installed)', t.fullname)
 
-        await self.build()
+        await self.build(targets)
 
         with self.context, \
-             self.progress('installing', targets, lambda t: self._install_target(t, mode), self.no_progress) as tasks:
+             self.progress('installing', targets, functools.partial(self._install_target, mode=mode), self.no_progress) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
             manifest_path = self.settings.install.data_destination / \

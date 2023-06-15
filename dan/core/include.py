@@ -28,7 +28,7 @@ def requires(*requirements) -> list[Target]:
     # return [parse_requirement(req) for req in requirements]
     global context
     requirements = [parse_requirement(req) for req in requirements]
-    sync_wait(load_requirements(requirements, makefile=context.current, install=True))
+    sync_wait(load_requirements(requirements, makefile=context.current, install=False))
     return requirements
 
 
@@ -130,6 +130,7 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
     try:
         spec.loader.exec_module(module)
     except Exception as err:
+        context.error('makefile error while loading \'%s\': %s', module_path, err)
         raise MakeFileError(module_path) from err
     context.up()
     return module
@@ -179,6 +180,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         if len(context.missing) == 0:
             raise err
     except Exception as err:
+        context.error('makefile error while including \'%s\': %s', module_path, err)
         raise MakeFileError(module_path) from err
     context.up()
 

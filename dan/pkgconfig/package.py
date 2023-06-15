@@ -204,7 +204,7 @@ class Package(CXXTarget, internal=True):
     def modification_time(self):
         return self.config_path.modification_time
 
-    def __getattr__(self, name):        
+    def __getattr__(self, name):
         value = self.data.get(name) if self.data is not None else None
         if value is None:
             raise AttributeError(name)

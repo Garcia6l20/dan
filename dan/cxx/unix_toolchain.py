@@ -20,8 +20,8 @@ class UnixToolchain(Toolchain):
         self.cxx = data['cxx']
         self.ar = data['ar'] if 'ar' in data else tools['ar']
         self.ranlib = data['ranlib'] if 'ranlib' in data else tools['ranlib']
-        self.as_ = data['readelf'] if 'readelf' in data else tools['readelf']
-        self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
+        # self.as_ = data['as'] if 'as' in data else tools['as']
+        # self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
         self.env = data['env'] if 'env' in data else None
         self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cc)
         self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cxx)
@@ -91,7 +91,7 @@ class UnixToolchain(Toolchain):
         return f'lib{basename}.{"so" if shared else "a"}'
 
     def make_executable_name(self, basename: str) -> str:
-        return basename
+        return f'{basename}.exe' if self.system.startswith('msys') else basename
 
     def get_base_compile_args(self, sourcefile: Path) -> list[str]:
         match sourcefile.suffix:
@@ -138,7 +138,7 @@ class UnixToolchain(Toolchain):
         return [args]
 
     def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
-        args = [self.cxx, *objects, '-o', str(output), *unique(
+        args = [self.cxx, *[o.name for o in objects], '-o', str(output), *unique(
             self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
         commands = [args]
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
@@ -147,7 +147,7 @@ class UnixToolchain(Toolchain):
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         return [
-            [self.ar, 'cr', output, *objects], # *options],
+            [self.ar, 'cr', output, *[o.name for o in objects]], # *options],
             [self.ranlib, output],
         ]
 

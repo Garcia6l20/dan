@@ -17,10 +17,56 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        config:
+        - name: Ubuntu
+          # NOTE: only ubunut does the full examples build
+          #       because others are too long on GH worflow
+          os: ubuntu-latest
+          shell: bash
+          with_conan: true
+
+        - name: Windows MSVC
+          os: windows-latest
+          shell: bash
+          with_conan: false
+          targets: |
+            libraries.use-simple-lib \
+            dan.io.test-mbedtls      \
+            dan.io.UseCatch2
+
+        - name: Windows MINGW64
+          os: windows-latest
+          msystem: MINGW64
+          shell: bash
+          scan_paths: -p D:\\msys64\\mingw64\\bin
+          with_conan: false
+          targets: |
+            libraries.use-simple-lib \
+            dan.io.test-mbedtls      \
+            dan.io.UseCatch2
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.config.shell }}
 
     steps:
       - uses: actions/checkout@v3
+      
+      - uses: msys2/setup-msys2@v2
+        if: ${{ matrix.config.msystem }}
+        with:
+          location: D:\\
+          msystem: ${{ matrix.config.msystem }}
+          # NOTE: we install defaul msys-gcc because python yarl library does not compile with mingw64-gcc,
+          #       while fmt (built within examples) does not compile with defaul msys-gcc :)
+          install: >-
+            mingw-w64-x86_64-gcc
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v3
         with:
@@ -32,7 +78,8 @@ jobs:
           git config --global user.email "gh-actions@github.com"
           git config --global user.name "GitHub Actions"
 
-      - name: Install requirements
+      - name: Install Conan
+        if: ${{ matrix.config.with_conan }}
         run: |
           python -m pip install conan
           conan profile detect
@@ -44,31 +91,32 @@ jobs:
 
       - name: Scan toolchains
         run: |
-          dan scan-toolchains
+          dan scan-toolchains -v ${{ matrix.config.scan_paths }}
 
       - name: Configure
         run: |
           cd examples
-          dan configure -v \
-              -t default  \
-              -s install.destination=dist
+          dan configure -v                \
+            -t default                    \
+            -s install.destination=dist   \
+            -o dan-examples.cxx.with_conan=${{ matrix.config.with_conan }}
 
       - name: Build
         run: |
           cd examples
-          dan build -v
+          dan build -v ${{ matrix.config.targets }}
 
       - name: Re-build
         run: |
           cd examples
-          dan build -v
+          dan build -v ${{ matrix.config.targets }}
 
       - name: Test
         run: |
           cd examples
-          dan test -v
+          dan test -v ${{ matrix.config.targets }}
       
       - name: Install
         run: |
           cd examples
-          dan install -v
+          dan install -v dev ${{ matrix.config.targets }}

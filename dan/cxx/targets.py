@@ -254,12 +254,16 @@ class CXXObjectsTarget(CXXTarget, internal=True):
         if not isinstance(self.sources, Iterable):
             assert callable(
                 self.sources), f'{self.name} sources parameter should be an iterable or a callable returning an iterable'
+        sources = list()
         for source in self.sources:
             source = Path(source)
             if not source.is_absolute():
                 source = self.source_path / source
+            sources.append(source)
             self.objs.append(
                 CXXObject(Path(source), self))
+        self.sources = sources
+            
 
     @property
     def file_dependencies(self):
@@ -356,7 +360,7 @@ class Library(CXXObjectsTarget, internal=True):
         if generate is not None:
             if previous_args and \
                     previous_args != await generate(
-                        [str(obj.output) for obj in self.objs], self.output, self.libs, dry_run=True):
+                        [obj.output for obj in self.objs], self.output, self.libs, dry_run=True):
                 self.__dirty = True
             else:
                 self.__dirty = False
@@ -453,6 +457,8 @@ class Module(CXXObjectsTarget, internal=True):
 
 class Executable(CXXObjectsTarget, internal=True):
 
+    installed = True
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -464,7 +470,7 @@ class Executable(CXXObjectsTarget, internal=True):
 
         previous_args = self.cache.get('link_args')
         if previous_args:
-            args = self.toolchain.make_link_commands([str(obj.output) for obj in self.objs], self.output,
+            args = self.toolchain.make_link_commands([obj.output for obj in self.objs], self.output,
                                                      [*self.libs, *self.link_options.public, *self.link_options.private])[0]
             args = [str(a) for a in args]
             if sorted(previous_args) != sorted(args):
@@ -482,7 +488,7 @@ class Executable(CXXObjectsTarget, internal=True):
         # link
         self.info('linking %s...', self.output.name)
         try:
-            commands, diags = await self.toolchain.link([str(obj.output) for obj in self.objs], self.output,
+            commands, diags = await self.toolchain.link([obj.output for obj in self.objs], self.output,
                                                         [*self.libs, *self.link_options.public, *self.link_options.private])
             self.diagnostics.insert(diags, str(self.output))
         except LinkageFailure as err:
