@@ -614,6 +614,9 @@ def create_toolchains(paths = None):
         toolchains[k] = v
     for tool in _required_tools:
         tools[tool] = str(find_executable(tool, paths, default_paths))
+    if not data:
+        logger.warning('no toolchain found')
+        return data
     data['tools'] = tools
     data['toolchains'] = toolchains
     if not 'default' in data:
