@@ -20,20 +20,32 @@ jobs:
     strategy:
       matrix:
         config:
+        - name: Ubuntu
+          # NOTE: only ubunut does the full examples build
+          #       because others are too long on GH worflow
+          os: ubuntu-latest
+          shell: bash
+          with_conan: true
+
         - name: Windows MSVC
           os: windows-latest
           shell: bash
           with_conan: false
+          targets: |
+            libraries.use-simple-lib \
+            dan.io.test-mbedtls      \
+            dan.io.UseCatch2
+
         - name: Windows MINGW64
           os: windows-latest
           msystem: MINGW64
           shell: msys2 {0}
           scan_paths: -p /mingw64/bin
           with_conan: false
-        - name: Ubuntu
-          os: ubuntu-latest
-          shell: bash
-          with_conan: true
+          targets: |
+            libraries.use-simple-lib \
+            dan.io.test-mbedtls      \
+            dan.io.UseCatch2
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
@@ -101,19 +113,19 @@ jobs:
       - name: Build
         run: |
           cd examples
-          dan build -v
+          dan build -v ${{ matrix.config.targets }}
 
       - name: Re-build
         run: |
           cd examples
-          dan build -v
+          dan build -v ${{ matrix.config.targets }}
 
       - name: Test
         run: |
           cd examples
-          dan test -v
+          dan test -v ${{ matrix.config.targets }}
       
       - name: Install
         run: |
           cd examples
-          dan install -v
+          dan install -v ${{ matrix.config.targets }}
