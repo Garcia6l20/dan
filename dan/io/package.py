@@ -180,7 +180,9 @@ class Package(Target, internal=True):
             from dan.pkgconfig.package import Data, find_package
             data = Data(self.output)
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
+                toolchain = self.context.get('cxx_target_toolchain')
+                search_path = get_packages_path() / toolchain.system / toolchain.arch / toolchain.build_type.name
                 for pkg in data.requires:
-                    pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[get_packages_path()], makefile=self.makefile)
+                    pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[search_path], makefile=self.makefile)
                     self.debug('copying %s to %s', pkg.config_path, self.build_path / self.pkgconfig_path)
                     group.create_task(aiofiles.copy(pkg.config_path, self.build_path / self.pkgconfig_path))
