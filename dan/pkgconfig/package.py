@@ -13,6 +13,8 @@ from dan.core.utils import unique
 from dan.core.version import Version, VersionSpec
 from dan.cxx.targets import CXXTarget, Library
 
+import typing as t
+
 
 class MissingPackage(RuntimeError):
     def __init__(self, name) -> None:
@@ -20,10 +22,11 @@ class MissingPackage(RuntimeError):
 
 
 def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'.*{name}\.pc$', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+    return find_file(fr'.*{name}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
 
-def find_pkg_configs(name, paths=list()) -> Path:
-    return find_files(fr'.*{name}\.pc$', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+
+def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
+    yield from find_files(fr'.*{name}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
 
 
 def has_package(name,  paths=list()):

@@ -2,6 +2,7 @@
 import os
 from dan.core.pathlib import Path
 import re
+import typing as t
 
 include_paths_lookup = [
     '~/.local/include',
@@ -32,15 +33,14 @@ def find_file(expr, paths) -> Path:
                 if r.match(file):
                     return Path(root) / file
 
-def find_files(expr, paths) -> list[Path]:
+
+def find_files(expr, paths) -> t.Generator[Path, None, None]:
     r = re.compile(expr)
-    files = list()
     for path in paths:
         for root, _, _files in os.walk(os.path.expandvars(os.path.expanduser(path))):
             for file in _files:
                 if r.match(file):
-                    files.append(Path(root) / file)
-    return files
+                    yield (Path(root) / file)
 
 
 def find_include_path(name, paths: list[str|Path] = None) -> Path:
@@ -66,7 +66,7 @@ def find_executable(name, paths: list[str|Path] = None, default_paths=True) -> P
         paths.extend(programs_paths_lookup)
     return find_file(expr, paths)
 
-def find_executables(name, paths: list[str|Path] = None, default_paths=True) -> list[Path]:
+def find_executables(name, paths: list[str|Path] = None, default_paths=True) -> t.Generator[Path, None, None]:
     paths = paths or list()
     if os.name == 'posix':
         expr = name + '$'
@@ -74,4 +74,4 @@ def find_executables(name, paths: list[str|Path] = None, default_paths=True) -> 
         expr = f'{name}.exe$'
     if default_paths:
         paths.extend(programs_paths_lookup)
-    return find_files(expr, paths)
+    yield from find_files(expr, paths)
