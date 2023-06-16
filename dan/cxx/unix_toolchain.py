@@ -96,7 +96,7 @@ class UnixToolchain(Toolchain):
     def get_base_compile_args(self, sourcefile: Path) -> list[str]:
         match sourcefile.suffix:
             case _ if sourcefile.suffix in cxx_extensions:
-                return [self.cxx, *self.default_cxxflags]
+                return [self.cxx, *self.default_cxxflags, *self.default_cflags]
             case _ if sourcefile.suffix in c_extensions:
                 return [self.cc, *self.default_cflags]
             case _:
