@@ -247,8 +247,13 @@ class Make(Logging):
         items = list()
         if self.required_targets and len(self.required_targets) > 0:
             for required in self.required_targets:
-                test_name, *test_case = required.split(':')
-                test_case = test_case[0] if len(test_case) else None
+                pos = required.find(':')
+                if pos > 0:
+                    test_name = required[:pos]
+                    test_case = required[pos+1:]
+                else:
+                    test_name = required
+                    test_case = None
 
                 for test in self.root.all_tests:
                     
@@ -258,6 +263,8 @@ class Make(Logging):
                             for case in test.cases:
                                 if fnmatch.fnmatch(case.name, test_case):
                                     cases.append(case)
+                            if len(cases) == 0:
+                                self.warning('couldn\'t find any test case in %s matching \'%s\'', test.name, test_case)
                             test.cases = cases
                         
                         items.append(test)
@@ -544,8 +551,13 @@ class Make(Logging):
 
     async def test(self):
         await self.initialize()
+        tests = self.tests
+        if len(tests) == 0:
+            self.error('No test selected')
+            return 255
+
         with self.context:
-            with self.progress('testing', self.tests, self._test_target, self.no_progress) as tasks:
+            with self.progress('testing', tests, self._test_target, self.no_progress) as tasks:
                 results = await asyncio.gather(*tasks)
                 if all(results):
                     self.info('Success !')

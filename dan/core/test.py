@@ -80,6 +80,7 @@ class Test(Logging, MakefileRegister, internal=True):
     async def _run_test(self, caze: Case):
         name = f'{self.name}.{caze.name}' if caze is not None else self.name
         args = [str(a) for a in caze.args]
+        self.debug('testing %s', name)
         out, err, rc = await self.executable.execute(*args, no_raise=True, cwd=self.workingDir)
         out_log, out_err = self.outs(caze)
         async with aiofiles.open(out_log, 'w') as outlog, \
@@ -124,6 +125,9 @@ class Test(Logging, MakefileRegister, internal=True):
 
     async def run_test(self):
         try:
+            if len(self.cases) == 0:
+                self.error('%s contains no test case', self.name)
+                return False
             async with asyncio.TaskGroup(f'running {self.name} tests') as tests:
                 for caze in self.cases:
                     tests.create_task(self._run_test(caze))
