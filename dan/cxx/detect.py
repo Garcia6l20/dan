@@ -443,7 +443,7 @@ def get_compilers(logger: logging.Logger, paths = None):
     return compilers
 
 unix_tools = [
-    'nm', 'ranlib', 'strip', 'readelf', 'ar', 'ranlib'
+    'nm', 'ranlib', 'strip', 'readelf', 'ar', 'ranlib', ('dbg', 'gdb')
 ]
 
 if os.name != 'nt':
@@ -481,6 +481,8 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         data['env'] = compiler.env
 
     def get_compiler_tool(tool, toolname=None):
+        if isinstance(tool, tuple):
+            tool, toolname = tool
         if not toolname:
             toolname = f'{base_name}-{tool}'
         if prefix:
@@ -496,8 +498,10 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     if compiler.name == 'gcc':
         get_compiler_tool('cxx', 'g++')
         get_compiler_tool('as')
+        get_compiler_tool('dbg', 'gdb')
     elif compiler.name == 'clang':
         get_compiler_tool('cxx', 'clang++')
+        get_compiler_tool('dbg', 'lldb')
     elif compiler.name == 'msvc':
         data['link'] = str(compiler.tools['link'])
         data['lib'] = str(compiler.tools['lib'])
@@ -616,7 +620,11 @@ def create_toolchains(paths = None):
             continue
         toolchains[k] = v
     for tool in _required_tools:
-        tools[tool] = str(find_executable(tool, paths, default_paths))
+        if isinstance(tool, tuple):
+            tool, toolname = tool
+        else:
+            toolname = tool
+        tools[tool] = str(find_executable(toolname, paths, default_paths))
     data['tools'] = tools
     data['toolchains'] = toolchains
     if not 'default' in data:
