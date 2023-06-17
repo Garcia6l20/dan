@@ -152,6 +152,19 @@ class OptionSet:
         if private:
             self._private = values._private
 
+def _make_link_libraries(libs: t.Iterable[str]) -> t.Iterable[str]:
+    '''Creates well ordered link parameters
+    
+    Puts all duplitate at the end of the input list to avoid ld errors,
+    ld requires the depending library to come on the command line before the dependent one.
+    '''
+    seen = set()
+    duplicates = list()    
+    for lib in libs:
+        if lib in seen:
+            duplicates.append(lib)
+        seen.add(lib)
+    return [*[lib for lib in libs if lib not in duplicates], *duplicates]
 
 class CXXTarget(Target, internal=True):
     public_includes: set[str] = set()
@@ -213,12 +226,12 @@ class CXXTarget(Target, internal=True):
     @property
     def libs(self) -> list[str]:
         tmp = list()
+        for dep in self.cxx_dependencies:
+            tmp.extend(dep.libs)
         tmp.extend(self.link_libraries.public)
         # TODO move create private_libs()
         tmp.extend(self.link_libraries.private)
-        for dep in self.cxx_dependencies:
-            tmp.extend(dep.libs)
-        return unique(tmp)
+        return _make_link_libraries(tmp)
 
     @cached_property
     def cxx_flags(self):
