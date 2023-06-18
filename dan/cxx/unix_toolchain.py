@@ -114,11 +114,12 @@ class UnixToolchain(Toolchain):
         output = build_path / sourcefile.name
         out, _, _ = await self.run('scan', output, args, log=False, cwd=build_path)
         if out:
-            all = ''.join([dep.replace('\\', ' ')
-                           for dep in out.splitlines()]).split()
-            _obj = all.pop(0)
-            _src = all.pop(0)
-            return all
+            all_deps = list()
+            for dep in out.splitlines():
+                all_deps.append(dep[:-2].strip())
+            _obj = all_deps.pop(0)
+            _src = all_deps.pop(0)
+            return all_deps
         else:
             return set()
 
