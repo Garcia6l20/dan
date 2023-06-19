@@ -178,16 +178,68 @@ class UnixToolchain(Toolchain):
         return includes
 
     async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
+        _from = list()
+        prev: diag.Diagnostic|diag.RelatedInformation = None
         async for line in lines:
             match re_match(line):
-                case r'(.+):(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
-                    yield diag.Diagnostic(
-                        message=m[5],
-                        range=diag.Range(start=diag.Position(line=int(m[2])-1, character=int(m[3]))),
+                case r'\s+?\|\s(\s+)?(\^~+)' as m:
+                    if prev is not None:
+                        if isinstance(prev, diag.Diagnostic):
+                            rng = prev.range
+                        else:
+                            rng = prev.location.range
+                        rng.start.character = len(m[1]) if m[1] else 0
+                        rng.end.character = rng.start.character + len(m[2])
+                case r'((?:.+)from (.+)):(\d+)[,:]' as m:
+                    message = m[1]
+                    if message.startswith('In file included'):
+                        _from.clear()
+                    filename = m[2]
+                    lineno = int(m[3]) - 1
+                    prev = info = diag.RelatedInformation(
+                        location=diag.Location(diag.Uri(filename),
+                        range=diag.Range(start=diag.Position(lineno), end=diag.Position(lineno))),
+                        message=message)
+                    _from.append(info)
+                case r'(.+?): In instantiation of \'(.+)\'' as m:
+                    _from.clear()
+                case r'(.+?):(\d+):(?:(\d+):)?\s+(required from\s.+)' as m:
+                    filename = m[1]
+                    lineno = int(m[2]) - 1
+                    character = int(m[3]) - 1 if m[3] else 0
+                    message = m[4]
+                    prev = info = diag.RelatedInformation(
+                        location=diag.Location(diag.Uri(filename),
+                        range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
+                        message=message)
+                    _from.append(info)
+                case r'(.+?):(\d+):(?:(\d+):)?\s(note):\s(.+)$' as m:
+                    filename = m[1]
+                    character=int(m[3]) if m[3] else 0
+                    lineno = int(m[2]) - 1
+                    message=m[5]
+                    if isinstance(prev, diag.Diagnostic):
+                        info = diag.RelatedInformation(
+                            location=diag.Location(diag.Uri(filename),
+                            range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
+                            message=message)
+                        prev.related_information.insert(0, info)
+                        prev = info
+                    else:
+                        self.warning('diagnostics: a note is expected to append after a diagnositc (previous: %s: %s)', type(prev).__name__, prev.message)
+                case r'(.+?):(\d+):(?:(\d+):)?\s(error|warning):\s(.+)$' as m:
+                    character=int(m[3]) if m[3] else 0
+                    lineno = int(m[2]) - 1
+                    message=m[5]
+                    prev = diag.Diagnostic(
+                        message=message,
+                        range=diag.Range(start=diag.Position(line=lineno, character=character), end=diag.Position(line=lineno)),
                         severity=diag.Severity[m[4].upper()],
                         source=self.type,
-                        filename=m[1]
+                        filename=m[1],
+                        related_information=list(_from)
                     )
+                    yield prev
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         match self.type:
