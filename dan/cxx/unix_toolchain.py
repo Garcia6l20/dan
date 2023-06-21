@@ -180,6 +180,7 @@ class UnixToolchain(Toolchain):
     async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         _from = list()
         prev: diag.Diagnostic|diag.RelatedInformation = None
+        prev_diag: diag.Diagnostic = None
         async for line in lines:
             match re_match(line):
                 case r'\s+?\|\s(\s+)?(\^~+)' as m:
@@ -218,20 +219,20 @@ class UnixToolchain(Toolchain):
                     character=int(m[3]) if m[3] else 0
                     lineno = int(m[2]) - 1
                     message=m[5]
-                    if isinstance(prev, diag.Diagnostic):
+                    if prev_diag is None:
+                        self.warning('diagnostics: a note is expected to append after a diagnositc')
+                    else:
                         info = diag.RelatedInformation(
                             location=diag.Location(diag.Uri(filename),
                             range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
                             message=message)
-                        prev.related_information.insert(0, info)
+                        prev_diag.related_information.insert(0, info)
                         prev = info
-                    else:
-                        self.warning('diagnostics: a note is expected to append after a diagnositc (previous: %s: %s)', type(prev).__name__, prev.message)
                 case r'(.+?):(\d+):(?:(\d+):)?\s(error|warning):\s(.+)$' as m:
                     character=int(m[3]) if m[3] else 0
                     lineno = int(m[2]) - 1
                     message=m[5]
-                    prev = diag.Diagnostic(
+                    prev_diag = prev = diag.Diagnostic(
                         message=message,
                         range=diag.Range(start=diag.Position(line=lineno, character=character), end=diag.Position(line=lineno)),
                         severity=diag.Severity[m[4].upper()],
@@ -239,7 +240,7 @@ class UnixToolchain(Toolchain):
                         filename=m[1],
                         related_information=list(_from)
                     )
-                    yield prev
+                    yield prev_diag
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         match self.type:
