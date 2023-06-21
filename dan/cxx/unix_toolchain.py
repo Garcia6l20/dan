@@ -228,7 +228,7 @@ class UnixToolchain(Toolchain):
                             message=message)
                         prev_diag.related_information.insert(0, info)
                         prev = info
-                case r'(.+?):(\d+):(?:(\d+):)?\s(error|warning):\s(.+)$' as m:
+                case r'(.+?):(\d+):(?:(\d+):)?\s(?:fatal )?(error|warning):\s(.+)$' as m:
                     character=int(m[3]) if m[3] else 0
                     lineno = int(m[2]) - 1
                     message=m[5]
