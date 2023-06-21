@@ -40,7 +40,7 @@ class Dependencies:
                 from dan.pkgconfig.package import Package
                 for pkg in Package.all.values():
                     if pkg.name == dependency:
-                        self.append(pkg)
+                        self._content.append(pkg)
                         break
                 else:
                     if Path(self.parent.source_path / dependency).exists():
