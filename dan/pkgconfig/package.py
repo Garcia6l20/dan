@@ -12,6 +12,7 @@ from dan.core.settings import InstallMode, InstallSettings
 from dan.core.utils import unique
 from dan.core.version import Version, VersionSpec
 from dan.cxx.targets import CXXTarget, Library
+from dan.cxx.toolchain import unique_libraries
 
 import typing as t
 
@@ -190,7 +191,7 @@ class Package(CXXTarget, internal=True):
                 tmp.extend(libs)
             for pkg in self.package_dependencies:
                 tmp.extend(pkg.libs)
-            self.__libs = unique(tmp)
+            self.__libs = unique_libraries(tmp)
         return self.__libs
 
     @asyncio.cached

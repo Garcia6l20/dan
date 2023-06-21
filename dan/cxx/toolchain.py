@@ -20,6 +20,21 @@ class RuntimeType(Enum):
     dynamic = 1
 
 
+def unique_libraries(libs: t.Iterable[str]) -> t.Iterable[str]:
+    '''Creates well ordered link parameters
+    
+    Puts all duplitate at the end of the input list to avoid ld errors,
+    ld requires the depending library to come on the command line before the dependent one.
+    '''
+    seen = set()
+    duplicates = list()    
+    for lib in libs:
+        if lib in seen:
+            duplicates.append(lib)
+        seen.add(lib)
+    return [*[lib for lib in libs if lib not in duplicates], *duplicates]
+
+
 class BaseFailure(RuntimeError):
     def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic], target = None) -> None:
         super().__init__(msg)

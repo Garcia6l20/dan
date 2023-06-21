@@ -3,7 +3,7 @@ from dan.core import diagnostics as diag
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, unique_libraries
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
 
@@ -82,7 +82,7 @@ class UnixToolchain(Toolchain):
             else:
                 assert isinstance(lib, str)
                 opts.append(f'-l{lib}')
-        return unique(opts)
+        return unique_libraries(opts)
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return unique([f'-D{d}' for d in definitions])
