@@ -39,6 +39,7 @@ class Context(Logging):
         self.__all_makefiles: set[MakeFile] = set()
         self.imported_makefiles: dict[Path, MakeFile] = dict()
         self.__prev_ctx: Context = None
+        self.__attributes = dict()
         super().__init__('context')
 
     @property
@@ -69,14 +70,14 @@ class Context(Logging):
             self.__current = self.__current.parent
 
     def get(self, name, default=None):
-        if hasattr(self, name):
-            return getattr(self, name)
+        if name in self.__attributes:
+            return self.__attributes[name]
         if default is not None:
-            setattr(self, name, default)
+            self.__attributes[name] = default
             return default
 
     def set(self, name, value):
-        setattr(self, name, value)
+        self.__attributes[name] = value
 
     def __enter__(self):
         global context

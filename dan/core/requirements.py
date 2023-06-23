@@ -43,6 +43,7 @@ class RequiredPackage(Logging):
         super().__init__(name)
         self.target : 'Target' = None
         self.package, self.name, self.repository = parse_package(name)
+        self.__skipped = list()
 
     def is_compatible(self, t: 'Target'):
         if self.version_spec is not None:
@@ -60,7 +61,9 @@ class RequiredPackage(Logging):
         return self.target.modification_time if self.target else 0.0
 
     def __skipped_method_call(self, name, *args, **kwargs):
-        self.debug('call to %s skipped (unresolved)', name)
+        if name not in self.__skipped:
+            self.debug('call to %s skipped (unresolved)', name)
+            self.__skipped.append(name)
 
     def __getattr__(self, name):
         if not self.found:
@@ -91,7 +94,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     if logger is None:
         logger = _get_makefile_logger()
 
-    deps_install_path = makefile.pkgs_path
+    deps_install_path = makefile.root.pkgs_path
     deps_settings = InstallSettings(deps_install_path)
 
     pkgs_search_paths = [deps_install_path]
@@ -128,7 +131,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
                     with makefile.context:
-                        t = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
+                        t = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
                     logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)
                 group.create_task(t.install(deps_settings, InstallMode.dev))
