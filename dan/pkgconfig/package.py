@@ -6,13 +6,14 @@ import re
 import importlib.util
 
 from dan.core.find import find_file, find_files, library_paths_lookup
+from dan.core.pm import re_match
 from dan.core.requirements import RequiredPackage, parse_requirement
 from dan.core.runners import cmdline2list
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.utils import unique
 from dan.core.version import Version, VersionSpec
 from dan.cxx.targets import CXXTarget, Library
-from dan.cxx.toolchain import unique_libraries
+from dan.cxx.toolchain import LibraryList
 
 import typing as t
 
@@ -119,20 +120,22 @@ class Package(CXXTarget, internal=True):
         if not self.config_path:
             raise MissingPackage(name)
         self.search_paths.insert(0, self.config_path.parent)
+        self.pn = name
         self.all[name] = self
 
-        super().__init__(name, **kwargs)
+        super().__init__(f'{name}-pkgconfig', **kwargs)
 
         dan_plugin = self.config_path.parent.parent / \
-            'dan' / f'{self.name}.py'
+            'dan' / f'{name}.py'
         if dan_plugin.exists():
             spec = importlib.util.spec_from_file_location(
-                f'{self.name}_plugin', dan_plugin)
+                f'{name}_plugin', dan_plugin)
             module = importlib.util.module_from_spec(spec)
             setattr(module, 'self', self)
             spec.loader.exec_module(module)
         self.__cflags = None
         self.__libs = None
+        self.__lib_paths = None
         if not data:
             self.data = Data(self.config_path)
 
@@ -180,18 +183,36 @@ class Package(CXXTarget, internal=True):
     def package_dependencies(self):
         return [pkg for pkg in self.dependencies if isinstance(pkg, Package)]
 
+    def __init_libs(self):
+        self.__libs = LibraryList()
+        self.__lib_paths = set()
+        libs = self.data.get('libs')
+        if libs is not None:
+            libs = cmdline2list(libs)
+            libs = self.toolchain.from_unix_flags(libs)
+            for l in libs:
+                match re_match(l):
+                    case r'-l(.+)' as m:
+                        self.__libs.add(m[0])
+                    case r'-L(.+)' as m:
+                        self.__lib_paths.add(m[0])
+                    case r'-Wl,-rpath,(.+)' as m:
+                        self.__lib_paths.add(m[0])
+        for pkg in self.package_dependencies:
+            self.__lib_paths.update(pkg.lib_paths)
+            self.__libs.extend(pkg.libs)
+        self.__lib_paths = list(self.__lib_paths)
+
+    @property
+    def lib_paths(self) -> list[str]:
+        if self.__lib_paths is None:
+            self.__init_libs()
+        return self.__lib_paths
+    
     @property
     def libs(self):
         if self.__libs is None:
-            tmp = list()
-            libs = self.data.get('libs')
-            if libs is not None:
-                libs = cmdline2list(libs)
-                libs = self.toolchain.from_unix_flags(libs)
-                tmp.extend(libs)
-            for pkg in self.package_dependencies:
-                tmp.extend(pkg.libs)
-            self.__libs = unique_libraries(tmp)
+            self.__init_libs()
         return self.__libs
 
     @asyncio.cached
@@ -219,6 +240,12 @@ _jinja_env: jinja2.Environment = None
 
 
 def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
+    
+    if name in Package.all:
+        pkg = Package.all[name]
+        if spec and not spec.is_compatible(pkg.version):
+            raise RuntimeError(f'incompatible package {name} ({pkg.version} {spec})')
+        return pkg
     if makefile is None:
         from dan.core.include import context
         makefile = context.current
@@ -245,14 +272,20 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     lib.info(f'creating pkgconfig: {dest}')
 
     requires = list()
-    for req in lib.requires:
-        if req.version_spec:
-            requires.append(f'{req.name} {req.version_spec.op} {req.version_spec.version}')
-        else:
-            requires.append(req.name)
+    for dep in lib.dependencies:
+        if isinstance(dep, RequiredPackage):
+            if dep.version_spec:
+                requires.append(f'{dep.name} {dep.version_spec.op} {dep.version_spec.version}')
+                continue
+        requires.append(dep.name)
 
-    libs = lib.toolchain.make_link_options(
-        [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
+
+    libs = list()
+    if not lib.interface:
+        libs.extend(lib.toolchain.make_libpath_options(
+            [Path(f'${{libdir}}/{lib.name}')]))
+        libs.extend(lib.toolchain.make_link_options(
+            [Path(f'${{libdir}}/{lib.name}')]))
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
     libs = lib.toolchain.to_unix_flags(libs)

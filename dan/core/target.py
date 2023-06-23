@@ -299,6 +299,10 @@ class Target(Logging, MakefileRegister, internal=True):
         if self._output is None:
             return None
         return self.build_path / self._output
+
+    @property
+    def routput(self):
+        return self._output
     
     @property
     def version(self):
@@ -316,7 +320,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @output.setter
     def output(self, path):
         path = Path(path)
-        if path.is_absolute() and self.build_path in path.parents:
+        if not path.is_absolute() and self.build_path in path.parents:
             raise RuntimeError(f'output must not be an absolute path within build directory')
         self._output = path
 
@@ -469,6 +473,9 @@ class Target(Logging, MakefileRegister, internal=True):
     @asyncio.cached
     async def install(self, settings: InstallSettings, mode: InstallMode):
         await self.build()
+
+        self.debug('installing %s to %s', self.name, settings.destination)
+
         installed_files = list()
         if mode == InstallMode.dev:
             if len(self.utils) > 0:

@@ -46,10 +46,11 @@ class MakeFile(sys.__class__):
 
     def register(self, cls: type[Target | Test]):
         """Register Target/Test class"""
+        t = cls()
         if issubclass(cls, Target):
-            self.__targets.add(cls())
+            self.__targets.add(t)
         if issubclass(cls, Test):
-            self.__tests.add(cls())
+            self.__tests.add(t)
         return cls
 
     def wraps(self, cls: type[Target]):

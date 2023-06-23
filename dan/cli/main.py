@@ -435,4 +435,5 @@ def main():
             asyncio.get_running_loop().run_until_complete()
         except Exception:
             pass
+        asyncio.run(Cache.save_all())
         return -1

@@ -49,7 +49,7 @@ class RequiredPackage(Logging):
             version_ok = self.version_spec.is_compatible(t.version)
         else:
             version_ok = True
-        return t.name == self.name and version_ok
+        return version_ok
     
     @property
     def found(self):
@@ -128,7 +128,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
                     with makefile.context:
-                        t = Package(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
+                        t = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile)
                     logger.debug('%s: adding package %s', req, t.fullname)
                 unresolved.append(req)
                 group.create_task(t.install(deps_settings, InstallMode.dev))

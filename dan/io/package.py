@@ -15,7 +15,8 @@ class PackageBuild(Target, internal=True):
     
     def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
-        super().__init__(name, *args, version=version, **kwargs)
+        self.pn = name
+        super().__init__(f'{name}-build', *args, version=version, **kwargs)
         self.package = name if package is None else package
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
@@ -25,10 +26,10 @@ class PackageBuild(Target, internal=True):
     @property
     def package_makefile(self):
         if self._package_makefile is None:
-            target = self.repo.find(self.name, self.package)
+            target = self.repo.find(self.pn, self.package)
             if target is None:
-                raise RuntimeError(f'cannot find {self.name} in {self.repo.name}')
-            self._package_makefile = self.repo.find(self.name, self.package).makefile
+                raise RuntimeError(f'cannot find {self.pn} in {self.repo.name}')
+            self._package_makefile = target.makefile
         return self._package_makefile
 
     def get_sources(self):
@@ -39,7 +40,7 @@ class PackageBuild(Target, internal=True):
                 sources = target
                 break
         if sources is None:
-            raise RuntimeError(f'Cannot find {self.name} pacakge\'s sources target')
+            raise RuntimeError(f'Cannot find {self.pn} package\'s sources target')
         return sources
 
     async def __initialize__(self):
@@ -118,6 +119,8 @@ class PackageBuild(Target, internal=True):
 
 class Package(Target, internal=True):
 
+    __all: dict[str, 'Package'] = dict()
+
     def __init__(self,
                  name: str = None,
                  version: str = None,
@@ -130,6 +133,20 @@ class Package(Target, internal=True):
         if name is not None:
             self.name = name
         super().__init__(**kwargs)
+        if self.name in self.__all:
+            raise RuntimeError(f'duplicate package: {self.name}')
+        self.__all[self.name] = self
+
+    @classmethod
+    def instance(cls, name, version, *args, **kwargs):
+        if name in cls.__all:
+            pkg = cls.__all[name]
+            if not version.is_compatible(pkg.version):
+                raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
+            return pkg
+        else:
+            return Package(name, version, *args, **kwargs)
+
     
     async def __initialize__(self):
 

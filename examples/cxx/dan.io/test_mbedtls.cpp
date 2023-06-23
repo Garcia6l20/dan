@@ -7,6 +7,7 @@
 int main(int argc, char **argv) {
     if (argc < 2) {
         fmt::print("Expecting at least one argument");
+        return -1;
     }
     mbedtls_sha256_context ctx;
     mbedtls_sha256_init(&ctx);

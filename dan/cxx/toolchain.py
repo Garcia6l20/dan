@@ -19,20 +19,31 @@ class RuntimeType(Enum):
     static = 0
     dynamic = 1
 
-
-def unique_libraries(libs: t.Iterable[str]) -> t.Iterable[str]:
-    '''Creates well ordered link parameters
+class LibraryList:
+    def __init__(self, *items: t.Iterable):
+        self._lst = list()
+        self.extend(items)
     
-    Puts all duplitate at the end of the input list to avoid ld errors,
-    ld requires the depending library to come on the command line before the dependent one.
-    '''
-    seen = set()
-    duplicates = list()    
-    for lib in libs:
-        if lib in seen:
-            duplicates.append(lib)
-        seen.add(lib)
-    return [*[lib for lib in libs if lib not in duplicates], *duplicates]
+    def add(self, item):
+        if not item in self._lst:
+            self._lst.insert(0, item)
+
+    def extend(self, items):
+        to_add = list()
+        for item in reversed(items):
+            try:
+                self._lst.remove(item)
+                to_add.insert(0, item)
+            except ValueError:
+                to_add.append(item)
+            
+        self._lst.extend(to_add)
+
+    def __iter__(self):
+        return iter(self._lst)
+    
+    def __reversed__(self):
+        return reversed(self._lst)
 
 
 class BaseFailure(RuntimeError):
@@ -138,6 +149,9 @@ class Toolchain(Logging):
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
         raise NotImplementedError()
 
+    def make_libpath_options(self, libraries: set[Path | str]) -> list[str]:
+        raise NotImplementedError()
+
     def make_link_options(self, libraries: set[Path]) -> list[str]:
         raise NotImplementedError()
 
@@ -220,11 +234,11 @@ class Toolchain(Logging):
                 raise LinkageFailure(err, objects, options, command, self) from None
         return commands
 
-    def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
+    def make_shared_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> tuple[Path, CommandArgsList]:
         raise NotImplementedError()
 
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str], **kwds):
-        commands = self.make_static_lib_commands(objects, output, options)
+        commands = self.make_shared_lib_commands(objects, output, options)
         for index, command in enumerate(commands):
             await self.run(f'shared_lib{index}', output, command, **kwds, cwd=output.parent)
         return commands
