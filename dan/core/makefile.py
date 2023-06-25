@@ -69,7 +69,7 @@ class MakeFile(sys.__class__):
             for t in self.__targets:
                 if type(t) == cls:
                     self.__targets.remove(t)
-                    return cls
+                    return new_cls
             assert False, 'Original target has not been registered'
         return decorator
 
