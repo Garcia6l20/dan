@@ -17,8 +17,10 @@ from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, T
 
 
 class CXXObject(Target, internal=True):
-    def __init__(self, source:Path, parent: 'CXXTarget', root: Path) -> None:
+    def __init__(self, source:Path, parent: 'CXXTarget', root: Path = None) -> None:
         if source.is_absolute():
+            if root is None:
+                root = parent.build_path
             name = '-'.join(source.relative_to(root).with_suffix(f'').parts)
         else:
             name = '-'.join(source.with_suffix(f'').parts)
