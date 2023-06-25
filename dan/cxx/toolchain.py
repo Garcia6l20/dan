@@ -29,15 +29,12 @@ class LibraryList:
             self._lst.insert(0, item)
 
     def extend(self, items):
-        to_add = list()
-        for item in reversed(items):
+        for item in items:
             try:
                 self._lst.remove(item)
-                to_add.insert(0, item)
             except ValueError:
-                to_add.append(item)
-            
-        self._lst.extend(to_add)
+                pass
+        self._lst.extend(items)
 
     def __iter__(self):
         return iter(self._lst)
