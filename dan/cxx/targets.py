@@ -224,7 +224,7 @@ class CXXTarget(Target, internal=True):
     def library_dependencies(self) -> list['Library']:
         return [dep for dep in self.dependencies if isinstance(dep, Library)]
 
-    @property
+    @cached_property
     def lib_paths(self) -> list[str]:
         tmp = set()
         for dep in self.cxx_dependencies:
@@ -234,7 +234,7 @@ class CXXTarget(Target, internal=True):
         tmp.update(self.library_paths.private)
         return list(tmp)
 
-    @property
+    @cached_property
     def libs(self) -> LibraryList:
         tmp = LibraryList()
         for dep in reversed(self.cxx_dependencies):
@@ -360,10 +360,14 @@ class Library(CXXObjectsTarget, internal=True):
     
     @property
     def libs(self) -> list[str]:
-        tmp = super().libs
         if not self.interface:
-            tmp.extend(self.toolchain.make_link_options([self.output]))
-        return tmp
+            libs = LibraryList()
+            libs.extend(self.toolchain.make_link_options([self.output]))
+            libs.extend(super().libs)
+        else:
+            libs = super().libs
+        
+        return libs
 
     async def __initialize__(self):
         self._init_sources()
