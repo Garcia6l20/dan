@@ -73,12 +73,11 @@ class CXXObject(Target, internal=True):
         else:
             self.__dirty = True
 
-    @property
+    @cached_property
     def up_to_date(self):
-        res = super().up_to_date
-        if res and self.__dirty:
-            res = False
-        return res
+        if self.__dirty:
+            return False
+        return super().up_to_date
 
     async def __build__(self):
         self.info('generating %s...', self.output.name)
@@ -296,7 +295,7 @@ class CXXObjectsTarget(CXXTarget, internal=True):
     def file_dependencies(self):
         return unique(super().file_dependencies, *[o.file_dependencies for o in self.objs])
     
-    @property
+    @cached_property
     def up_to_date(self):
         for obj in self.objs:
             if not obj.up_to_date:
@@ -405,7 +404,7 @@ class Library(CXXObjectsTarget, internal=True):
         else:
             self.__dirty = False
 
-    @property
+    @cached_property
     def up_to_date(self):
         if self.__dirty:
             return False
@@ -514,7 +513,7 @@ class Executable(CXXObjectsTarget, internal=True):
             if sorted(previous_args) != sorted(args):
                 self.__dirty = True
 
-    @property
+    @cached_property
     def up_to_date(self):
         if self.__dirty:
             return False

@@ -398,7 +398,7 @@ class Target(Logging, MakefileRegister, internal=True):
         output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output  
         return output.stat().st_mtime if output.exists() else 0.0
 
-    @property
+    @cached_property
     def up_to_date(self):
         output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
         if output and not output.exists():
