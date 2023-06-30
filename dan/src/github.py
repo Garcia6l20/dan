@@ -24,6 +24,11 @@ class GitHubReleaseSources(TarSources, internal=True):
         await super().__initialize__()
 
         self._url = self.cache.get('url')
+        if self._url is not None and self.version is not None:
+            prev_version = self.cache.get('version')
+            if prev_version is not None and prev_version != self.version:
+                self._url = None
+            
         if self._url is None:
             avail_versions = await self.available_versions()
             if self.version is None:
@@ -45,6 +50,7 @@ class GitHubReleaseSources(TarSources, internal=True):
                         self._url = release['tarball_url']
             if self._url is None:
                 raise RuntimeError(f'cannot resolve url of {self.name}')
+            self.cache['version'] = self.version
             self.cache['url'] = self._url
 
     @asyncio.cached
