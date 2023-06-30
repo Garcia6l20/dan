@@ -160,6 +160,8 @@ class Package(CXXTarget, internal=True):
                         dep = self.all[req.name]
                     else:
                         dep = find_package(req.name, req.version_spec, search_paths=self.search_paths, makefile=self.makefile)
+                    if dep is None:
+                        raise RuntimeError(f'Unresolved requirement: {req}')
                     group.create_task(dep.initialize())
                     deps.add(dep)
         self.includes.public.append(self.data.get('includedir'))
@@ -273,11 +275,14 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
 
     requires = list()
     for dep in lib.dependencies:
-        if isinstance(dep, RequiredPackage):
-            if dep.version_spec:
-                requires.append(f'{dep.name} {dep.version_spec.op} {dep.version_spec.version}')
-                continue
-        requires.append(dep.name)
+        match dep:
+            case RequiredPackage():
+                if dep.version_spec:
+                    requires.append(f'{dep.name} {dep.version_spec.op} {dep.version_spec.version}')
+                else:
+                    requires.append(dep.name)
+            case Library():
+                requires.append(dep.name)
 
 
     libs = list()
