@@ -4,7 +4,7 @@ from dan.core import aiofiles, asyncio
 from dan.core.pathlib import Path
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
-from dan.core.find import find_files
+from dan.core.find import find_file, find_files
 from dan.core.version import Version, VersionSpec
 from dan.io.repositories import get_packages_path, get_repo_instance
 
@@ -199,7 +199,11 @@ class Package(Target, internal=True):
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 toolchain = self.context.get('cxx_target_toolchain')
                 search_path = get_packages_path() / toolchain.system / toolchain.arch / toolchain.build_type.name
+                dest = self.build_path / self.pkgconfig_path
                 for pkg in data.requires:
-                    pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[search_path], makefile=self.makefile)
-                    self.debug('copying %s to %s', pkg.config_path, self.build_path / self.pkgconfig_path)
-                    group.create_task(aiofiles.copy(pkg.config_path, self.build_path / self.pkgconfig_path))
+                    pkgconfig_file = find_file(rf'{pkg.name}.pc$', [search_path])
+                    # NOTE: find_package will resolve to the build-directory installed pkgconfig, wich will result in a failure
+                    # pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[search_path], makefile=self.makefile)
+                    if pkgconfig_file is not None and not (dest / pkgconfig_file.name).exists():
+                        self.debug('copying %s to %s', pkgconfig_file, dest)
+                        group.create_task(aiofiles.copy(pkgconfig_file, dest))
