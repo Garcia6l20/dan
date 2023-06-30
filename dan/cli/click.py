@@ -76,3 +76,22 @@ class SettingsParamType(ParamType):
                         completions.append(CompletionItem(f'{prefix}{field.name}', type='nospace'))
         gen_comps(fields=self.fields, parts=incomplete.split('.'))
         return completions
+
+class OptionsParamType(ParamType):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from click.shell_completion import CompletionItem
+        from dan.make import Make
+        from dan.core.asyncio import sync_wait
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True)
+        sync_wait(make.initialize())
+        
+        comps = []
+        for opt in make.all_options:
+            if opt.fullname.startswith(incomplete):
+                comps.append(CompletionItem(opt.fullname, type='nospace'))
+        
+        return comps
