@@ -203,7 +203,7 @@ class Package(CXXTarget, internal=True):
         for pkg in self.package_dependencies:
             self.__lib_paths.update(pkg.lib_paths)
             self.__libs.extend(pkg.libs)
-        self.__lib_paths = list(self.__lib_paths)
+        self.__lib_paths = list(sorted(self.__lib_paths))
 
     @property
     def lib_paths(self) -> list[str]:

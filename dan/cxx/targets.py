@@ -231,7 +231,7 @@ class CXXTarget(Target, internal=True):
         tmp.update(self.library_paths.public)
         # # TODO move create private_libs()
         tmp.update(self.library_paths.private)
-        return list(tmp)
+        return list(sorted(tmp))
 
     @cached_property
     def libs(self) -> LibraryList:
@@ -350,12 +350,12 @@ class Library(CXXObjectsTarget, internal=True):
     def interface(self) -> bool:
         return self.library_type == LibraryType.INTERFACE
 
-    @property
+    @cached_property
     def lib_paths(self) -> list[str]:
         tmp = super().lib_paths
         if not self.interface:
             tmp.extend(self.toolchain.make_libpath_options([self.output]))
-        return tmp
+        return list(sorted(tmp))
     
     @property
     def libs(self) -> list[str]:
