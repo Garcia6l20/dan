@@ -131,10 +131,13 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                     logger.debug('%s using requirements\' target %s', req, t.fullname)
                 else:
                     with makefile.context:
-                        t = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
-                    logger.debug('%s: adding package %s', req, t.fullname)
-                unresolved.append(req)
+                        t, is_new = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
+                    if is_new:
+                        logger.debug('%s: adding package %s', req, t.fullname)
+                    else:
+                        logger.debug('%s: package already beeing installed at version %s', req, t.version)
                 group.create_task(t.install(deps_settings, InstallMode.dev))
+                unresolved.append(req)
 
 
 

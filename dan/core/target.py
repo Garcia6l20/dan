@@ -470,7 +470,7 @@ class Target(Logging, MakefileRegister, internal=True):
             if inspect.iscoroutine(res):
                 group.create_task(res)
 
-    @asyncio.cached
+    @asyncio.cached(unique = True)
     async def install(self, settings: InstallSettings, mode: InstallMode):
         await self.build()
 

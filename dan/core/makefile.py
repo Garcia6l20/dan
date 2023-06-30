@@ -44,6 +44,14 @@ class MakeFile(sys.__class__):
             self.__cache = Cache(
                 self.build_path / f'{self.name}.cache', cache_name=self.fullname, binary=True)
         return self.__cache
+    
+    @property
+    def parents(self):
+        parent = self.parent
+        while parent is not None:
+            yield parent
+            parent = parent.parent
+
 
     __target_fullnames = list()
     __test_fullnames = list()
@@ -55,6 +63,9 @@ class MakeFile(sys.__class__):
             #     raise RuntimeError(f'duplicate target name: {t.fullname}')
             MakeFile.__target_fullnames.append(t.fullname)
             self.__targets.add(t)
+            self.__find.cache_clear()
+            for parent in self.parents:
+                parent.__find.cache_clear()
         if issubclass(cls, Test):
             # if t.fullname in MakeFile.__test_fullnames:
             #     raise RuntimeError(f'duplicate test name: {t.fullname}')

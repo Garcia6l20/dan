@@ -143,9 +143,9 @@ class Package(Target, internal=True):
             pkg = cls.__all[name]
             if not version.is_compatible(pkg.version):
                 raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
-            return pkg
+            return pkg, False
         else:
-            return Package(name, version, *args, **kwargs)
+            return Package(name, version, *args, **kwargs), True
 
     
     async def __initialize__(self):

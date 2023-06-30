@@ -6,28 +6,55 @@ import typing as t
 from dan.core.functools import BaseDecorator
 
 
-class cached(BaseDecorator):
+class Cached(BaseDecorator):
 
-    def __init__(self, fn):
+    def __init__(self, fn, unique=False):
         self.__fn = fn
-        self.__cache: dict[int, Future] = dict()
+        self.__unique = unique
+        self.__is_method = fn.__call__.__class__.__name__ == 'method-wrapper'
+        if not self.__is_method and self.__unique:
+            self.__cache = None
+        else:
+            self.__cache: dict[int, Future] = dict()
 
     async def __call__(self, *args, **kwds):
-        key = hash((args, frozenset(kwds)))
-        if key not in self.__cache:
-            self.__cache[key] = Future()
-            try:
-                self.__cache[key].set_result(await self.__fn(*args, **kwds))
-            except Exception as ex:
-                self.__cache[key].set_exception(ex)
-        elif not self.__cache[key].done():
-            await self.__cache[key]
+        if not self.__is_method and self.__unique:
+            if self.__cache is None:
+                self.__cache = Future()
+                try:
+                    self.__cache.set_result(await self.__fn(*args, **kwds))
+                except Exception as ex:
+                    self.__cache.set_exception(ex)
+            elif not self.__cache.done():
+                await self.__cache
+            return self.__cache.result()
+        else:
+            key = id(args[0]) if self.__unique else hash((args, frozenset(kwds)))
+            if key not in self.__cache:
+                self.__cache[key] = Future()
+                try:
+                    self.__cache[key].set_result(await self.__fn(*args, **kwds))
+                except Exception as ex:
+                    self.__cache[key].set_exception(ex)
+            elif not self.__cache[key].done():
+                await self.__cache[key]
 
-        return self.__cache[key].result()
+            return self.__cache[key].result()
 
     def clear_all(self):
-        self.__cache = dict()
+        if self.__unique:
+            self.__cache = dict()
+        else:
+            self.__cache = None
 
+
+def cached(*args, **kwargs):
+    if len(args) == 1 and callable(args[0]):
+        return Cached(args[0])
+    else:
+        def wrapper(fn):
+            return Cached(fn, *args, **kwargs)
+        return wrapper
 
 class _SyncWaitThread(threading.Thread):
     def __init__(self, coro):
