@@ -122,7 +122,9 @@ class UnixToolchain(Toolchain):
         if out:
             all_deps = list()
             for dep in out.splitlines():
-                all_deps.append(dep[:-2].strip())
+                if dep.endswith('\\'):
+                    dep = dep[:-2]
+                all_deps.append(dep.strip())
             _obj = all_deps.pop(0)
             _src = all_deps.pop(0)
             return all_deps
