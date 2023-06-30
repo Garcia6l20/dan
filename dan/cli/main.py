@@ -136,7 +136,7 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
 @common_opts
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets"""
@@ -151,7 +151,7 @@ async def build(ctx: CommandsContext, force=False, **kwds):
 @cli.command()
 @common_opts
 @click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def install(ctx: CommandsContext, mode: str, **kwargs):
     """Install targets"""
@@ -266,7 +266,7 @@ def toolchains(**kwargs):
 
 @cli.command()
 @common_opts
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def clean(ctx, **kwargs):
     """Clean generated stuff"""
@@ -276,7 +276,7 @@ async def clean(ctx, **kwargs):
 
 @cli.command()
 @common_opts
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def run(ctx, **kwargs):
     """Run executable(s)"""
@@ -287,7 +287,7 @@ async def run(ctx, **kwargs):
 
 @cli.command()
 @common_opts
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def test(ctx, **kwargs):
     """Run tests"""

@@ -95,3 +95,24 @@ class OptionsParamType(ParamType):
                 comps.append(CompletionItem(opt.fullname, type='nospace'))
         
         return comps
+
+
+class TargetParamType(ParamType):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from click.shell_completion import CompletionItem
+        from dan.make import Make
+        from dan.core.asyncio import sync_wait
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True)
+        sync_wait(make.initialize())
+
+        
+        comps = []
+        for target in make.root.all_targets:
+            if target.fullname.startswith(incomplete):
+                comps.append(CompletionItem(target.fullname, type='nospace'))
+        
+        return comps
