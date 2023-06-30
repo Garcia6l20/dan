@@ -25,7 +25,9 @@ jobs:
           #       because others are too long on GH worflow
           os: ubuntu-latest
           shell: bash
-          with_conan: true
+          with_conan: false
+          targets: |
+            dan.io
 
         - name: Windows MSVC
           os: windows-latest
