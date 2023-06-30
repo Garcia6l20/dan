@@ -157,6 +157,8 @@ class VersionSpec:
         self.op = op
         
     def is_compatible(self, version: Version):
+        if isinstance(version, VersionSpec):
+            version = version.version
         match self.op:
             case '==':
                 return version == self.version
