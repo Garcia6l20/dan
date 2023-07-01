@@ -57,18 +57,22 @@ class PackageBuild(Target, internal=True):
                         break
 
         packages_path = get_packages_path()
-        
+        makefile = self.package_makefile
+
+        # set package version
+        version_option = makefile.options.get('version')
+        if self.version is None:
+            self.version = Version(version_option.value)
+        else:
+            version_option.value = str(self.version)
+
         toolchain = self.context.get('cxx_target_toolchain')
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
         
         # update package build-path
-        makefile = self.package_makefile
         makefile.build_path = self.build_path / 'build'
 
-        # set package version
-        if self.version:
-            makefile.options.get('version').value = str(self.version)
 
         # set our output to the last installed package
         # TODO handle multiple outputs, then set our outputs to all installed packages
