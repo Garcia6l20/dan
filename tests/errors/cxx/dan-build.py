@@ -8,3 +8,11 @@ class NoMain(Executable):
 
 class UndefinedReference(Executable):
     sources = ['undefined-reference.cpp']
+
+class IncludeChain(Executable):
+    private_includes = ['.']
+    sources = ['include-chain.cpp']
+
+class TemplateError(Executable):
+    private_includes = ['.']
+    sources = ['template-error.cpp']

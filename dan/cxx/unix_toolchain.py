@@ -68,7 +68,7 @@ class UnixToolchain(Toolchain):
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
         return unique([f'-I{p}' for p in include_paths])
 
-    def make_link_options(self, libraries: set[Path | str]) -> list[str]:
+    def make_libpath_options(self, libraries: set[Path | str]) -> list[str]:
         opts = list()
         if self.rpath:
             opts.append(f'-Wl,-rpath,{self.rpath}')
@@ -78,11 +78,17 @@ class UnixToolchain(Toolchain):
                 opts.append(f'-L{lib.parent}')
                 if not self.rpath:
                     opts.append(f'-Wl,-rpath,{lib.parent}')
+        return opts
+
+    def make_link_options(self, libraries: set[Path | str]) -> list[str]:
+        opts = list()
+        for lib in libraries:
+            if isinstance(lib, Path):
                 opts.append(f'-l{lib.stem.removeprefix("lib")}')
             else:
                 assert isinstance(lib, str)
                 opts.append(f'-l{lib}')
-        return unique(opts)
+        return opts
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return unique([f'-D{d}' for d in definitions])
@@ -116,7 +122,9 @@ class UnixToolchain(Toolchain):
         if out:
             all_deps = list()
             for dep in out.splitlines():
-                all_deps.append(dep[:-2].strip())
+                if dep.endswith('\\'):
+                    dep = dep[:-2]
+                all_deps.append(dep.strip())
             _obj = all_deps.pop(0)
             _src = all_deps.pop(0)
             return all_deps
@@ -139,7 +147,7 @@ class UnixToolchain(Toolchain):
         return [args]
 
     def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
-        args = [self.cxx, *[o.name for o in objects], '-o', str(output), *unique(
+        args = [self.cxx, *objects, '-o', str(output), *unique(
             self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
         commands = [args]
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
@@ -148,11 +156,11 @@ class UnixToolchain(Toolchain):
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         return [
-            [self.ar, 'cr', output, *[o.name for o in objects]], # *options],
+            [self.ar, 'cr', output, *objects], # *options],
             [self.ranlib, output],
         ]
 
-    def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
+    def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> tuple[Path, CommandArgsList]:
         args = [self.cxx, '-shared', *
                 unique(self.default_ldflags, options), *objects, '-o', output]
         commands = [args]
@@ -178,16 +186,69 @@ class UnixToolchain(Toolchain):
         return includes
 
     async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
+        _from = list()
+        prev: diag.Diagnostic|diag.RelatedInformation = None
+        prev_diag: diag.Diagnostic = None
         async for line in lines:
             match re_match(line):
-                case r'(.+):(\d+):(\d+):\s(error|warning):\s(.+)$' as m:
-                    yield diag.Diagnostic(
-                        message=m[5],
-                        range=diag.Range(start=diag.Position(line=int(m[2])-1, character=int(m[3]))),
+                case r'\s+?\|\s(\s+)?(\^~+)' as m:
+                    if prev is not None:
+                        if isinstance(prev, diag.Diagnostic):
+                            rng = prev.range
+                        else:
+                            rng = prev.location.range
+                        rng.start.character = len(m[1]) if m[1] else 0
+                        rng.end.character = rng.start.character + len(m[2])
+                case r'((?:.+)from (.+)):(\d+)[,:]' as m:
+                    message = m[1]
+                    if message.startswith('In file included'):
+                        _from.clear()
+                    filename = m[2]
+                    lineno = int(m[3]) - 1
+                    prev = info = diag.RelatedInformation(
+                        location=diag.Location(diag.Uri(filename),
+                        range=diag.Range(start=diag.Position(lineno), end=diag.Position(lineno))),
+                        message=message)
+                    _from.append(info)
+                case r'(.+?): In instantiation of \'(.+)\'' as m:
+                    _from.clear()
+                case r'(.+?):(\d+):(?:(\d+):)?\s+(required from\s.+)' as m:
+                    filename = m[1]
+                    lineno = int(m[2]) - 1
+                    character = int(m[3]) - 1 if m[3] else 0
+                    message = m[4]
+                    prev = info = diag.RelatedInformation(
+                        location=diag.Location(diag.Uri(filename),
+                        range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
+                        message=message)
+                    _from.append(info)
+                case r'(.+?):(\d+):(?:(\d+):)?\s(note):\s(.+)$' as m:
+                    filename = m[1]
+                    character=int(m[3]) if m[3] else 0
+                    lineno = int(m[2]) - 1
+                    message=m[5]
+                    if prev_diag is None:
+                        self.warning('diagnostics: a note is expected to append after a diagnositc')
+                    else:
+                        info = diag.RelatedInformation(
+                            location=diag.Location(diag.Uri(filename),
+                            range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
+                            message=message)
+                        prev_diag.related_information.insert(0, info)
+                        prev = info
+                case r'(.+?):(\d+):(?:(\d+):)?\s(?:fatal )?(error|warning):\s(.+)$' as m:
+                    character=int(m[3]) if m[3] else 0
+                    lineno = int(m[2]) - 1
+                    message=m[5]
+                    prev_diag = prev = diag.Diagnostic(
+                        message=message,
+                        range=diag.Range(start=diag.Position(line=lineno, character=character), end=diag.Position(line=lineno)),
                         severity=diag.Severity[m[4].upper()],
                         source=self.type,
-                        filename=m[1]
+                        filename=m[1],
+                        related_information=list(_from)
                     )
+                    yield prev_diag
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         match self.type:
@@ -211,9 +272,19 @@ class UnixToolchain(Toolchain):
                     filename = m[1] or object
                     section = m[2]
                     section_offset = int(m[3], 0)
-                    message = m[4]
+                    message = m[4].strip()
                     yield diag.Diagnostic(
                         message=message,
+                        source=self.type
+                    )
+                case r'(?:.+?: )?(.+?):(\d+): (undefined reference to.+)$' as m:
+                    filename = m[1]
+                    line = int(m[2])
+                    message = m[3].strip()
+                    yield diag.Diagnostic(
+                        message=message,
+                        filename=filename,
+                        range=diag.Range(start=diag.Position(line=line)),
                         source=self.type
                     )
                 case _:

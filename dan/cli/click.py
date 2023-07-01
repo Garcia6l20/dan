@@ -76,3 +76,51 @@ class SettingsParamType(ParamType):
                         completions.append(CompletionItem(f'{prefix}{field.name}', type='nospace'))
         gen_comps(fields=self.fields, parts=incomplete.split('.'))
         return completions
+
+class OptionsParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from click.shell_completion import CompletionItem
+        from dan.make import Make
+        from dan.core.asyncio import sync_wait
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True)
+        sync_wait(make.initialize())
+        
+        comps = []
+        for opt in make.all_options:
+            if opt.fullname.startswith(incomplete):
+                comps.append(CompletionItem(opt.fullname, type='nospace'))
+        
+        return comps
+
+
+class TargetParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from click.shell_completion import CompletionItem
+        from dan.make import Make
+        from dan.core.asyncio import sync_wait
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True)
+        sync_wait(make.initialize())
+
+        
+        comps = []
+        for target in make.root.all_targets:
+            if target.fullname.startswith(incomplete):
+                comps.append(CompletionItem(target.fullname, type='nospace'))
+        
+        return comps
+
+
+class ToolchainParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from dan.cxx.detect import get_toolchains
+        from click.shell_completion import CompletionItem
+        toolchains = get_toolchains(create=False)["toolchains"]
+        
+        comps = []
+        for name in toolchains.keys():
+            if name.startswith(incomplete):
+                comps.append(CompletionItem(name))
+
+        return comps

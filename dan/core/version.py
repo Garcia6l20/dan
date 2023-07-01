@@ -88,11 +88,11 @@ class Version:
         elif not isinstance(other, Version):
             return False
         for mine, their in zip(self._parts, other._parts):
-            if mine >= their:
+            if mine > their:
                 return True
             if mine < their:
                 return False
-        return False
+        return True
     
     def __lt__(self, other: 'Version'):
         if isinstance(other, str):
@@ -157,6 +157,8 @@ class VersionSpec:
         self.op = op
         
     def is_compatible(self, version: Version):
+        if isinstance(version, VersionSpec):
+            version = version.version
         match self.op:
             case '==':
                 return version == self.version

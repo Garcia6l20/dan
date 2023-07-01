@@ -73,17 +73,22 @@ class MSVCToolchain(Toolchain):
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
         return [f'/I{p}' for p in include_paths]
 
-    def make_link_options(self, libraries: set[Path | str]) -> list[str]:
+    def make_libpath_options(self, libraries: set[Path | str]) -> list[str]:
         lib_paths = list()
-        libs = list()
         for lib in libraries:
             if isinstance(lib, Path):
                 lib_paths.append(f'/LIBPATH:{lib.parent}')
+        return lib_paths
+
+    def make_link_options(self, libraries: set[Path | str]) -> list[str]:
+        libs = list()
+        for lib in libraries:
+            if isinstance(lib, Path):
                 libs.append(f'{lib.stem}.lib')
             else:
                 assert isinstance(lib, str)
                 libs.append(f'{lib}.lib')
-        return [*libs, *lib_paths]
+        return libs
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return [f'/D{d}' for d in definitions]
@@ -158,19 +163,11 @@ class MSVCToolchain(Toolchain):
         return [[self.lnk, *self.common_flags, *options, *objects, f'/OUT:{str(output)}']]
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
-        objects = list(objects)
-        objs = [objects[0].name]
-        for obj in objects[1:]:
-            objs.append(obj.name)
-        return [[self.lib, *self.common_flags, *objs, f'/OUT:{output}']]
+        return [[self.lib, *self.common_flags, *objects, f'/OUT:{output}']]
 
     def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
-        objects = list(objects)
-        objs = [objects[0].name]
-        for obj in objects[1:]:
-            objs.append(obj.name)
         return [[self.lnk, *self.common_flags,
-                f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objs, f'/OUT:{output.with_suffix(".dll")}']]
+                f'/IMPLIB:{output.with_suffix(".lib")}', '/DLL', *options, *objects, f'/OUT:{output.with_suffix(".dll")}']]
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         async for line in lines:

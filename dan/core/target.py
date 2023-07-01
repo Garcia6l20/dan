@@ -40,7 +40,7 @@ class Dependencies:
                 from dan.pkgconfig.package import Package
                 for pkg in Package.all.values():
                     if pkg.name == dependency:
-                        self.append(pkg)
+                        self._content.append(pkg)
                         break
                 else:
                     if Path(self.parent.source_path / dependency).exists():
@@ -299,6 +299,10 @@ class Target(Logging, MakefileRegister, internal=True):
         if self._output is None:
             return None
         return self.build_path / self._output
+
+    @property
+    def routput(self):
+        return self._output
     
     @property
     def version(self):
@@ -316,9 +320,12 @@ class Target(Logging, MakefileRegister, internal=True):
     @output.setter
     def output(self, path):
         path = Path(path)
-        if path.is_absolute() and self.build_path in path.parents:
+        if not path.is_absolute() and self.build_path in path.parents:
             raise RuntimeError(f'output must not be an absolute path within build directory')
-        self._output = path
+        elif path.is_absolute() and self.build_path in path.parents:
+            self._output = path.relative_to(self.build_path)
+        else:
+            self._output = path
 
     @property
     def is_requirement(self) -> bool:
@@ -394,7 +401,7 @@ class Target(Logging, MakefileRegister, internal=True):
         output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output  
         return output.stat().st_mtime if output.exists() else 0.0
 
-    @property
+    @cached_property
     def up_to_date(self):
         output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
         if output and not output.exists():
@@ -466,9 +473,12 @@ class Target(Logging, MakefileRegister, internal=True):
             if inspect.iscoroutine(res):
                 group.create_task(res)
 
-    @asyncio.cached
+    @asyncio.cached(unique = True)
     async def install(self, settings: InstallSettings, mode: InstallMode):
         await self.build()
+
+        self.debug('installing %s to %s', self.name, settings.destination)
+
         installed_files = list()
         if mode == InstallMode.dev:
             if len(self.utils) > 0:

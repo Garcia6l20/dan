@@ -10,19 +10,20 @@ from dan.pkgconfig.package import Package
 class _QtMoccer:
     
     async def __initialize__(self):
-        qt_core = Package('Qt5Core', makefile=self.makefile)
+        qt_core = Package(f'Qt{self.qt_major}Core', makefile=self.makefile)
         await qt_core.initialize()
         self.moc = self.makefile.cache.get('moc_executable')
         if not self.moc:
+            search_paths = [qt_core.host_bins if hasattr(qt_core, 'host_bins') else qt_core.bindir, qt_core.prefix]
             self.moc = find_executable(
-                'moc', paths=[qt_core.host_bins], default_paths=False)
+                'moc', paths=search_paths, default_paths=False)
             self.makefile.cache.moc_executable = str(self.moc)
         self.dependencies.add(qt_core)
 
         self.includes.private.append(self.build_path)
 
         for module in self.qt_modules:
-            pkg = Package(f'Qt5{module}', makefile=self.makefile)
+            pkg = Package(f'Qt{self.qt_major}{module}', makefile=self.makefile)
             await pkg.initialize()
             self.dependencies.add(pkg)
 
@@ -85,11 +86,14 @@ class _QtMoccer:
         await super().__build__()
 
 
-def moc(modules: list[str]):
+def moc(modules: list[str] = None, major=6):
+    if modules is None:
+        modules = ['Widgets']
     def decorator(cls):
         from dan.core.include import context
         @context.current.wraps(cls)
         class QtWapped(_QtMoccer, cls):
             qt_modules = modules
+            qt_major = major
         return cls
     return decorator

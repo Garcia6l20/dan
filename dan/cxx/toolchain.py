@@ -19,6 +19,29 @@ class RuntimeType(Enum):
     static = 0
     dynamic = 1
 
+class LibraryList:
+    def __init__(self, *items: t.Iterable):
+        self._lst = list()
+        self.extend(items)
+    
+    def add(self, item):
+        if not item in self._lst:
+            self._lst.insert(0, item)
+
+    def extend(self, items):
+        for item in items:
+            try:
+                self._lst.remove(item)
+            except ValueError:
+                pass
+        self._lst.extend(items)
+
+    def __iter__(self):
+        return iter(self._lst)
+    
+    def __reversed__(self):
+        return reversed(self._lst)
+
 
 class BaseFailure(RuntimeError):
     def __init__(self, msg: str, err: CommandError, options: set[str], command: str, toolchain: 'Toolchain', diags: list[diag.Diagnostic], target = None) -> None:
@@ -123,6 +146,9 @@ class Toolchain(Logging):
     def make_include_options(self, include_paths: set[Path]) -> list[str]:
         raise NotImplementedError()
 
+    def make_libpath_options(self, libraries: set[Path | str]) -> list[str]:
+        raise NotImplementedError()
+
     def make_link_options(self, libraries: set[Path]) -> list[str]:
         raise NotImplementedError()
 
@@ -205,11 +231,11 @@ class Toolchain(Logging):
                 raise LinkageFailure(err, objects, options, command, self) from None
         return commands
 
-    def make_static_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
+    def make_shared_lib_commands(self, objects: set[Path], output: Path, options: set[str]) -> tuple[Path, CommandArgsList]:
         raise NotImplementedError()
 
     async def shared_lib(self, objects: set[Path], output: Path, options: set[str], **kwds):
-        commands = self.make_static_lib_commands(objects, output, options)
+        commands = self.make_shared_lib_commands(objects, output, options)
         for index, command in enumerate(commands):
             await self.run(f'shared_lib{index}', output, command, **kwds, cwd=output.parent)
         return commands

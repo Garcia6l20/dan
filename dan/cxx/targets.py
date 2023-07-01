@@ -13,15 +13,26 @@ from dan.core.target import Target
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
-from dan.cxx.toolchain import CompilationFailure, LinkageFailure, Toolchain
+from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain
 
 
 class CXXObject(Target, internal=True):
-    def __init__(self, source:Path, parent: 'CXXTarget') -> None:
-        super().__init__(source.stem, parent=parent, default=False)
+    def __init__(self, source:Path, parent: 'CXXTarget', root: Path = None) -> None:
+        if source.is_absolute():
+            if root is None:
+                root = parent.build_path
+            name = '-'.join(source.relative_to(root).with_suffix(f'').parts)
+        else:
+            name = '-'.join(source.with_suffix(f'').parts)
+        super().__init__(name, parent=parent, default=False)
         self.parent = parent
-        self.source = self.source_path / source
+        self.source = source
         self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
+        obj_fname = source.with_suffix('.obj' if self.toolchain.type == 'msvc' else '.o')
+        if source.is_absolute():
+            self.output = self.build_path / obj_fname.name
+        else:
+            self.output = self.build_path / obj_fname
         self.__dirty = False
 
     @property
@@ -43,9 +54,6 @@ class CXXObject(Target, internal=True):
     async def __initialize__(self):
         await self.parent.preload()
 
-        ext = 'o' if os.name != 'nt' else 'obj'
-        self.output: Path = Path(f'{self.source.stem}.{ext}')
-
         deps = self.cache.get('deps')
         if deps is not None:
             self.dependencies.update(deps)
@@ -58,24 +66,24 @@ class CXXObject(Target, internal=True):
         previous_args = self.cache.get('compile_args')
         if previous_args:
             args = self.toolchain.make_compile_commands(
-                self.source, self.output, self.private_cxx_flags)[0]
+                self.source_path / self.source, self.output, self.private_cxx_flags)[0]
             args = [str(arg) for arg in args]
             if sorted(args) != sorted(previous_args):
                 self.__dirty = True
         else:
             self.__dirty = True
 
-    @property
+    @cached_property
     def up_to_date(self):
-        res = super().up_to_date
-        if res and self.__dirty:
-            res = False
-        return res
+        if self.__dirty:
+            return False
+        return super().up_to_date
 
     async def __build__(self):
         self.info('generating %s...', self.output.name)
         try:
-            commands, diags = await self.toolchain.compile(self.source, self.output, self.private_cxx_flags)
+            self.output.parent.mkdir(parents=True, exist_ok=True)
+            commands, diags = await self.toolchain.compile(self.source_path / self.source, self.output, self.private_cxx_flags)
             self.parent.diagnostics.insert(diags, str(self.source))
         except CompilationFailure as err:
             self.parent.diagnostics.insert(err.diags, str(self.source))
@@ -83,7 +91,7 @@ class CXXObject(Target, internal=True):
             raise
         self.cache['compile_args'] = [str(a) for a in commands[0]]
         self.debug('scanning dependencies of %s', self.source.name)
-        deps = await self.toolchain.scan_dependencies(self.source, self.private_cxx_flags, self.build_path)
+        deps = await self.toolchain.scan_dependencies(self.source_path / self.source, self.private_cxx_flags, self.build_path)
         deps = [d for d in deps
                 if self.makefile.root.source_path in Path(d).parents
                 or self.build_path in Path(d).parents]
@@ -152,20 +160,6 @@ class OptionSet:
         if private:
             self._private = values._private
 
-def _make_link_libraries(libs: t.Iterable[str]) -> t.Iterable[str]:
-    '''Creates well ordered link parameters
-    
-    Puts all duplitate at the end of the input list to avoid ld errors,
-    ld requires the depending library to come on the command line before the dependent one.
-    '''
-    seen = set()
-    duplicates = list()    
-    for lib in libs:
-        if lib in seen:
-            duplicates.append(lib)
-        seen.add(lib)
-    return [*[lib for lib in libs if lib not in duplicates], *duplicates]
-
 class CXXTarget(Target, internal=True):
     public_includes: set[str] = set()
     private_includes: set[str] = set()
@@ -175,6 +169,9 @@ class CXXTarget(Target, internal=True):
     
     public_compile_definitions: set[str] = set()
     private_compile_definitions: set[str] = set()
+
+    public_lib_paths: set[str] = set()
+    private_lib_paths: set[str] = set()
 
     public_link_libraries: set[str] = set()
     private_link_libraries: set[str] = set()
@@ -197,6 +194,9 @@ class CXXTarget(Target, internal=True):
 
         self.link_libraries = OptionSet(self, 'link_libraries',
                                         self.public_link_libraries, self.private_link_libraries, transform=self.toolchain.make_link_options)
+        
+        self.library_paths = OptionSet(self, 'library_paths',
+                                        self.public_lib_paths, self.private_lib_paths, transform=self.toolchain.make_libpath_options)
 
         self.compile_definitions = OptionSet(self, 'compile_definitions',
                                              self.public_compile_definitions, self.private_compile_definitions, transform=self.toolchain.make_compile_definitions)
@@ -223,15 +223,25 @@ class CXXTarget(Target, internal=True):
     def library_dependencies(self) -> list['Library']:
         return [dep for dep in self.dependencies if isinstance(dep, Library)]
 
-    @property
-    def libs(self) -> list[str]:
-        tmp = list()
+    @cached_property
+    def lib_paths(self) -> list[str]:
+        tmp = set()
         for dep in self.cxx_dependencies:
+            tmp.update(dep.lib_paths)
+        tmp.update(self.library_paths.public)
+        # # TODO move create private_libs()
+        tmp.update(self.library_paths.private)
+        return list(sorted(tmp))
+
+    @cached_property
+    def libs(self) -> LibraryList:
+        tmp = LibraryList()
+        for dep in reversed(self.cxx_dependencies):
             tmp.extend(dep.libs)
         tmp.extend(self.link_libraries.public)
-        # TODO move create private_libs()
+        # # TODO move create private_libs()
         tmp.extend(self.link_libraries.private)
-        return _make_link_libraries(tmp)
+        return tmp
 
     @cached_property
     def cxx_flags(self):
@@ -263,18 +273,21 @@ class CXXObjectsTarget(CXXTarget, internal=True):
     @cache.once_method
     def _init_sources(self):
         if callable(self.sources):
-            self.sources = set(self.sources())
+            self.sources = list(self.sources())
         if not isinstance(self.sources, Iterable):
             assert callable(
                 self.sources), f'{self.name} sources parameter should be an iterable or a callable returning an iterable'
         sources = list()
+        source_root = Path(os.path.commonprefix(self.sources))
         for source in self.sources:
             source = Path(source)
-            if not source.is_absolute():
-                source = self.source_path / source
+            if source.is_absolute():
+                root = source_root
+            else:
+                root = self.source_path
             sources.append(source)
             self.objs.append(
-                CXXObject(Path(source), self))
+                CXXObject(Path(source), self, root=root))
         self.sources = sources
             
 
@@ -282,7 +295,7 @@ class CXXObjectsTarget(CXXTarget, internal=True):
     def file_dependencies(self):
         return unique(super().file_dependencies, *[o.file_dependencies for o in self.objs])
     
-    @property
+    @cached_property
     def up_to_date(self):
         for obj in self.objs:
             if not obj.up_to_date:
@@ -337,12 +350,23 @@ class Library(CXXObjectsTarget, internal=True):
     def interface(self) -> bool:
         return self.library_type == LibraryType.INTERFACE
 
+    @cached_property
+    def lib_paths(self) -> list[str]:
+        tmp = super().lib_paths
+        if not self.interface:
+            tmp.extend(self.toolchain.make_libpath_options([self.output]))
+        return list(sorted(tmp))
+    
     @property
     def libs(self) -> list[str]:
-        tmp = super().libs
         if not self.interface:
-            tmp.extend(self.toolchain.make_link_options([self.output]))
-        return tmp
+            libs = LibraryList()
+            libs.extend(self.toolchain.make_link_options([self.output]))
+            libs.extend(super().libs)
+        else:
+            libs = super().libs
+        
+        return libs
 
     async def __initialize__(self):
         self._init_sources()
@@ -373,14 +397,14 @@ class Library(CXXObjectsTarget, internal=True):
         if generate is not None:
             if previous_args and \
                     previous_args != await generate(
-                        [obj.output for obj in self.objs], self.output, self.libs, dry_run=True):
+                        [obj.routput for obj in self.objs], self.output, self.libs, dry_run=True):
                 self.__dirty = True
             else:
                 self.__dirty = False
         else:
             self.__dirty = False
 
-    @property
+    @cached_property
     def up_to_date(self):
         if self.__dirty:
             return False
@@ -393,9 +417,9 @@ class Library(CXXObjectsTarget, internal=True):
             'creating %s library %s...', self.library_type.name.lower(), self.output.name)
 
         if self.static:
-            await self.toolchain.static_lib([obj.output for obj in self.objs], self.output, self.libs)
+            await self.toolchain.static_lib([obj.routput for obj in self.objs], self.output, self.libs)
         elif self.shared:
-            await self.toolchain.shared_lib([obj.output for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
+            await self.toolchain.shared_lib([obj.routput for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
             from .msvc_toolchain import MSVCToolchain
             if isinstance(self.toolchain, MSVCToolchain):
                 self.compile_definitions.add(
@@ -483,13 +507,13 @@ class Executable(CXXObjectsTarget, internal=True):
 
         previous_args = self.cache.get('link_args')
         if previous_args:
-            args = self.toolchain.make_link_commands([obj.output for obj in self.objs], self.output,
-                                                     [*self.libs, *self.link_options.public, *self.link_options.private])[0]
+            args = self.toolchain.make_link_commands([obj.routput for obj in self.objs], self.output,
+                                                     [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private])[0]
             args = [str(a) for a in args]
             if sorted(previous_args) != sorted(args):
                 self.__dirty = True
 
-    @property
+    @cached_property
     def up_to_date(self):
         if self.__dirty:
             return False
@@ -501,8 +525,8 @@ class Executable(CXXObjectsTarget, internal=True):
         # link
         self.info('linking %s...', self.output.name)
         try:
-            commands, diags = await self.toolchain.link([obj.output for obj in self.objs], self.output,
-                                                        [*self.libs, *self.link_options.public, *self.link_options.private])
+            commands, diags = await self.toolchain.link([obj.routput for obj in self.objs], self.output,
+                                                        [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private])
             self.diagnostics.insert(diags, str(self.output))
         except LinkageFailure as err:
             self.diagnostics.insert(err.diags, str(self.output))

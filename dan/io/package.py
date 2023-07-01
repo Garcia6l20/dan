@@ -4,7 +4,7 @@ from dan.core import aiofiles, asyncio
 from dan.core.pathlib import Path
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target
-from dan.core.find import find_files
+from dan.core.find import find_file, find_files
 from dan.core.version import Version, VersionSpec
 from dan.io.repositories import get_packages_path, get_repo_instance
 
@@ -15,7 +15,8 @@ class PackageBuild(Target, internal=True):
     
     def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
-        super().__init__(name, *args, version=version, **kwargs)
+        self.pn = name
+        super().__init__(f'{name}-build', *args, version=version, **kwargs)
         self.package = name if package is None else package
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
@@ -25,10 +26,10 @@ class PackageBuild(Target, internal=True):
     @property
     def package_makefile(self):
         if self._package_makefile is None:
-            target = self.repo.find(self.name, self.package)
+            target = self.repo.find(self.pn, self.package)
             if target is None:
-                raise RuntimeError(f'cannot find {self.name} in {self.repo.name}')
-            self._package_makefile = self.repo.find(self.name, self.package).makefile
+                raise RuntimeError(f'cannot find {self.pn} in {self.repo.name}')
+            self._package_makefile = target.makefile
         return self._package_makefile
 
     def get_sources(self):
@@ -39,7 +40,7 @@ class PackageBuild(Target, internal=True):
                 sources = target
                 break
         if sources is None:
-            raise RuntimeError(f'Cannot find {self.name} pacakge\'s sources target')
+            raise RuntimeError(f'Cannot find {self.pn} package\'s sources target')
         return sources
 
     async def __initialize__(self):
@@ -56,18 +57,22 @@ class PackageBuild(Target, internal=True):
                         break
 
         packages_path = get_packages_path()
-        
+        makefile = self.package_makefile
+
+        # set package version
+        version_option = makefile.options.get('version')
+        if self.version is None:
+            self.version = Version(version_option.value)
+        else:
+            version_option.value = str(self.version)
+
         toolchain = self.context.get('cxx_target_toolchain')
         self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
         self.install_settings = InstallSettings(self.build_path)
         
         # update package build-path
-        makefile = self.package_makefile
         makefile.build_path = self.build_path / 'build'
 
-        # set package version
-        if self.version:
-            makefile.options.get('version').value = str(self.version)
 
         # set our output to the last installed package
         # TODO handle multiple outputs, then set our outputs to all installed packages
@@ -118,6 +123,8 @@ class PackageBuild(Target, internal=True):
 
 class Package(Target, internal=True):
 
+    __all: dict[str, 'Package'] = dict()
+
     def __init__(self,
                  name: str = None,
                  version: str = None,
@@ -130,6 +137,20 @@ class Package(Target, internal=True):
         if name is not None:
             self.name = name
         super().__init__(**kwargs)
+        if self.name in self.__all:
+            raise RuntimeError(f'duplicate package: {self.name}')
+        self.__all[self.name] = self
+
+    @classmethod
+    def instance(cls, name, version, *args, **kwargs):
+        if name in cls.__all:
+            pkg = cls.__all[name]
+            if not version.is_compatible(pkg.version):
+                raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
+            return pkg, False
+        else:
+            return Package(name, version, *args, **kwargs), True
+
     
     async def __initialize__(self):
 
@@ -182,7 +203,11 @@ class Package(Target, internal=True):
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 toolchain = self.context.get('cxx_target_toolchain')
                 search_path = get_packages_path() / toolchain.system / toolchain.arch / toolchain.build_type.name
+                dest = self.build_path / self.pkgconfig_path
                 for pkg in data.requires:
-                    pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[search_path], makefile=self.makefile)
-                    self.debug('copying %s to %s', pkg.config_path, self.build_path / self.pkgconfig_path)
-                    group.create_task(aiofiles.copy(pkg.config_path, self.build_path / self.pkgconfig_path))
+                    pkgconfig_file = find_file(rf'{pkg.name}.pc$', [search_path])
+                    # NOTE: find_package will resolve to the build-directory installed pkgconfig, wich will result in a failure
+                    # pkg = find_package(pkg.name, spec=pkg.version_spec, search_paths=[search_path], makefile=self.makefile)
+                    if pkgconfig_file is not None and not (dest / pkgconfig_file.name).exists():
+                        self.debug('copying %s to %s', pkgconfig_file, dest)
+                        group.create_task(aiofiles.copy(pkgconfig_file, dest))

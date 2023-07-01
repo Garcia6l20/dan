@@ -1,4 +1,5 @@
 from functools import cached_property
+import functools
 from pathlib import Path
 import sys
 
@@ -43,13 +44,33 @@ class MakeFile(sys.__class__):
             self.__cache = Cache(
                 self.build_path / f'{self.name}.cache', cache_name=self.fullname, binary=True)
         return self.__cache
+    
+    @property
+    def parents(self):
+        parent = self.parent
+        while parent is not None:
+            yield parent
+            parent = parent.parent
 
+
+    __target_fullnames = list()
+    __test_fullnames = list()
     def register(self, cls: type[Target | Test]):
         """Register Target/Test class"""
+        t = cls()
         if issubclass(cls, Target):
-            self.__targets.add(cls())
+            # if t.fullname in MakeFile.__target_fullnames:
+            #     raise RuntimeError(f'duplicate target name: {t.fullname}')
+            MakeFile.__target_fullnames.append(t.fullname)
+            self.__targets.add(t)
+            self.__find.cache_clear()
+            for parent in self.parents:
+                parent.__find.cache_clear()
         if issubclass(cls, Test):
-            self.__tests.add(cls())
+            # if t.fullname in MakeFile.__test_fullnames:
+            #     raise RuntimeError(f'duplicate test name: {t.fullname}')
+            MakeFile.__test_fullnames.append(t.fullname)
+            self.__tests.add(t)
         return cls
 
     def wraps(self, cls: type[Target]):
@@ -59,19 +80,13 @@ class MakeFile(sys.__class__):
             for t in self.__targets:
                 if type(t) == cls:
                     self.__targets.remove(t)
-                    return cls
+                    return new_cls
             assert False, 'Original target has not been registered'
         return decorator
 
-    def find(self, name_or_class) -> Target:
-        """Find a target.
 
-        Args:
-            name (str): The target name to find.
-
-        Returns:
-            Target: The found target or None.
-        """
+    @functools.cache
+    def __find(self, name_or_class) -> Target:
         if isinstance(name_or_class, type):
             def check(t: Target):
                 return type(t) == name_or_class
@@ -82,10 +97,26 @@ class MakeFile(sys.__class__):
             if check(t):
                 return t
         for c in self.children:
-            t = c.find(name_or_class)
+            t = c.__find(name_or_class)
             if t:
                 return t
-    
+
+    def find(self, name_or_class) -> Target:
+        """Find a target.
+
+        Args:
+            name (str): The target name to find.
+
+        Returns:
+            Target: The found target or None.
+        """
+        t = self.__find(name_or_class)
+        if t is not None:
+            return t
+        
+        if self.parent:
+            return self.parent.find(name_or_class)
+
     def __getitem__(self, name_or_class) -> Target:
         return self.find(name_or_class)
 
