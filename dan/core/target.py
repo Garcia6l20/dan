@@ -322,7 +322,10 @@ class Target(Logging, MakefileRegister, internal=True):
         path = Path(path)
         if not path.is_absolute() and self.build_path in path.parents:
             raise RuntimeError(f'output must not be an absolute path within build directory')
-        self._output = path
+        elif path.is_absolute() and self.build_path in path.parents:
+            self._output = path.relative_to(self.build_path)
+        else:
+            self._output = path
 
     @property
     def is_requirement(self) -> bool:
