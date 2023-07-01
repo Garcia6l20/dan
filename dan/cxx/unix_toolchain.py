@@ -156,13 +156,13 @@ class UnixToolchain(Toolchain):
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         return [
-            [self.ar, 'cr', output, *[o.relative_to(output.parent) for o in objects]], # *options],
+            [self.ar, 'cr', output, *objects], # *options],
             [self.ranlib, output],
         ]
 
     def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> tuple[Path, CommandArgsList]:
         args = [self.cxx, '-shared', *
-                unique(self.default_ldflags, options), *[o.relative_to(output.parent) for o in objects], '-o', output]
+                unique(self.default_ldflags, options), *objects, '-o', output]
         commands = [args]
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
