@@ -9,7 +9,7 @@ from dan.core.requirements import parse_package
 from dan.make import Make
 
 _make : Make = None
-async def get_make():
+async def get_make(toolchain='default', quiet=True):
     global _make
     if _make is None:
         from dan.cxx.detect import get_dan_path
@@ -17,10 +17,10 @@ async def get_make():
         source_path.mkdir(exist_ok=True, parents=True)
         os.chdir(source_path)
         (source_path / 'dan-build.py').touch()
-        make = Make(source_path / 'build', quiet=True)
+        make = Make(source_path / 'build', quiet=quiet)
         make.config.source_path = str(source_path)
         make.config.build_path = str(source_path / 'build')
-        make.config.toolchain = 'default'
+        make.config.toolchain = toolchain
         await make._config.save()
         await make.initialize()
         _make = make
@@ -48,10 +48,10 @@ async def get_repository(name = None):
 
 
 @contextlib.asynccontextmanager
-async def make_context():
-    make = await get_make()
+async def make_context(toolchain='default', quiet=True):
+    make = await get_make(toolchain, quiet=quiet)
     with make.context:
-        yield
+        yield make
 
 
 @click.group()
@@ -81,25 +81,28 @@ async def libraries():
             for name, lib in repo.installed.items():
                 click.echo(f'{name} = {lib.version}')
 
+async def get_library(library_spec):
+    package, library, repository = parse_package(library_spec)
+    repo = await get_repository(repository)
+    if repo is None:
+        raise RuntimeError(f'cannot find repository {repository}')
+
+    lib = repo.find(library, package)
+    if lib is None:
+        if repository is None:
+            repository = repo.name
+        if package is None:
+            package = library
+        raise RuntimeError(f'cannot find {package}:{library}@{repository}')
+
+    return lib
+
 @ls.command()
 @click.argument('LIBRARY')
 async def versions(library: str):
     """Get LIBRARY's available versions"""
     async with make_context():
-        package, library, repository = parse_package(library)
-        repo = await get_repository(repository)
-        if repo is None:
-            click.logger.error(f'cannot find repository {repository}')
-            return -1
-
-        lib = repo.find(library, package)
-        if lib is None:
-            if repository is None:
-                repository = repo.name
-            if package is None:
-                package = library
-            click.logger.error(f'cannot find {package}:{library}@{repository}')
-            return -1
+        lib = await get_library(library)
         
         from dan.src.github import GitHubReleaseSources
         
@@ -125,6 +128,24 @@ async def search(name):
                 if fnmatch.fnmatch(libname, name):
                     click.echo(f'{libname} = {lib.version}')
 
+@cli.command()
+@click.option('--toolchain', '-t', type=click.ToolchainParamType(), default='default')
+@click.argument('PACKAGE_SPEC')
+@click.argument('VERSION', required=False)
+async def install(toolchain, package_spec, version):
+    """Intall given PACKAGE_SPEC"""
+    from dan.io.package import PackageBuild
+
+    async with make_context(toolchain, quiet=False) as make:
+        package, name, repository = parse_package(package_spec)
+        pkg = PackageBuild(name, version, package, repository, makefile=make.root)
+        await pkg.initialize()
+        if pkg.up_to_date:
+            click.echo(f'Package {package_spec} already installed at version {pkg.version}')
+        else:
+            await pkg.build()
+            click.echo(f'Package {package_spec} installed successfully at version {pkg.version}')
+            
 
 def main():
     import sys
