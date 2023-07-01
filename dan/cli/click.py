@@ -78,9 +78,6 @@ class SettingsParamType(ParamType):
         return completions
 
 class OptionsParamType(ParamType):
-    def __init__(self) -> None:
-        super().__init__()
-
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from click.shell_completion import CompletionItem
         from dan.make import Make
@@ -98,9 +95,6 @@ class OptionsParamType(ParamType):
 
 
 class TargetParamType(ParamType):
-    def __init__(self) -> None:
-        super().__init__()
-
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from click.shell_completion import CompletionItem
         from dan.make import Make
@@ -115,4 +109,18 @@ class TargetParamType(ParamType):
             if target.fullname.startswith(incomplete):
                 comps.append(CompletionItem(target.fullname, type='nospace'))
         
+        return comps
+
+
+class ToolchainParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from dan.cxx.detect import get_toolchains
+        from click.shell_completion import CompletionItem
+        toolchains = get_toolchains(create=False)["toolchains"]
+        
+        comps = []
+        for name in toolchains.keys():
+            if name.startswith(incomplete):
+                comps.append(CompletionItem(name))
+
         return comps

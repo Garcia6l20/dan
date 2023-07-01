@@ -92,21 +92,13 @@ def cli(ctx: click.AsyncContext, **kwds):
     ctx.call_on_close(show_diags)
 
 
-def available_toolchains():
-    from dan.cxx.detect import get_toolchains
-    return ['default', *[name for name in get_toolchains(create=False)['toolchains'].keys()]]
-
-
-_toolchain_choice = click.Choice(available_toolchains(), case_sensitive=False)
-
-
 @cli.command()
 @click.option('--verbose', '-v', is_flag=True,
               help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
-              type=_toolchain_choice)
+              type=click.ToolchainParamType())
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
-@click.option('--option', '-o', 'options', help='Set or change an option', multiple=True)
+@click.option('--option', '-o', 'options', help='Set or change an option', multiple=True, type=click.OptionsParamType())
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH')
 @click.option('--source-path', '-S', help='Path where source is located.',
@@ -116,7 +108,7 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
     """Configure dan project"""
     ctx(**kwds)  # update kwds
     if toolchain is None and ctx.make.config.toolchain is None:
-        toolchain = click.prompt('Toolchain', type=_toolchain_choice, default='default')
+        toolchain = click.prompt('Toolchain', type=click.ToolchainParamType(), default='default')
 
     await ctx.make.configure(source_path, toolchain)
 
