@@ -198,8 +198,12 @@ class Package(CXXTarget, internal=True):
                         self.__libs.add(m[0])
                     case r'-L(.+)' as m:
                         self.__lib_paths.add(m[0])
+                    case r'/LIBPATH:(.+)' as m:
+                        self.__lib_paths.add(m[0])
                     case r'-Wl,-rpath,(.+)' as m:
                         self.__lib_paths.add(m[0])
+                    case _:
+                        self.__libs.add(l)
         for pkg in self.package_dependencies:
             self.__lib_paths.update(pkg.lib_paths)
             self.__libs.extend(pkg.libs)
