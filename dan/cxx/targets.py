@@ -475,12 +475,23 @@ class Module(CXXObjectsTarget, internal=True):
 class Executable(CXXObjectsTarget, internal=True):
 
     installed = True
+    subsystem: str = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        if self.subsystem is None:
+            self.subsystem = 'console'
+
         self.output = self.toolchain.make_executable_name(self.name)
         self.__dirty = False
+
+    def _make_link_options(self):
+        subsystem_opt = []
+        if self.toolchain.type == 'msvc':
+            subsystem_opt.append(f'/subsystem:{self.subsystem}')
+        return [*subsystem_opt, *self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private]
+
 
     async def __initialize__(self):
         await super().__initialize__()
@@ -488,7 +499,7 @@ class Executable(CXXObjectsTarget, internal=True):
         previous_args = self.cache.get('link_args')
         if previous_args:
             args = self.toolchain.make_link_commands([obj.routput for obj in self.objs], self.output,
-                                                     [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private])[0]
+                                                     self._make_link_options())[0]
             args = [str(a) for a in args]
             if sorted(previous_args) != sorted(args):
                 self.__dirty = True
@@ -506,7 +517,7 @@ class Executable(CXXObjectsTarget, internal=True):
         self.info('linking %s...', self.output.name)
         try:
             commands, diags = await self.toolchain.link([obj.routput for obj in self.objs], self.output,
-                                                        [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private])
+                                                        self._make_link_options())
             self.diagnostics.insert(diags, str(self.output))
         except LinkageFailure as err:
             self.diagnostics.insert(err.diags, str(self.output))
