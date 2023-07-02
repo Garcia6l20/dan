@@ -95,10 +95,13 @@ PathImpl = type(Path())
 
 
 class FileDependency(PathImpl):
-    up_to_date = True
-
+    
     def __init__(self, *args, **kwargs):
         super(PathImpl, self).__init__()
+
+    @property
+    def up_to_date(self):
+        return self.exists()
 
     @property
     def modification_time(self):
@@ -168,6 +171,8 @@ class Options:
         self.update(default)
 
     def add(self, name: str, default_value, help=None):
+        if self.get(name) is not None:
+            raise RuntimeError(f'duplicate options detected ({name})')
         opt = Option(self, f'{self.__parent.fullname}.{name}',
                      default_value, help=help)
         self.__items.append(opt)

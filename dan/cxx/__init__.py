@@ -3,7 +3,7 @@ from dan.core.cache import Cache
 
 from dan.core.errors import InvalidConfiguration
 from dan.core.settings import Settings
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.toolchain import Toolchain, BuildType
 from dan.cxx.detect import get_toolchains
 
 target_toolchain: Toolchain = None
