@@ -2,6 +2,7 @@
 import io
 import logging
 import os
+from pathlib import Path
 import subprocess
 import sys
 
@@ -149,12 +150,23 @@ def cmdline2list(s: str):
 
     return result
 
+def list2cmdline(command: list|str):
+    if isinstance(command, list):
+        cmd = list()
+        for part in command:
+            if isinstance(part, Path):
+                cmd.append(part.as_posix())
+            else:
+                cmd.append(part)
+        return subprocess.list2cmdline(cmd)
+    return command
+
+
 async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None, out_capture=None, err_capture=None, all_capture=None, input: str = None) -> tuple[str, str, int]:
     if _jobs_sem is not None:
         await _jobs_sem.acquire()
     try:
-        if not isinstance(command, str):
-            command = subprocess.list2cmdline(command)
+        command = list2cmdline(command)
         if env is not None:
             e = dict(os.environ)
             for k, v in env.items():
@@ -225,8 +237,7 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
 
 
 def sync_run(command, pipe=True, logger: logging.Logger = None, no_raise=False, shell=True, env=None, cwd=None):
-    if not isinstance(command, str):
-        command = subprocess.list2cmdline(command)
+    command = list2cmdline(command)
     if pipe:
         stdout = subprocess.PIPE
     else:

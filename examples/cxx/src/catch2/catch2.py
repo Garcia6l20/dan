@@ -29,10 +29,10 @@ class Catch2(CMakeProject):
         if self.toolchain.build_type == BuildType.debug:
             # patch: no 'd' postfix in pkgconfig
             async with asyncio.TaskGroup() as g:
-                g.create_task(aiofiles.replace_in_file(installer.settings.data_destination / 'pkgconfig' / 'catch2.pc',
-                                              '-lCatch2', '-lCatch2d'))
-                g.create_task(aiofiles.replace_in_file(installer.settings.data_destination / 'pkgconfig' / 'catch2-with-main.pc',
-                                              '-lCatch2Main', '-lCatch2Maind'))
+                g.create_task(aiofiles.sub(installer.settings.data_destination / 'pkgconfig' / 'catch2.pc',
+                                           r'-lCatch2\W', '-lCatch2d'))
+                g.create_task(aiofiles.sub(installer.settings.data_destination / 'pkgconfig' / 'catch2-with-main.pc',
+                                           r'-lCatch2Main\W', '-lCatch2Maind'))
 
 
 @Catch2.utility

@@ -3,6 +3,7 @@ from dan.core.target import Target, FileDependency, Installer, Option
 from dan.core.runners import async_run
 from dan.core.pm import re_match
 from dan.core import aiofiles
+from dan.core.find import find_executable
 from dan.cxx import Toolchain
 
 from pathlib import Path
@@ -26,7 +27,7 @@ class Project(Target, internal=True):
                 self.options.add(name, default, doc)
     
     async def _cmake(self, *cmake_args, **kwargs):
-        return await async_run(['cmake', *cmake_args], logger=self, cwd=self.build_path, **kwargs)
+        return await async_run(['cmake', *cmake_args], logger=self, cwd=self.build_path, **kwargs, env=self.toolchain.env)
 
     @property
     def _target_args(self):
@@ -39,12 +40,17 @@ class Project(Target, internal=True):
     async def __initialize__(self):
 
         if not self.cmake_cache_dep.up_to_date:
+            base_opts = []
+            if self.toolchain.system.startswith('msys'):
+                make = find_executable(r'.+make', self.toolchain.env['PATH'].split(';'), default_paths=False)
+                base_opts.extend((f'-GMinGW Makefiles', f'-DCMAKE_MAKE_PROGRAM={make.as_posix()}'))
             await self._cmake(
                 self.source_path,
+                *base_opts,
                 f'-DCMAKE_BUILD_TYPE={self.toolchain.build_type.name.upper()}',
                 f'-DCMAKE_CONFIGURATION_TYPES={self.toolchain.build_type.name.upper()}',
-                f'-DCMAKE_C_COMPILER={self.toolchain.cc}',
-                f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx}',
+                f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
+                f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
                 *[f'-D{k}={v}' for k, v in self.cmake_config_options.items()]
             )
             out, err, rc = await self._cmake('-S', self.source_path,  '-LH', log=False)
@@ -75,7 +81,7 @@ class Project(Target, internal=True):
         return await super().__initialize__()
     
     async def __build__(self):
-        await self._cmake('--build', '.', *self._target_args)
+        await self._cmake('--build', '.', '--parallel', *self._target_args)
     
     async def __install__(self, installer: Installer):
         await self.build()
