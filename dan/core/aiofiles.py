@@ -49,3 +49,11 @@ async def copy(src : Path, dest : Path, chunk_size=2048):
                 break
             await d.write(chunk)
     dest.chmod(src.stat().st_mode)
+
+
+async def replace_in_file(filepath, old, new):
+    async with open(filepath) as f:
+        content = await f.read()
+    content = content.replace(old, new)
+    async with open(filepath, 'w') as f:
+        await f.write(content)
