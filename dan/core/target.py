@@ -220,6 +220,57 @@ class Options:
     def __iter__(self):
         return iter(self.__items)
 
+class Installer:
+    def __init__(self, settings: InstallSettings, mode: InstallMode, logger: Logging) -> None:
+        self.settings = settings
+        self.mode = mode
+        self.installed_files = list()
+        self._logger = logger
+    
+    async def _install(self, src: Path|str, dest: Path):
+        if isinstance(src, Path):
+            if dest.exists() and dest.younger_than(src):
+                self._logger.info('%s is up-to-date', dest)
+                self.installed_files.append(dest)
+                return
+            self._logger.debug('installing: %s', dest)
+            await aiofiles.copy(src, dest)
+        else:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            self._logger.debug('installing: %s', dest)
+            async with aiofiles.open(dest, 'w') as f:
+                await f.write(src)
+        self.installed_files.append(dest)
+
+    @property
+    def dev(self):
+        return self.mode == InstallMode.dev
+    
+    async def install_bin(self, src):
+        await self._install(src, self.settings.runtime_destination)
+
+    async def install_shared_library(self, src):
+        await self._install(src, self.settings.libraries_destination)
+
+    async def install_static_library(self, src):
+        if not self.dev:
+            return
+        await self._install(src, self.settings.libraries_destination)
+
+    async def install_header(self, src):
+        if not self.dev:
+            return
+        await self._install(src, self.settings.includes_destination)
+
+    
+    async def install_data(self, src, dest = None, dev=False):
+        if dev and not self.dev:
+            return
+        destination = self.settings.data_destination
+        if dest is not None:
+            destination /= dest
+        await self._install(src, destination)
+
 
 class Target(Logging, MakefileRegister, internal=True):
     name: str = None
@@ -493,21 +544,10 @@ class Target(Logging, MakefileRegister, internal=True):
 
         self.debug('installing %s to %s', self.name, settings.destination)
 
-        installed_files = list()
-        if mode == InstallMode.dev:
-            if len(self.utils) > 0:
-                lines = list()
-                for fn in self.utils:
-                    tmp = inspect.getsourcelines(fn)[0]
-                    tmp[0] = f'\n\n@self.utility\n'
-                    lines.extend(tmp)
-                filepath = settings.libraries_destination / \
-                    'dan' / f'{self.name}.py'
-                filepath.parent.mkdir(exist_ok=True, parents=True)
-                async with aiofiles.open(filepath, 'w') as f:
-                    await f.writelines(lines)
-                    installed_files.append(filepath)
-        return installed_files
+        installer = Installer(settings, mode, self)
+        await self.__install__(installer)
+        return installer.installed_files
+
 
     def get_dependency(self, dep: str | type, recursive=True) -> TargetDependencyLike:
         """Search for dependency"""
@@ -540,8 +580,15 @@ class Target(Logging, MakefileRegister, internal=True):
     async def __build__(self):
         ...
 
-    async def __install__(self):
-        ...
+    async def __install__(self, installer: Installer):
+        if installer.dev:
+            if len(self.utils) > 0:
+                body = str()
+                for fn in self.utils:
+                    tmp = inspect.getsourcelines(fn)[0]
+                    tmp[0] = f'\n\n@self.utility\n'
+                    body += '\n'.join(tmp)
+                await installer.install_data(body, f'dan/{self.name}.py')
 
     async def __clean__(self):
         ...

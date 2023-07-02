@@ -7,9 +7,8 @@ from enum import Enum
 from functools import cached_property
 
 from dan.core.pathlib import Path
-from dan.core import aiofiles, cache
-from dan.core.settings import InstallMode, InstallSettings
-from dan.core.target import Target
+from dan.core import cache
+from dan.core.target import Target, Installer
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
@@ -430,56 +429,37 @@ class Library(CXXObjectsTarget, internal=True):
 
         self.debug('done')
 
-    @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
-        if mode == InstallMode.user and not self.shared:
-            return list()
-
-        await self.build()
+    async def __install__(self, installer: Installer):
 
         tasks = list()
 
-        if settings.create_pkg_config:
+        if installer.settings.create_pkg_config:
             from dan.pkgconfig.package import create_pkg_config
-            tasks.append(create_pkg_config(self, settings))
+            tasks.append(create_pkg_config(self, installer.settings))
 
-        async def do_install(src: Path, dest: Path):
-            if dest.exists() and dest.younger_than(src):
-                self.info('%s is up-to-date', dest)
-            else:
-                self.debug('installing %s', dest)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                await aiofiles.copy(src, dest)
-            return dest
+        if self.shared:
+            tasks.append(installer.install_shared_library(self.output))
+        elif self.static:
+            tasks.append(installer.install_static_library(self.output))
 
-        dest = settings.libraries_destination / self.output.name
-        self.info('installing %s to %s', self.name, dest)
-
-        if not self.interface:
-            tasks.append(do_install(self.output, dest))
-
-        if mode == InstallMode.dev:
+        if installer.dev:
             header_expr = re.compile(self.header_match)
-            includes_dest = settings.includes_destination
             for public_include_dir in self.includes.public_raw:
                 headers = public_include_dir.rglob('*.h*')
                 for header in headers:
                     if header_expr.match(str(header)):
-                        dest = includes_dest / \
-                            header.relative_to(public_include_dir)
-                        tasks.append(do_install(header, dest))
+                        tasks.append(installer.install_header(header))
 
-            for obj in self.objs:
-                for dbg_file in self.toolchain.debug_files(obj.output):
-                    tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
+            # TODO: how to handle debug symbols ? check where debug it is usually installed and do the same
+            # for obj in self.objs:
+            #     for dbg_file in self.toolchain.debug_files(obj.output):
+            #         tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
 
-        tasks.insert(0, super().install(settings, mode))
+        tasks.insert(0, super().__install__(installer))
 
-        result = list()
         for tchunk in chunks(tasks, 100):
-            result.append(await asyncio.gather(*tchunk))
+            await asyncio.gather(*tchunk)
 
-        return result
 
 class Module(CXXObjectsTarget, internal=True):
     def __init__(self, name: str, sources: list[str], *args, **kwargs):
@@ -535,16 +515,9 @@ class Executable(CXXObjectsTarget, internal=True):
         self.cache['link_args'] = [str(a) for a in commands[0]]
         self.debug('done')
 
-    @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
-        dest = settings.runtime_destination / self.output.name
-        if dest.exists() and dest.younger_than(self.output):
-            self.info('%s is up-to-date', dest)
-        else:
-            self.info('installing %s', dest)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            await aiofiles.copy(self.output, dest)
-        return [dest]
+    async def __install__(self, installer: Installer):
+        await installer.install_bin(self.output)
+        await super().__install__(installer)
 
     async def execute(self, *args, build=True, **kwargs):
         if build:
