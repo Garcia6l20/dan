@@ -243,6 +243,7 @@ class Target(Logging, MakefileRegister, internal=True):
         
         self.parent = parent
         self.__cache: dict = None
+        self.__source_path : Path = None
 
         if name is not None:
             self.name = name
@@ -339,7 +340,14 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def source_path(self) -> Path:
-        return self.makefile.source_path
+        if self.__source_path is None:
+            return self.makefile.source_path
+        else:
+            return self.__source_path
+    
+    @source_path.setter
+    def source_path(self, value):
+        self.__source_path = value
 
     @property
     def build_path(self) -> Path:
