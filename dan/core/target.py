@@ -229,6 +229,7 @@ class Target(Logging, MakefileRegister, internal=True):
     installed: bool = False
     output: Path = None
     options: dict[str, Any] = dict()
+    provides: Iterable[str] = None
 
     dependencies: set[TargetDependencyLike] = set()
     preload_dependencies: set[TargetDependencyLike] = set()
@@ -248,6 +249,11 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.name is None:
             self.name = self.__class__.__name__
+        
+        if self.provides is None:
+            self.provides = [self.name]
+        else:
+            self.provides = set([self.name, *self.provides])
 
         if default is not None:
             self.default = default

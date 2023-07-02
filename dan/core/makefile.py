@@ -92,7 +92,7 @@ class MakeFile(sys.__class__):
                 return type(t) == name_or_class
         else:
             def check(t: Target):
-                return t.name == name_or_class
+                return name_or_class in t.provides
         for t in self.targets:
             if check(t):
                 return t
