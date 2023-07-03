@@ -343,7 +343,6 @@ class Make(Logging):
             return orig(value)
 
     
-    @classmethod
     def _apply_inputs(self, inputs: list[str], get_item: t.Callable[[str], tuple[t.Any, t.Any, t.Any]], info: t.Callable[[t.Any], t.Any]):
         for input in inputs:
             m = re.match(r'(.+?)([+-])?="?(.+)"?', input)
@@ -351,7 +350,11 @@ class Make(Logging):
                 name = m[1]
                 op = m[2]
                 value = m[3]
-                input, out_value, orig = get_item(name)
+                _item = get_item(name)
+                if _item is None:
+                    self.warning('unknown option/setting: %s (skipped)', name)
+                    continue
+                input, out_value, orig = _item
                 sname = name.split('.')[-1]
                 if orig is None:
                     orig = type(input)
