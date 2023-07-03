@@ -125,9 +125,8 @@ class Package(CXXTarget, internal=True):
 
         super().__init__(f'{name}-pkgconfig', **kwargs)
 
-        dan_plugin = self.config_path.parent.parent / \
-            'dan' / f'{name}.py'
-        if dan_plugin.exists():
+        dan_plugin = find_file(rf'{name}\.py', [self.config_path.parent.parent])
+        if dan_plugin is not None:
             spec = importlib.util.spec_from_file_location(
                 f'{name}_plugin', dan_plugin)
             module = importlib.util.module_from_spec(spec)
@@ -274,7 +273,7 @@ def _get_jinja_env():
 
 
 async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
-    dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
+    dest = settings.data_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
 
     requires = list()

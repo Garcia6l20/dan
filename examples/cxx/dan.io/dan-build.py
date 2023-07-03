@@ -9,7 +9,7 @@ catch2, = requires('catch2 = 3')
 class UseCatch2(Executable):
     sources = 'test_catch2.cpp',
     dependencies = [
-        catch2,
+        'catch2:catch2-with-main',
         'spdlog >= 1.11',
     ]
 

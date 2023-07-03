@@ -448,7 +448,8 @@ class Library(CXXObjectsTarget, internal=True):
                 headers = public_include_dir.rglob('*.h*')
                 for header in headers:
                     if header_expr.match(str(header)):
-                        tasks.append(installer.install_header(header))
+                        subdirs = header.relative_to(public_include_dir).parent
+                        tasks.append(installer.install_header(header, subdirs))
 
             # TODO: how to handle debug symbols ? check where debug it is usually installed and do the same
             # for obj in self.objs:

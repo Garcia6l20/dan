@@ -232,8 +232,11 @@ class Installer:
         self.installed_files = list()
         self._logger = logger
     
-    async def _install(self, src: Path|str, dest: Path):
+    async def _install(self, src: Path|str, dest: Path, subdir: Path = None):
+        if subdir is not None:
+            dest /= subdir
         if isinstance(src, Path):
+            dest /= src.name
             if dest.exists() and dest.younger_than(src):
                 self._logger.info('%s is up-to-date', dest)
                 self.installed_files.append(dest)
@@ -251,30 +254,26 @@ class Installer:
     def dev(self):
         return self.mode == InstallMode.dev
     
-    async def install_bin(self, src):
-        await self._install(src, self.settings.runtime_destination)
+    async def install_bin(self, src, subdir = None):
+        await self._install(src, self.settings.runtime_destination, subdir)
 
-    async def install_shared_library(self, src):
-        await self._install(src, self.settings.libraries_destination)
+    async def install_shared_library(self, src, subdir = None):
+        await self._install(src, self.settings.libraries_destination, subdir)
 
-    async def install_static_library(self, src):
+    async def install_static_library(self, src, subdir = None):
         if not self.dev:
             return
-        await self._install(src, self.settings.libraries_destination)
+        await self._install(src, self.settings.libraries_destination, subdir)
 
-    async def install_header(self, src):
+    async def install_header(self, src, subdir = None):
         if not self.dev:
             return
-        await self._install(src, self.settings.includes_destination)
+        await self._install(src, self.settings.includes_destination, subdir)
 
-    
-    async def install_data(self, src, dest = None, dev=False):
+    async def install_data(self, src, subdir = None, dev=False):
         if dev and not self.dev:
             return
-        destination = self.settings.data_destination
-        if dest is not None:
-            destination /= dest
-        await self._install(src, destination)
+        await self._install(src, self.settings.data_destination, subdir)
 
 
 class Target(Logging, MakefileRegister, internal=True):
@@ -348,6 +347,7 @@ class Target(Logging, MakefileRegister, internal=True):
         super().__init__(self.fullname)
 
         self._output: Path = None
+        self._build_path = None
 
         if type(self).output != Target.output:
             # hack class-defined output
@@ -407,7 +407,10 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def build_path(self) -> Path:
-        return self.makefile.build_path
+        if self._build_path is None:
+            return self.makefile.build_path
+        else:
+            return self._build_path
     
     @property
     def requires(self):

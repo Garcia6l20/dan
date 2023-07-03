@@ -68,6 +68,8 @@ class PackageRepository(Target, internal=True):
         self.repo_data = _get_settings().get(name)
         super().__init__(name, *args, **kwargs)
         self.output = get_dan_path() / 'repositories' / self.name
+        self.toolchain = self.context.get('cxx_target_toolchain')
+        self.pkgs_root = get_packages_path() / self.toolchain.system / self.toolchain.arch / self.toolchain.build_type.name
         self._package_makefile = None
 
     async def __build__(self):
@@ -90,6 +92,7 @@ class PackageRepository(Target, internal=True):
             requirements = None
             with self.makefile.context:
                 self._package_makefile = load_makefile(root / 'dan-build.py', f'{self.name}.packages', requirements=requirements, build_path=self.build_path / self.name, parent=self.makefile)
+                self._package_makefile.pkgs_path = self.pkgs_root
 
         return self._package_makefile
 
@@ -103,7 +106,7 @@ class PackageRepository(Target, internal=True):
             package = name
 
         for lib in self.pkgs_makefile.all_installed:
-            if lib.name == name and lib.makefile.name == package:
+            if name in lib.provides and lib.makefile.name == package:
                 return lib
 
 def get_repo_instance(repo_name:str, makefile=None) -> PackageRepository:

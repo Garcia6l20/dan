@@ -22,6 +22,7 @@ class MakeFile(sys.__class__):
         self.source_path = source_path
         self.build_path = build_path
         self.__requirements = requirements
+        self.__pkgs_path = None
         self.parent = parent
         self.__cache: Cache = None
         self.children: list[MakeFile] = list()
@@ -131,10 +132,17 @@ class MakeFile(sys.__class__):
 
     @property
     def pkgs_path(self):
-        if self.requirements:
-            return self.requirements.parent.build_path / 'pkgs'
+        if self.__pkgs_path is None:
+            if self.requirements:
+                return self.requirements.parent.build_path / 'pkgs'
+            else:
+                return self.build_path / 'pkgs'
         else:
-            return self.build_path / 'pkgs'
+            return self.__pkgs_path
+        
+    @pkgs_path.setter
+    def pkgs_path(self, value):
+        self.__pkgs_path = value
 
     @requirements.setter
     def requirements(self, value: 'MakeFile'):
