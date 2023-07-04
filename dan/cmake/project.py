@@ -6,27 +6,22 @@ from dan.core import aiofiles
 from dan.core.find import find_executable, find_file
 from dan.cxx import Toolchain
 
-from pathlib import Path
+import typing as t
 
 
 class Project(Target, internal=True):
 
     cmake_targets: list[str] = None
     cmake_config_definitions: dict[str, str] = dict()
-    cmake_options_prefix: str = None
     cmake_patch_debug_postfix: list = None
+    cmake_options: dict[str, tuple[str, t.Any, str]] = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cmake_cache_dep = FileDependency(self.build_path / 'CMakeCache.txt')
         self.dependencies.add(self.cmake_cache_dep)
         self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
-        
-        cmake_options = self.cache.get('cmake_options')
-        if cmake_options is not None:
-            for name, default, doc in self.cache.get('cmake_options'):
-                self.options.add(name, default, doc)
-    
+
     async def _cmake(self, *cmake_args, **kwargs):
         return await async_run(['cmake', *cmake_args], logger=self, cwd=self.build_path, **kwargs, env=self.toolchain.env)
 
@@ -38,6 +33,13 @@ class Project(Target, internal=True):
                 targets_args.extend(('-t', target))
         return targets_args
 
+    async def __initialize__(self):
+        if self.cmake_options is not None:
+            for name, (cmake_name, default, help) in self.cmake_options.items():
+                opt = self.options.add(name, default, help)
+                setattr(opt, 'cmake_name', cmake_name)
+        return await super().__initialize__()
+
     async def __build__(self):
         cmake_prefix_path = {self.makefile.pkgs_path.as_posix()}
         for dep in self.dependencies:
@@ -48,6 +50,15 @@ class Project(Target, internal=True):
         if self.toolchain.system.startswith('msys'):
             make = find_executable(r'.+make', self.toolchain.env['PATH'].split(';'), default_paths=False)
             base_opts.extend((f'-GMinGW Makefiles', f'-DCMAKE_MAKE_PROGRAM={make.as_posix()}'))
+
+        cmake_options = dict()
+        for opt in self.options:
+            if hasattr(opt, 'cmake_name'):
+                value = opt.value
+                if isinstance(value, bool):
+                    value = 'ON' if value else 'OFF'
+                cmake_options[opt.cmake_name] = value
+
         await self._cmake(
             self.source_path,
             *base_opts,
@@ -56,32 +67,9 @@ class Project(Target, internal=True):
             f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
             f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
             f'-DCMAKE_PREFIX_PATH={";".join(cmake_prefix_path)}',
-            *[f'-D{k}={v}' for k, v in self.cmake_config_definitions.items()]
+            *[f'-D{k}={v}' for k, v in self.cmake_config_definitions.items()],
+            *[f'-D{k}={v}' for k, v in cmake_options.items()]
         )
-        out, err, rc = await self._cmake('-S', self.source_path,  '-LH', log=False)
-        cmake_options = list()
-        doc = None
-        for line in out.splitlines():
-            match re_match(line.strip()):
-                case r'^(.+):(\w+)=(.+)$' as m:
-                    name = m[1]
-                    tp = m[2]
-                    value = m[3]
-                    match tp:
-                        case 'STRING':
-                            pass
-                        case 'BOOL':
-                            value = value.lower() in ('on', 'true', 'yes')
-                        case 'PATH'|'FILEPATH':
-                            value = Path(value)
-                        case _:
-                            self.warning('unhandled cmake type: %s', tp)
-                    if self.cmake_options_prefix is None or name.startswith(self.cmake_options_prefix):
-                        cmake_options.append((name.lower(), value, doc))
-                case r'^// (.+)$' as m:
-                    doc = m[1]
-        self.cache['cmake_options'] = cmake_options
-    
         await self._cmake('--build', '.', '--parallel', *self._target_args)
     
     async def __install__(self, installer: Installer):
