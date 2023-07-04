@@ -115,6 +115,19 @@ async def versions(library: str):
             else:
                 click.echo(f' - {v}')
 
+@ls.command()
+@click.argument('LIBRARY')
+async def options(library: str):
+    """Get LIBRARY's available options"""
+    async with make_context():
+        lib = await get_library(library)
+        await lib.initialize()
+        for o in lib.options:
+            current = ''
+            if o.value != o.default:
+                current = f', current: {o.value}'
+            click.echo(f'{o.name}: {o.help} (type: {o.type.__name__}, default: {o.default}{current})')
+
 @cli.command()
 @click.argument('NAME')
 async def search(name):
