@@ -12,7 +12,7 @@ from pathlib import Path
 class Project(Target, internal=True):
 
     cmake_targets: list[str] = None
-    cmake_config_options: dict[str, str] = dict()
+    cmake_config_definitions: dict[str, str] = dict()
     cmake_options_prefix: str = None
     cmake_patch_debug_postfix: list = None
 
@@ -56,7 +56,7 @@ class Project(Target, internal=True):
             f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
             f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
             f'-DCMAKE_PREFIX_PATH={";".join(cmake_prefix_path)}',
-            *[f'-D{k}={v}' for k, v in self.cmake_config_options.items()]
+            *[f'-D{k}={v}' for k, v in self.cmake_config_definitions.items()]
         )
         out, err, rc = await self._cmake('-S', self.source_path,  '-LH', log=False)
         cmake_options = list()
@@ -77,7 +77,6 @@ class Project(Target, internal=True):
                         case _:
                             self.warning('unhandled cmake type: %s', tp)
                     if self.cmake_options_prefix is None or name.startswith(self.cmake_options_prefix):
-                        # TODO: make options persistant
                         cmake_options.append((name.lower(), value, doc))
                 case r'^// (.+)$' as m:
                     doc = m[1]
