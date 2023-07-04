@@ -20,7 +20,8 @@ from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
 from dan.core.include import MakeFileError, include_makefile, Context
 from dan.core import aiofiles, asyncio
-from dan.core.settings import InstallMode, Settings
+from dan.core.requirements import load_requirements
+from dan.core.settings import InstallMode, InstallSettings, Settings
 from dan.core.test import Test
 from dan.core.utils import unique
 from dan.cxx import init_toolchains
@@ -492,6 +493,37 @@ class Make(Logging):
                 raise errors[0]
             elif err_count > 1:
                 raise asyncio.ExceptionGroup('Multiple errors occured while building the project', errors=errors)
+    
+    
+    async def _install_target_deps(self, t: Target):
+        deps_install_path = self.root.pkgs_path
+        deps_settings = InstallSettings(deps_install_path)
+        try:
+            await load_requirements(t.requires, makefile=self.root, logger=self, install=True)
+
+        except Exception as err:
+            self._diagnostics.update(gen_python_diags(err))
+            raise
+    
+    async def install_dependencies(self, targets: list[Target] = None):
+        await self.initialize()
+
+        if targets is None:
+            targets = self.targets
+
+        with self.context, \
+             self.progress('installing deps', targets, self._install_target_deps, self.no_progress) as tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            errors = list()
+            for result in results:
+                if isinstance(result, Exception):
+                    self._logger.error(str(result))
+                    errors.append(result)
+            err_count = len(errors)
+            if err_count == 1:
+                raise errors[0]
+            elif err_count > 1:
+                raise asyncio.ExceptionGroup('Multiple errors occured while installing project dependencies', errors=errors)
 
     async def _install_target(self, t: Target, mode: InstallMode):
         try:

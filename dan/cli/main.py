@@ -138,9 +138,15 @@ async def build(ctx: CommandsContext, force=False, **kwds):
     if force:
         await ctx.make.clean()
     await ctx.make.build()
-    # from dan.cxx import target_toolchain
-    # target_toolchain.compile_commands.update()
 
+@cli.command()
+@common_opts
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def install_dependencies(ctx: CommandsContext, **kwds):
+    """Build targets"""
+    ctx(**kwds)  # update kwds
+    await ctx.make.install_dependencies()
 
 @cli.command()
 @common_opts
