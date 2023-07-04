@@ -58,3 +58,40 @@ async def sub(filepath, pattern, repl, **kwargs):
     content = re.sub(pattern, repl, content, **kwargs)
     async with open(filepath, 'w') as f:
         await f.write(content)
+
+_lock_pool = None
+def _get_lock_pool():
+    global _lock_pool
+    if _lock_pool is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _lock_pool = ThreadPoolExecutor(max_workers=1)
+    return _lock_pool
+
+import lockfile
+
+class LockFile(lockfile.LockFile):
+
+    def __init__(self, path, timeout=None):
+        super().__init__(path, False, timeout)
+    
+    def sync_acquire(self, timeout=None):
+        return super().acquire(timeout)
+
+    async def acquire(self, timeout=None):
+        loop = asyncio.get_event_loop()
+        def _acquire():
+            return lockfile.LockFile.acquire(self, timeout)
+        return await loop.run_in_executor(_get_lock_pool(), _acquire)
+    
+    def sync_release(self):
+        return super().release()
+
+    async def release(self):
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(_get_lock_pool(), super().release)
+    
+    async def __aenter__(self):
+        await self.acquire()
+       
+    async def __aexit__(self, et, exc, tb):
+        await self.release()

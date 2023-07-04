@@ -10,8 +10,6 @@ from dan.io.repositories import get_packages_path, get_repo_instance
 
 
 class PackageBuild(Target, internal=True):
-
-    _all_builds: dict[str, 'PackageBuild'] = dict()
     
     def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
@@ -23,6 +21,7 @@ class PackageBuild(Target, internal=True):
         self._package_makefile = None
         self._build_path = None
         self.toolchain = self.context.get('cxx_target_toolchain')
+        self.lock: aiofiles.LockFile = None
 
     @property
     def package_makefile(self):
@@ -71,6 +70,8 @@ class PackageBuild(Target, internal=True):
         makefile.pkgs_path = pkgs_root / self.package / str(self.version)
 
         self._build_path = makefile.pkgs_path
+        self.lock = aiofiles.LockFile(self.build_path / 'build')
+
         self.install_settings = InstallSettings(self.build_path)
         
         # update package build-path
@@ -95,38 +96,38 @@ class PackageBuild(Target, internal=True):
         return self._build_path
     
     async def __build__(self):
-        ident = f'{self.package}-{self.version}'
-        if ident in self._all_builds:
-            self.debug(f'{ident} already built by {self._all_builds[ident].fullname}')
-            await self._all_builds[ident].build()
-            return
+        if self.lock.is_locked():
+            self.debug('package %s %s already building...', self.name, self.version)
+            # wait for it
+            async with self.lock:
+                return
 
-        self._all_builds[ident] = self
+        async with self.lock:
 
-        makefile = self.package_makefile
-        build_path = makefile.build_path
+            makefile = self.package_makefile
+            build_path = makefile.build_path
 
-        # FIXME: shall a makefile have an associated toolchain ?
-        toolchain = None
-        async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
-            for target in makefile.all_installed:
-                if hasattr(target, 'toolchain'):
-                    if toolchain is None:
-                        toolchain = target.toolchain
-                    else:
-                        assert toolchain == target.toolchain, 'Toolchain missmatch'
-                group.create_task(target.install(self.install_settings, InstallMode.dev))
+            # FIXME: shall a makefile have an associated toolchain ?
+            toolchain = None
+            async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
+                for target in makefile.all_installed:
+                    if hasattr(target, 'toolchain'):
+                        if toolchain is None:
+                            toolchain = target.toolchain
+                        else:
+                            assert toolchain == target.toolchain, 'Toolchain missmatch'
+                    group.create_task(target.install(self.install_settings, InstallMode.dev))
 
-        makefile.cache.ignore()
-        del makefile
+            makefile.cache.ignore()
+            del makefile
 
-        os.chdir(self.build_path.parent)
+            os.chdir(self.build_path.parent)
 
-        self.debug('cleaning')
-        async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
-            if toolchain is not None and not toolchain.build_type.is_debug_mode:
-                group.create_task(aiofiles.rmtree(self.output / 'src'))
-            group.create_task(aiofiles.rmtree(build_path, force=True))
+            self.debug('cleaning')
+            async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
+                if toolchain is not None and not toolchain.build_type.is_debug_mode:
+                    group.create_task(aiofiles.rmtree(self.output / 'src'))
+                group.create_task(aiofiles.rmtree(build_path, force=True))
 
 
 class Package(Target, internal=True):
