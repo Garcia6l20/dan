@@ -13,7 +13,7 @@ from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
 from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain
-
+from dan.core.cache import cached_property as dan_cached
 
 class CXXObject(Target, internal=True):
     def __init__(self, source:Path, parent: 'CXXTarget', root: Path = None) -> None:
@@ -49,11 +49,17 @@ class CXXObject(Target, internal=True):
     @property
     def compile_definitions(self):
         return self.parent.compile_definitions
+    
+    @dan_cached()
+    def deps(self): ...
+
+    @dan_cached()
+    def compile_args(self): ...
 
     async def __initialize__(self):
         await self.parent.preload()
 
-        deps = self.cache.get('deps')
+        deps = self.deps
         if deps is not None:
             self.dependencies.update(deps)
 
@@ -62,8 +68,8 @@ class CXXObject(Target, internal=True):
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
-        previous_args = self.cache.get('compile_args')
-        if previous_args:
+        previous_args = self.compile_args
+        if previous_args is not None:
             args = self.toolchain.make_compile_commands(
                 self.source_path / self.source, self.output, self.private_cxx_flags)[0]
             args = [str(arg) for arg in args]
@@ -88,13 +94,13 @@ class CXXObject(Target, internal=True):
             self.parent.diagnostics.insert(err.diags, str(self.source))
             err.target = self
             raise
-        self.cache['compile_args'] = [str(a) for a in commands[0]]
+        self.compile_args = [str(a) for a in commands[0]]
         self.debug('scanning dependencies of %s', self.source.name)
         deps = await self.toolchain.scan_dependencies(self.source_path / self.source, self.private_cxx_flags, self.build_path)
         deps = [d for d in deps
                 if self.makefile.root.source_path in Path(d).parents
                 or self.build_path in Path(d).parents]
-        self.cache['deps'] = deps
+        self.deps = deps
 
 
 class OptionSet:

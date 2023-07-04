@@ -283,7 +283,7 @@ class Target(Logging, MakefileRegister, internal=True):
     default: bool = True
     installed: bool = False
     output: Path = None
-    options: dict[str, Any] = dict()
+    options: dict[str, Any]|Options = dict()
     provides: Iterable[str] = None
 
     dependencies: set[TargetDependencyLike] = set()

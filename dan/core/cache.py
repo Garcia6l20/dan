@@ -128,4 +128,35 @@ def once_method(fn):
 
     return wrapper
 
+class _CachedProperty:
+    def __init__(self, getter: t.Callable[[], t.Any], cache_name=None):
+        self.__getter = getter
+        self.__name = getter.__name__
+        self.__cache_name = 'cache' if cache_name is None else cache_name
 
+    def __get__(self, instance, owner: type | None = None):
+        cache = getattr(instance, self.__cache_name)
+        if isinstance(cache, Cache):
+            cache = cache.data
+        value = cache.get(self.__name)
+        if value is None:
+            value = self.__getter(instance)
+            if value is not None:
+                cache[self.__name] = value
+        return value
+
+    def __set__(self, instance, value):
+        cache = getattr(instance, self.__cache_name)
+        if isinstance(cache, Cache):
+            cache = cache.data
+        cache[self.__name] = value
+
+    def __delete__(self, instance):
+        cache = getattr(instance, self.__cache_name)
+        del cache[self.__name]
+
+
+def cached_property(cache_name=None):
+    def wrapper(fn):
+        return _CachedProperty(fn, cache_name=cache_name)
+    return wrapper
