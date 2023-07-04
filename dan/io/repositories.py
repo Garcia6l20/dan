@@ -4,7 +4,7 @@ from dan.core.makefile import MakeFile
 
 from dan.cxx.detect import get_dan_path
 from dan.core.target import Target
-from dan.core.runners import async_run
+from dan.core.runners import CommandError, async_run
 from dan.core import aiofiles
 from dan.core.cache import Cache
 
@@ -82,7 +82,10 @@ class PackageRepository(Target, internal=True):
                 await aiofiles.rmtree(self.output)
                 raise e
         else:
+            try:
                 await async_run(f'git pull -q', logger=self, cwd=self.output)
+            except CommandError:
+                self.warning('cannot update %s', self.name)
 
     @property
     def pkgs_makefile(self) -> MakeFile:
