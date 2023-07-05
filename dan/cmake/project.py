@@ -41,16 +41,6 @@ class Project(Target, internal=True):
         return await super().__initialize__()
 
     async def __build__(self):
-        cmake_prefix_path = {self.makefile.pkgs_path.as_posix()}
-        for dep in self.dependencies:
-            match dep:
-                case RequiredPackage():
-                    cmake_prefix_path.add(dep.makefile.pkgs_path.as_posix())
-        base_opts = []
-        if self.toolchain.system.startswith('msys'):
-            make = find_executable(r'.+make', self.toolchain.env['PATH'].split(';'), default_paths=False)
-            base_opts.extend((f'-GMinGW Makefiles', f'-DCMAKE_MAKE_PROGRAM={make.as_posix()}'))
-
         cmake_options = dict()
         for opt in self.options:
             if hasattr(opt, 'cmake_name'):
@@ -59,6 +49,18 @@ class Project(Target, internal=True):
                     value = 'ON' if value else 'OFF'
                 cmake_options[opt.cmake_name] = value
 
+        cmake_options['CMAKE_PREFIX_PATH'] = self.makefile.pkgs_path.as_posix()
+        for dep in self.dependencies:
+            match dep:
+                case RequiredPackage():
+                    if dep.makefile.pkgs_path != self.makefile.pkgs_path:
+                        cmake_options[f'{dep.name}_DIR'] = (dep.makefile.pkgs_path / 'lib' / 'cmake' / dep.name).as_posix() 
+
+        base_opts = []
+        if self.toolchain.system.startswith('msys'):
+            make = find_executable(r'.+make', self.toolchain.env['PATH'].split(';'), default_paths=False)
+            base_opts.extend((f'-GMinGW Makefiles', f'-DCMAKE_MAKE_PROGRAM={make.as_posix()}'))
+
         await self._cmake(
             self.source_path,
             *base_opts,
@@ -66,7 +68,6 @@ class Project(Target, internal=True):
             f'-DCMAKE_CONFIGURATION_TYPES={self.toolchain.build_type.name.upper()}',
             f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
             f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
-            f'\'-DCMAKE_PREFIX_PATH={";".join(cmake_prefix_path)}\'',
             *[f'-D{k}={v}' for k, v in self.cmake_config_definitions.items()],
             *[f'-D{k}={v}' for k, v in cmake_options.items()]
         )
