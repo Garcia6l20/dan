@@ -21,7 +21,7 @@ class PackageBuild(Target, internal=True):
         self._package_makefile = None
         self._build_path = None
         self.toolchain = self.context.get('cxx_target_toolchain')
-        self.lock: aiofiles.LockFile = None
+        self.lock: aiofiles.FileLock = None
 
     @property
     def package_makefile(self):
@@ -70,7 +70,7 @@ class PackageBuild(Target, internal=True):
         makefile.pkgs_path = pkgs_root / self.package / str(self.version)
 
         self._build_path = makefile.pkgs_path
-        self.lock = aiofiles.LockFile(self.build_path / 'build')
+        self.lock = aiofiles.FileLock(self.build_path / 'build.lock')
 
         self.install_settings = InstallSettings(self.build_path)
         
@@ -96,7 +96,7 @@ class PackageBuild(Target, internal=True):
         return self._build_path
     
     async def __build__(self):
-        if self.lock.is_locked():
+        if self.lock.locked:
             self.debug('package %s %s already building...', self.name, self.version)
             # wait for it
             async with self.lock:
