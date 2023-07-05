@@ -66,7 +66,7 @@ class Project(Target, internal=True):
             f'-DCMAKE_CONFIGURATION_TYPES={self.toolchain.build_type.name.upper()}',
             f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
             f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
-            f'-DCMAKE_PREFIX_PATH={";".join(cmake_prefix_path)}',
+            f'\'-DCMAKE_PREFIX_PATH={";".join(cmake_prefix_path)}\'',
             *[f'-D{k}={v}' for k, v in self.cmake_config_definitions.items()],
             *[f'-D{k}={v}' for k, v in cmake_options.items()]
         )
