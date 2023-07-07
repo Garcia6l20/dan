@@ -392,7 +392,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def is_requirement(self) -> bool:
-        return self.makefile.name.endswith('requirements')
+        return self.makefile.is_requirement
 
     @property
     def source_path(self) -> Path:

@@ -15,7 +15,8 @@ class MakeFile(sys.__class__):
                source_path: Path,
                build_path: Path,
                requirements: 'MakeFile' = None,
-               parent: 'MakeFile' = None) -> None:
+               parent: 'MakeFile' = None,
+               is_requirement = False) -> None:
         self.name = name
         self.description = None
         self.version = None
@@ -24,6 +25,7 @@ class MakeFile(sys.__class__):
         self.__requirements = requirements
         self.__pkgs_path = None
         self.parent = parent
+        self.__is_requirement = is_requirement
         self.__cache: Cache = None
         self.children: list[MakeFile] = list()
         if self.name != 'dan-requires' and self.parent:
@@ -53,6 +55,14 @@ class MakeFile(sys.__class__):
             yield parent
             parent = parent.parent
 
+    @property
+    def is_requirement(self):
+        if self.__is_requirement:
+            return True
+        for parent in self.parents:
+            if parent.__is_requirement:
+                return True
+        return False
 
     __target_fullnames = list()
     __test_fullnames = list()
