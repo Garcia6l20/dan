@@ -192,12 +192,26 @@ class Package(Target, internal=True):
         self.dependencies.add(self.pkg_build)
         lib_path = Path('pkgs') / 'lib'
         self.pkgconfig_path = lib_path / 'pkgconfig'
-        self.cmake_path = lib_path / 'cmake'
+        self.cmake_path = lib_path / 'cmake' / self.name
         self.dan_path = lib_path / 'dan'
         
         self.output = self.pkgconfig_path / f'{self.name}.pc'
 
         return await super().__initialize__()
+    
+    async def _import_cmake_pkg(self, pkg: Path):
+        self.debug('copying %s to %s', pkg, self.build_path / self.cmake_path)
+        content = [
+            f'set(CMAKE_CURRENT_LIST_FILE "{pkg.absolute().as_posix()}")\n',
+            f'set(CMAKE_CURRENT_LIST_DIR "{pkg.parent.absolute().as_posix()}")\n'
+        ]
+        async with aiofiles.open(pkg) as f:
+            content.extend(await f.readlines())
+        dest = self.build_path / self.cmake_path / pkg.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(dest, 'w') as f:
+            await f.writelines(content)
+
     
     async def __build__(self):
         (self.build_path / self.pkgconfig_path).mkdir(exist_ok=True, parents=True)
@@ -219,7 +233,7 @@ class Package(Target, internal=True):
 
             for pkg in find_files(r'.+\.cmake$', [self.pkg_build.install_settings.libraries_destination / 'cmake']):
                 self.debug('copying %s to %s', pkg, self.build_path / self.cmake_path)
-                group.create_task(aiofiles.copy(pkg, self.build_path / self.cmake_path))
+                group.create_task(self._import_cmake_pkg(pkg))
 
         if self.output.exists():
             from dan.pkgconfig.package import Data, find_package

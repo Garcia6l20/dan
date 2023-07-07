@@ -49,12 +49,7 @@ class Project(Target, internal=True):
                     value = 'ON' if value else 'OFF'
                 cmake_options[opt.cmake_name] = value
 
-        cmake_options['CMAKE_PREFIX_PATH'] = self.makefile.pkgs_path.as_posix()
-        for dep in self.dependencies:
-            match dep:
-                case RequiredPackage():
-                    if dep.makefile.pkgs_path != self.makefile.pkgs_path:
-                        cmake_options[f'{dep.name}_DIR'] = (dep.makefile.pkgs_path / 'lib' / 'cmake' / dep.name).as_posix() 
+        cmake_options['CMAKE_PREFIX_PATH'] = self.makefile.root.pkgs_path.as_posix()
 
         base_opts = []
         if self.toolchain.system.startswith('msys'):
