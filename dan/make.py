@@ -319,110 +319,19 @@ class Make(Logging):
             if check(target):
                 return target
 
-
-    @classmethod
-    def _parse_str_value(cls, name, value: str, orig: type, tp: type = None):
-        if issubclass(orig, Enum):
-            names = [n.lower()
-                        for n in orig._member_names_]
-            value = value.lower()
-            if value in names:
-                return orig(names.index(value))
-            else:
-                raise RuntimeError(f'{name} should be one of {names}')
-        elif issubclass(orig, (set, list)):
-            assert tp is not None
-            result = list()
-            for sub in value.split(';'):
-                result.append(cls._parse_str_value(name, sub, tp))
-            return orig(result)
-        elif orig == bool:
-            return value.lower() in ('true', 'yes', 'on', '1')
-        else:
-            if tp is not None:
-                raise TypeError(f'unhandled type {orig}[{tp}]')
-            return orig(value)
-
-    
-    def _apply_inputs(self, inputs: list[str], get_item: t.Callable[[str], tuple[t.Any, t.Any, t.Any]], info: t.Callable[[t.Any], t.Any]):
-        for input in inputs:
-            m = re.match(r'(.+?)([+-])?="?(.+)"?', input)
-            if m:
-                name = m[1]
-                op = m[2]
-                value = m[3]
-                _item = get_item(name)
-                if _item is None:
-                    self.warning('unknown option/setting: %s (skipped)', name)
-                    continue
-                input, out_value, orig = _item
-                sname = name.split('.')[-1]
-                if orig is None:
-                    orig = type(input)
-                if hasattr(orig, '__annotations__') and sname in orig.__annotations__:
-                    tp = orig.__annotations__[sname]
-                    if t.is_optional(tp):
-                        orig = t.get_args(tp)[0]
-                        tp = None
-                    else:
-                        orig = t.get_origin(tp)
-                        if orig is None:
-                            orig = tp
-                            tp = None
-                        else:
-                            args = t.get_args(tp)
-                            if args:
-                                tp = args[0]
-                else:
-                    tp = None
-                in_value = self._parse_str_value(name, value, orig, tp)
-                match (out_value, op, in_value):
-                    case (list()|set(), '-', list()|set()) if len(in_value) == 1 and list(in_value)[0] == '*':
-                        out_value.clear()
-                    case (set(), '+', set()):
-                        out_value.update(in_value)
-                    case (set(), '-', set()):
-                        out_value = out_value - in_value
-                    case (list(), '+', set()|list()):
-                        out_value.extend(in_value)
-                    case (list(), '-', set()|list()):
-                        for v in in_value:
-                            out_value.remove(v)
-                    case (_, '+' | '-', _):
-                        raise TypeError(f'unhandled "{op}=" operator on type {type(out_value)} ({name})')
-                    case _:
-                        out_value = in_value
-                if isinstance(input, dict):
-                    input[sname] = out_value
-                else:
-                    setattr(input, sname, out_value)
-                info(name, out_value)
-            else:
-                raise RuntimeError(f'cannot process given input: {input}')
-
     async def apply_options(self, *options):
         await self.initialize()
+        from dan.core.settings import _apply_inputs
         all_opts = self.all_options
         def get_option(name):
             for opt in all_opts:
                 if opt.fullname == name:
                     return opt.cache, opt.value, opt.type
-        self._apply_inputs(options, get_option, lambda k, v: self.info(f'option: {k} = {v}'))
+        _apply_inputs(options, get_option, logger=self, input_type_name='option')
 
     async def apply_settings(self, *settings):
-        # dont init for settings
-        def get_setting(name):
-            parts = name.split('.')
-            setting = self.settings
-            for part in parts[:-1]:
-                if not hasattr(setting, part):
-                    raise RuntimeError(f'no such setting: {name}')
-                setting = getattr(setting, part)
-            if not hasattr(setting, parts[-1]):
-                raise RuntimeError(f'no such setting: {name}')
-            value = getattr(setting, parts[-1])
-            return setting, value, type(setting)
-        self._apply_inputs(settings, get_setting, lambda k, v: self.info(f'setting: {k} = {v}'))
+        from dan.core.settings import apply_settings
+        apply_settings(self.settings, *settings, logger=self)
 
 
     @staticmethod

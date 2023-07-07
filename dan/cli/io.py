@@ -68,19 +68,8 @@ def cli():
 @click.option('--setting', '-s', 'settings', type=click.SettingsParamType(RepositoriesSettings), multiple=True)
 async def configure(settings):
     io_settings = _get_settings()
-    make = Make(get_source_path(), quiet=False)
-    def get_setting(name):
-        parts = name.split('.')
-        setting = io_settings
-        for part in parts[:-1]:
-            if not hasattr(setting, part):
-                raise RuntimeError(f'no such setting: {name}')
-            setting = getattr(setting, part)
-        if not hasattr(setting, parts[-1]):
-            raise RuntimeError(f'no such setting: {name}')
-        value = getattr(setting, parts[-1])
-        return setting, value, type(setting)
-    make._apply_inputs(settings, get_setting, lambda k, v: click.logger.info(f'setting: {k} = {v}'))
+    from dan.core.settings import apply_settings
+    apply_settings(io_settings, *settings, logger=click.logger)
     await Cache.save_all()
 
 @cli.group()

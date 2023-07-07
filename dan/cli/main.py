@@ -96,7 +96,7 @@ def cli(ctx: click.AsyncContext, **kwds):
 @click.option('--verbose', '-v', is_flag=True,
               help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
-              type=click.ToolchainParamType())
+              type=click.ToolchainParamType(), envvar='DAN_TOOLCHAIN')
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True, type=click.OptionsParamType())
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
