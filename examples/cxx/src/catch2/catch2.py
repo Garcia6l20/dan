@@ -1,8 +1,7 @@
-import os
-from dan.core.pm import re_match
-from dan.cxx import Library, target_toolchain
 from dan.src import GitSources
-from dan.cmake import ConfigureFile
+from dan.cmake import Project as CMakeProject
+from dan.core import asyncio, aiofiles
+from dan.cxx import BuildType
 
 version = '3.2.1'
 description = 'A modern, C++-native, test framework for unit-tests, TDD and BDD'
@@ -15,81 +14,25 @@ class Catch2Source(GitSources):
     patches = 'patches/0001-fix-add-missing-cstdint-includes.patch',
 
 
-class Config(ConfigureFile):
-    name = 'catch2-config'
-    dependencies = Catch2Source,
-    output = 'generated/catch2/catch_user_config.hpp'
-
-    async def __initialize__(self):
-        await super().__initialize__()
-        self.input = self.get_dependency(
-            'catch2-source').output / 'src/catch2/catch_user_config.hpp.in'
-        
-        self.add_overridable_catch2_option('counter', True)
-        self.add_overridable_catch2_option('android_logwrite', False)
-        self.add_overridable_catch2_option('colour_win32', os.name == 'nt')
-        self.add_overridable_catch2_option(
-            'cpp11_to_string', target_toolchain.cpp_std >= 11)
-        self.add_overridable_catch2_option(
-            'cpp17_byte', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option(
-            'cpp17_optional', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option(
-            'cpp17_string_view', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option(
-            'cpp17_uncaught_exceptions', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option(
-            'cpp17_variant', target_toolchain.cpp_std >= 17)
-        self.add_overridable_catch2_option('global_nextafter', True)
-        self.add_overridable_catch2_option('posix_signals', os.name == 'posix')
-        self.add_overridable_catch2_option('getenv', True)
-        self.add_overridable_catch2_option('use_async', True)
-        # self.add_overridable_catch2_option('WCHAR', False)
-        self.add_overridable_catch2_option('windows_seh', os.name == 'nt')
-
-        self.add_catch2_option('bazel_support', False)
-        self.add_catch2_option('disable_exceptions', False)
-        self.add_catch2_option('disable', False)
-        self.add_catch2_option('disable_stringification', False)
-        self.add_catch2_option('all_stringmarkers', True)
-        self.add_catch2_option('optional_stringmaker', True)
-        self.add_catch2_option('pair_stringmaker', True)
-        self.add_catch2_option('tuple_stringmaker', True)
-        self.add_catch2_option('variant_stringmaker', False)
-        self.add_catch2_option('experimental_redirect', False)
-        self.add_catch2_option('fast_compile', False)
-        self.add_catch2_option('prefix_all', False)
-        self.add_catch2_option('windows_crtdbg', os.name == 'nt')
-        self.add_catch2_option('experimental_redirect', False)
-        self.add_catch2_option('default_reporter', 'console')
-        self.add_catch2_option('console_width', 80)
-
-    def add_overridable_catch2_option(self, name: str, value: bool):
-        o = self.options.add(name, value)
-        self[f'CATCH_CONFIG_{name.upper()}'] = o.value
-        self[f'CATCH_CONFIG_NO_{name.upper()}'] = not o.value
-
-    def add_catch2_option(self, name: str, value):
-        o = self.options.add(name, value)
-        self[f'CATCH_CONFIG_{name.upper()}'] = o.value
-
-class Catch2(Library):
+class Catch2(CMakeProject):
     name = 'catch2'
-    preload_dependencies = Config,
+    provides = ['catch2-with-main']
+    preload_dependencies = [Catch2Source]
+    cmake_options_prefix = 'CATCH'    
 
-    def sources(self):
-        return (self.get_dependency('catch2-source').output / 'src').rglob('*.cpp')
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.source_path = self.get_dependency(Catch2Source).output
 
-    async def __initialize__(self):
-        src = self.get_dependency('catch2-source').output / 'src'
-        self.config = self.get_dependency('catch2-config')
-        self.options = self.config.options
-        self.includes.add(src, public=True)
-        self.includes.add(self.build_path / 'generated', public=True)
-        if self.toolchain.type == 'msvc':
-            self.link_options.add('/SUBSYSTEM:CONSOLE', public=True)
-
-        await super().__initialize__()
+    async def __install__(self, installer):
+        await super().__install__(installer)
+        if self.toolchain.build_type == BuildType.debug:
+            # patch: no 'd' postfix in pkgconfig
+            async with asyncio.TaskGroup() as g:
+                g.create_task(aiofiles.sub(installer.settings.data_destination / 'pkgconfig' / 'catch2.pc',
+                                           r'-lCatch2\W', '-lCatch2d'))
+                g.create_task(aiofiles.sub(installer.settings.data_destination / 'pkgconfig' / 'catch2-with-main.pc',
+                                           r'-lCatch2Main\W', '-lCatch2Maind'))
 
 
 @Catch2.utility

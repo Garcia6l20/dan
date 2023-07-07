@@ -11,16 +11,17 @@ import re
 from dataclasses_json import dataclass_json
 import sys
 import tqdm
-import typing as t
 from collections.abc import Iterable
 
+import dan.core.typing as t
 from dan.core import diagnostics as diag
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
 from dan.core.include import MakeFileError, include_makefile, Context
 from dan.core import aiofiles, asyncio
-from dan.core.settings import InstallMode, Settings
+from dan.core.requirements import load_requirements
+from dan.core.settings import InstallMode, InstallSettings, Settings
 from dan.core.test import Test
 from dan.core.utils import unique
 from dan.cxx import init_toolchains
@@ -318,103 +319,19 @@ class Make(Logging):
             if check(target):
                 return target
 
-
-    @classmethod
-    def _parse_str_value(cls, name, value: str, orig: type, tp: type = None):
-        if issubclass(orig, Enum):
-            names = [n.lower()
-                        for n in orig._member_names_]
-            value = value.lower()
-            if value in names:
-                return orig(names.index(value))
-            else:
-                raise RuntimeError(f'{name} should be one of {names}')
-        elif issubclass(orig, (set, list)):
-            assert tp is not None
-            result = list()
-            for sub in value.split(';'):
-                result.append(cls._parse_str_value(name, sub, tp))
-            return orig(result)
-        elif orig == bool:
-            return value.lower() in ('true', 'yes', 'on', '1')
-        else:
-            if tp is not None:
-                raise TypeError(f'unhandled type {orig}[{tp}]')
-            return orig(value)
-
-    
-    @classmethod
-    def _apply_inputs(self, inputs: list[str], get_item: t.Callable[[str], tuple[t.Any, t.Any, t.Any]], info: t.Callable[[t.Any], t.Any]):
-        for input in inputs:
-            m = re.match(r'(.+?)([+-])?="?(.+)"?', input)
-            if m:
-                name = m[1]
-                op = m[2]
-                value = m[3]
-                input, out_value, orig = get_item(name)
-                sname = name.split('.')[-1]
-                if orig is None:
-                    orig = type(input)
-                if hasattr(orig, '__annotations__') and sname in orig.__annotations__:
-                    tp = orig.__annotations__[sname]
-                    orig = t.get_origin(tp)
-                    if orig is None:
-                        orig = tp
-                        tp = None
-                    else:
-                        args = t.get_args(tp)
-                        if args:
-                            tp = args[0]
-                else:
-                    tp = None
-                in_value = self._parse_str_value(name, value, orig, tp)
-                match (out_value, op, in_value):
-                    case (list()|set(), '-', list()|set()) if len(in_value) == 1 and list(in_value)[0] == '*':
-                        out_value.clear()
-                    case (set(), '+', set()):
-                        out_value.update(in_value)
-                    case (set(), '-', set()):
-                        out_value = out_value - in_value
-                    case (list(), '+', set()|list()):
-                        out_value.extend(in_value)
-                    case (list(), '-', set()|list()):
-                        for v in in_value:
-                            out_value.remove(v)
-                    case (_, '+' | '-', _):
-                        raise TypeError(f'unhandled "{op}=" operator on type {type(out_value)} ({name})')
-                    case _:
-                        out_value = in_value
-                if isinstance(input, dict):
-                    input[sname] = out_value
-                else:
-                    setattr(input, sname, out_value)
-                info(name, out_value)
-            else:
-                raise RuntimeError(f'cannot process given input: {input}')
-
     async def apply_options(self, *options):
         await self.initialize()
+        from dan.core.settings import _apply_inputs
         all_opts = self.all_options
         def get_option(name):
             for opt in all_opts:
                 if opt.fullname == name:
                     return opt.cache, opt.value, opt.type
-        self._apply_inputs(options, get_option, lambda k, v: self.info(f'option: {k} = {v}'))
+        _apply_inputs(options, get_option, logger=self, input_type_name='option')
 
     async def apply_settings(self, *settings):
-        # dont init for settings
-        def get_setting(name):
-            parts = name.split('.')
-            setting = self.settings
-            for part in parts[:-1]:
-                if not hasattr(setting, part):
-                    raise RuntimeError(f'no such setting: {name}')
-                setting = getattr(setting, part)
-            if not hasattr(setting, parts[-1]):
-                raise RuntimeError(f'no such setting: {name}')
-            value = getattr(setting, parts[-1])
-            return setting, value, type(setting)
-        self._apply_inputs(settings, get_setting, lambda k, v: self.info(f'setting: {k} = {v}'))
+        from dan.core.settings import apply_settings
+        apply_settings(self.settings, *settings, logger=self)
 
 
     @staticmethod
@@ -489,6 +406,37 @@ class Make(Logging):
                 raise errors[0]
             elif err_count > 1:
                 raise asyncio.ExceptionGroup('Multiple errors occured while building the project', errors=errors)
+    
+    
+    async def _install_target_deps(self, t: Target):
+        deps_install_path = self.root.pkgs_path
+        deps_settings = InstallSettings(deps_install_path)
+        try:
+            await load_requirements(t.requires, makefile=self.root, logger=self, install=True)
+
+        except Exception as err:
+            self._diagnostics.update(gen_python_diags(err))
+            raise
+    
+    async def install_dependencies(self, targets: list[Target] = None):
+        await self.initialize()
+
+        if targets is None:
+            targets = self.targets
+
+        with self.context, \
+             self.progress('installing deps', targets, self._install_target_deps, self.no_progress) as tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            errors = list()
+            for result in results:
+                if isinstance(result, Exception):
+                    self._logger.error(str(result))
+                    errors.append(result)
+            err_count = len(errors)
+            if err_count == 1:
+                raise errors[0]
+            elif err_count > 1:
+                raise asyncio.ExceptionGroup('Multiple errors occured while installing project dependencies', errors=errors)
 
     async def _install_target(self, t: Target, mode: InstallMode):
         try:

@@ -1,4 +1,5 @@
 import sys
+import dan.logging
 import dan.core.include
 from dan.core.include import include, requires
 from dan.core.generator import generator

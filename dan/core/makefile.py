@@ -15,14 +15,17 @@ class MakeFile(sys.__class__):
                source_path: Path,
                build_path: Path,
                requirements: 'MakeFile' = None,
-               parent: 'MakeFile' = None) -> None:
+               parent: 'MakeFile' = None,
+               is_requirement = False) -> None:
         self.name = name
         self.description = None
         self.version = None
         self.source_path = source_path
         self.build_path = build_path
         self.__requirements = requirements
+        self.__pkgs_path = None
         self.parent = parent
+        self.__is_requirement = is_requirement
         self.__cache: Cache = None
         self.children: list[MakeFile] = list()
         if self.name != 'dan-requires' and self.parent:
@@ -52,6 +55,14 @@ class MakeFile(sys.__class__):
             yield parent
             parent = parent.parent
 
+    @property
+    def is_requirement(self):
+        if self.__is_requirement:
+            return True
+        for parent in self.parents:
+            if parent.__is_requirement:
+                return True
+        return False
 
     __target_fullnames = list()
     __test_fullnames = list()
@@ -92,7 +103,7 @@ class MakeFile(sys.__class__):
                 return type(t) == name_or_class
         else:
             def check(t: Target):
-                return t.name == name_or_class
+                return name_or_class in t.provides
         for t in self.targets:
             if check(t):
                 return t
@@ -131,10 +142,17 @@ class MakeFile(sys.__class__):
 
     @property
     def pkgs_path(self):
-        if self.requirements:
-            return self.requirements.parent.build_path / 'pkgs'
+        if self.__pkgs_path is None:
+            if self.requirements:
+                return self.requirements.parent.build_path / 'pkgs'
+            else:
+                return self.build_path / 'pkgs'
         else:
-            return self.build_path / 'pkgs'
+            return self.__pkgs_path
+        
+    @pkgs_path.setter
+    def pkgs_path(self, value):
+        self.__pkgs_path = value
 
     @requirements.setter
     def requirements(self, value: 'MakeFile'):

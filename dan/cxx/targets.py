@@ -7,14 +7,13 @@ from enum import Enum
 from functools import cached_property
 
 from dan.core.pathlib import Path
-from dan.core import aiofiles, cache
-from dan.core.settings import InstallMode, InstallSettings
-from dan.core.target import Target
+from dan.core import cache
+from dan.core.target import Target, Installer
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
 from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain
-
+from dan.core.cache import cached_property as dan_cached
 
 class CXXObject(Target, internal=True):
     def __init__(self, source:Path, parent: 'CXXTarget', root: Path = None) -> None:
@@ -50,11 +49,17 @@ class CXXObject(Target, internal=True):
     @property
     def compile_definitions(self):
         return self.parent.compile_definitions
+    
+    @dan_cached()
+    def deps(self): ...
+
+    @dan_cached()
+    def compile_args(self): ...
 
     async def __initialize__(self):
         await self.parent.preload()
 
-        deps = self.cache.get('deps')
+        deps = self.deps
         if deps is not None:
             self.dependencies.update(deps)
 
@@ -63,8 +68,8 @@ class CXXObject(Target, internal=True):
         self.other_generated_files.update(
             self.toolchain.compile_generated_files(self.output))
 
-        previous_args = self.cache.get('compile_args')
-        if previous_args:
+        previous_args = self.compile_args
+        if previous_args is not None:
             args = self.toolchain.make_compile_commands(
                 self.source_path / self.source, self.output, self.private_cxx_flags)[0]
             args = [str(arg) for arg in args]
@@ -89,13 +94,13 @@ class CXXObject(Target, internal=True):
             self.parent.diagnostics.insert(err.diags, str(self.source))
             err.target = self
             raise
-        self.cache['compile_args'] = [str(a) for a in commands[0]]
+        self.compile_args = [str(a) for a in commands[0]]
         self.debug('scanning dependencies of %s', self.source.name)
         deps = await self.toolchain.scan_dependencies(self.source_path / self.source, self.private_cxx_flags, self.build_path)
         deps = [d for d in deps
                 if self.makefile.root.source_path in Path(d).parents
                 or self.build_path in Path(d).parents]
-        self.cache['deps'] = deps
+        self.deps = deps
 
 
 class OptionSet:
@@ -103,20 +108,26 @@ class OptionSet:
                  name: str,
                  public: list | set = set(),
                  private: list | set = set(),
-                 transform: t.Callable = None) -> None:
+                 transform_out: t.Callable[[t.Any], t.Any] = None,
+                 transform_in: t.Callable[[t.Any], t.Any] = None) -> None:
         self._parent = parent
         self._name = name
-        self._transform = transform or (lambda x: x)
+        self._transform_out = transform_out or self.__nop_transform
+        self._transform_in = transform_in or self.__nop_transform
         self._public = list(public)
         self._private = list(private)
 
+    @staticmethod
+    def __nop_transform(x):
+        return x
+
     @property
     def private(self) -> list:
-        return unique(self._transform(self._private))
+        return unique(self._transform_out(self._private))
 
     @property
     def public(self) -> list:
-        items: list = self._transform(self._public)
+        items: list = self._transform_out(self._public)
         for dep in self._parent.cxx_dependencies:
             items.extend(getattr(dep, self._name).public)
         return unique(items)
@@ -149,11 +160,11 @@ class OptionSet:
         if public:
             for value in values:
                 if not value in self._public:
-                    self._public.append(value)
+                    self._public.append(self._transform_in(value))
         else:
             for value in values:
                 if not value in self._private:
-                    self._private.append(value)
+                    self._private.append(self._transform_in(value))
 
     def update(self, values: 'OptionSet', private=False):
         self._public = values._public
@@ -179,6 +190,11 @@ class CXXTarget(Target, internal=True):
     public_link_options: set[str] = set()
     private_link_options: set[str] = set()
 
+    def __make_src_path(self, path):
+        if not isinstance(path, Path):
+            path = Path(path)
+        return path if path.is_absolute() else self.source_path / path
+
     def __init__(self,
                  *args,
                  **kwargs) -> None:
@@ -186,34 +202,28 @@ class CXXTarget(Target, internal=True):
         self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
 
         self.includes = OptionSet(self, 'includes',
-                                #   self.public_includes, self.private_includes,
-                                  transform=self.toolchain.make_include_options)
+                                  self.public_includes, self.private_includes,
+                                  transform_out=self.toolchain.make_include_options,
+                                  transform_in=self.__make_src_path)
 
         self.compile_options = OptionSet(self, 'compile_options',
                                          self.public_compile_options, self.private_compile_options)
 
         self.link_libraries = OptionSet(self, 'link_libraries',
-                                        self.public_link_libraries, self.private_link_libraries, transform=self.toolchain.make_link_options)
+                                        self.public_link_libraries, self.private_link_libraries,
+                                        transform_out=self.toolchain.make_link_options)
         
         self.library_paths = OptionSet(self, 'library_paths',
-                                        self.public_lib_paths, self.private_lib_paths, transform=self.toolchain.make_libpath_options)
+                                        self.public_lib_paths, self.private_lib_paths,
+                                        transform_out=self.toolchain.make_libpath_options)
 
         self.compile_definitions = OptionSet(self, 'compile_definitions',
-                                             self.public_compile_definitions, self.private_compile_definitions, transform=self.toolchain.make_compile_definitions)
+                                             self.public_compile_definitions, self.private_compile_definitions,
+                                             transform_out=self.toolchain.make_compile_definitions)
 
         self.link_options = OptionSet(self, 'link_options',
                                       self.public_link_options, self.private_link_options)
-
-        for path in self.public_includes:
-            path = Path(path)
-            self.includes.add(
-                path if path.is_absolute() else self.source_path / path,
-                public=True)
-
-        for path in self.private_includes:
-            path = Path(path)
-            self.includes.add(
-                path if path.is_absolute() else self.source_path / path)
+       
 
     @property
     def cxx_dependencies(self) -> list['CXXTarget']:
@@ -430,56 +440,38 @@ class Library(CXXObjectsTarget, internal=True):
 
         self.debug('done')
 
-    @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
-        if mode == InstallMode.user and not self.shared:
-            return list()
-
-        await self.build()
+    async def __install__(self, installer: Installer):
 
         tasks = list()
 
-        if settings.create_pkg_config:
+        if installer.settings.create_pkg_config:
             from dan.pkgconfig.package import create_pkg_config
-            tasks.append(create_pkg_config(self, settings))
+            tasks.append(create_pkg_config(self, installer.settings))
 
-        async def do_install(src: Path, dest: Path):
-            if dest.exists() and dest.younger_than(src):
-                self.info('%s is up-to-date', dest)
-            else:
-                self.debug('installing %s', dest)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                await aiofiles.copy(src, dest)
-            return dest
+        if self.shared:
+            tasks.append(installer.install_shared_library(self.output))
+        elif self.static:
+            tasks.append(installer.install_static_library(self.output))
 
-        dest = settings.libraries_destination / self.output.name
-        self.info('installing %s to %s', self.name, dest)
-
-        if not self.interface:
-            tasks.append(do_install(self.output, dest))
-
-        if mode == InstallMode.dev:
+        if installer.dev:
             header_expr = re.compile(self.header_match)
-            includes_dest = settings.includes_destination
             for public_include_dir in self.includes.public_raw:
                 headers = public_include_dir.rglob('*.h*')
                 for header in headers:
                     if header_expr.match(str(header)):
-                        dest = includes_dest / \
-                            header.relative_to(public_include_dir)
-                        tasks.append(do_install(header, dest))
+                        subdirs = header.relative_to(public_include_dir).parent
+                        tasks.append(installer.install_header(header, subdirs))
 
-            for obj in self.objs:
-                for dbg_file in self.toolchain.debug_files(obj.output):
-                    tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
+            # TODO: how to handle debug symbols ? check where debug it is usually installed and do the same
+            # for obj in self.objs:
+            #     for dbg_file in self.toolchain.debug_files(obj.output):
+            #         tasks.append(do_install(dbg_file, settings.libraries_destination / dbg_file.name))
 
-        tasks.insert(0, super().install(settings, mode))
+        tasks.insert(0, super().__install__(installer))
 
-        result = list()
         for tchunk in chunks(tasks, 100):
-            result.append(await asyncio.gather(*tchunk))
+            await asyncio.gather(*tchunk)
 
-        return result
 
 class Module(CXXObjectsTarget, internal=True):
     def __init__(self, name: str, sources: list[str], *args, **kwargs):
@@ -495,12 +487,23 @@ class Module(CXXObjectsTarget, internal=True):
 class Executable(CXXObjectsTarget, internal=True):
 
     installed = True
+    subsystem: str = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        if self.subsystem is None:
+            self.subsystem = 'console'
+
         self.output = self.toolchain.make_executable_name(self.name)
         self.__dirty = False
+
+    def _make_link_options(self):
+        subsystem_opt = []
+        if self.toolchain.type == 'msvc':
+            subsystem_opt.append(f'/subsystem:{self.subsystem}')
+        return [*subsystem_opt, *self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private]
+
 
     async def __initialize__(self):
         await super().__initialize__()
@@ -508,7 +511,7 @@ class Executable(CXXObjectsTarget, internal=True):
         previous_args = self.cache.get('link_args')
         if previous_args:
             args = self.toolchain.make_link_commands([obj.routput for obj in self.objs], self.output,
-                                                     [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private])[0]
+                                                     self._make_link_options())[0]
             args = [str(a) for a in args]
             if sorted(previous_args) != sorted(args):
                 self.__dirty = True
@@ -526,7 +529,7 @@ class Executable(CXXObjectsTarget, internal=True):
         self.info('linking %s...', self.output.name)
         try:
             commands, diags = await self.toolchain.link([obj.routput for obj in self.objs], self.output,
-                                                        [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private])
+                                                        self._make_link_options())
             self.diagnostics.insert(diags, str(self.output))
         except LinkageFailure as err:
             self.diagnostics.insert(err.diags, str(self.output))
@@ -535,16 +538,9 @@ class Executable(CXXObjectsTarget, internal=True):
         self.cache['link_args'] = [str(a) for a in commands[0]]
         self.debug('done')
 
-    @asyncio.cached
-    async def install(self, settings: InstallSettings, mode: InstallMode) -> list[Path]:
-        dest = settings.runtime_destination / self.output.name
-        if dest.exists() and dest.younger_than(self.output):
-            self.info('%s is up-to-date', dest)
-        else:
-            self.info('installing %s', dest)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            await aiofiles.copy(self.output, dest)
-        return [dest]
+    async def __install__(self, installer: Installer):
+        await installer.install_bin(self.output)
+        await super().__install__(installer)
 
     async def execute(self, *args, build=True, **kwargs):
         if build:

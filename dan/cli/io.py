@@ -6,15 +6,21 @@ import contextlib
 
 from dan.cli import click
 from dan.core.requirements import parse_package
+from dan.core.cache import Cache
+from dan.io.repositories import RepositoriesSettings, _get_settings
 from dan.make import Make
+
+def get_source_path():
+    from dan.cxx.detect import get_dan_path
+    source_path = get_dan_path() / 'deps'
+    source_path.mkdir(exist_ok=True, parents=True)
+    return source_path
 
 _make : Make = None
 async def get_make(toolchain='default', quiet=True):
     global _make
     if _make is None:
-        from dan.cxx.detect import get_dan_path
-        source_path = get_dan_path() / 'deps'
-        source_path.mkdir(exist_ok=True, parents=True)
+        source_path = get_source_path()
         os.chdir(source_path)
         (source_path / 'dan-build.py').touch()
         make = Make(source_path / 'build', quiet=quiet)
@@ -57,6 +63,14 @@ async def make_context(toolchain='default', quiet=True):
 @click.group()
 def cli():
     pass
+
+@cli.command()
+@click.option('--setting', '-s', 'settings', type=click.SettingsParamType(RepositoriesSettings), multiple=True)
+async def configure(settings):
+    io_settings = _get_settings()
+    from dan.core.settings import apply_settings
+    apply_settings(io_settings, *settings, logger=click.logger)
+    await Cache.save_all()
 
 @cli.group()
 def ls():
@@ -114,6 +128,19 @@ async def versions(library: str):
                 click.echo(f' - {v} (default)')
             else:
                 click.echo(f' - {v}')
+
+@ls.command()
+@click.argument('LIBRARY')
+async def options(library: str):
+    """Get LIBRARY's available options"""
+    async with make_context():
+        lib = await get_library(library)
+        await lib.initialize()
+        for o in lib.options:
+            current = ''
+            if o.value != o.default:
+                current = f', current: {o.value}'
+            click.echo(f'{o.name}: {o.help} (type: {o.type.__name__}, default: {o.default}{current})')
 
 @cli.command()
 @click.argument('NAME')

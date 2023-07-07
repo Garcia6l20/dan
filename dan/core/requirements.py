@@ -38,8 +38,19 @@ def parse_package(name: str) -> tuple[str, str, str]:
 
 
 class RequiredPackage(Logging):
-    def __init__(self, name: str, version_spec: VersionSpec = None):
-        self.version_spec = version_spec
+    
+    @t.overload
+    def __init__(self, specification_str: str): ...
+    
+    @t.overload
+    def __init__(self, name: str, version_spec: VersionSpec): ...
+
+    def __init__(self, *args):
+        if len(args) == 2:
+            name = args[0]
+            self.version_spec = args[1]
+        else:
+            name, self.version_spec = VersionSpec.parse(args[0])
         super().__init__(name)
         self.target : 'Target' = None
         self.package, self.name, self.repository = parse_package(name)
@@ -122,24 +133,25 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 logger.debug('%s: using package %s', req, t.fullname)
                 req.target = t
                 resolved.append(req)
-            elif install:
-                if makefile.requirements:
-                    # install requirement from dan-requires.py
-                    t = makefile.requirements.find(req.name)
-                    if not t:
-                        raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
-                    logger.debug('%s using requirements\' target %s', req, t.fullname)
-                else:
-                    with makefile.context:
-                        t, is_new = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
-                    if is_new:
-                        logger.debug('%s: adding package %s', req, t.fullname)
-                    else:
-                        logger.debug('%s: package already beeing installed at version %s', req, t.version)
+                continue
+            
+            if makefile.requirements:
+                # install requirement from dan-requires.py
+                t = makefile.requirements.find(req.name)
+                if not t:
+                    raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
+                logger.debug('%s using requirements\' target %s', req, t.fullname)
+            else:
+                with makefile.context:
+                    t, is_new = Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
+                if is_new:
+                    logger.debug('%s: adding package %s', req, t.fullname)
+                elif install:
+                    logger.debug('%s: package already beeing installed at version %s', req, t.version)
+
+            if install:
                 group.create_task(t.install(deps_settings, InstallMode.dev))
-                unresolved.append(req)
-
-
+            unresolved.append(req)
 
     if install:
         for req in unresolved:

@@ -99,7 +99,7 @@ class MakeFileError(RuntimeError):
         super().__init__(f'failed to load {self.path}')
 
 
-def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None):
+def _init_makefile(module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None, is_requirement=False):
     global context
     source_path = Path(module.__file__).parent
     if parent is None and context.current is not None:
@@ -116,9 +116,16 @@ def _init_makefile(module, name: str = 'root', build_path: Path = None, requirem
         source_path,
         build_path,
         requirements,
-        parent)
+        parent,
+        is_requirement)
 
-def load_makefile(module_path: Path, name: str = None, module_name: str = None, build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None) -> MakeFile:
+def load_makefile(module_path: Path,
+                  name: str = None,
+                  module_name: str = None,
+                  build_path: Path = None,
+                  requirements: MakeFile = None,
+                  parent: MakeFile = None,
+                  is_requirement=False) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
     if module_path in context.imported_makefiles:
@@ -127,7 +134,7 @@ def load_makefile(module_path: Path, name: str = None, module_name: str = None, 
         module_name, module_path)
     module = importlib.util.module_from_spec(spec)
     context.imported_makefiles[module_path] = module
-    _init_makefile(module, name, build_path, requirements, parent)
+    _init_makefile(module, name, build_path, requirements, parent, is_requirement)
     try:
         spec.loader.exec_module(module)
     except Exception as err:
@@ -173,7 +180,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     requirements_file = module_path.with_stem('dan-requires')
     if module_path.stem == 'dan-build' and requirements_file.exists():
         context.current.requirements = load_makefile(
-            requirements_file, name='dan-requires', module_name=f'{name}.requirements')
+            requirements_file, name='dan-requires', module_name=f'{name}.requirements', is_requirement=True)
 
     try:
         spec.loader.exec_module(module)

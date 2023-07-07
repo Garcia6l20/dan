@@ -96,7 +96,7 @@ def cli(ctx: click.AsyncContext, **kwds):
 @click.option('--verbose', '-v', is_flag=True,
               help='Pring debug informations')
 @click.option('--toolchain', '-t', help='The toolchain to use',
-              type=click.ToolchainParamType())
+              type=click.ToolchainParamType(), envvar='DAN_TOOLCHAIN')
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True, type=click.OptionsParamType())
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
@@ -108,7 +108,9 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
     """Configure dan project"""
     ctx(**kwds)  # update kwds
     if toolchain is None and ctx.make.config.toolchain is None:
-        toolchain = click.prompt('Toolchain', type=click.ToolchainParamType(), default='default')
+        from dan.cxx.detect import get_toolchains
+        tp = click.Choice(get_toolchains(create=False)["toolchains"].keys())
+        toolchain = click.prompt('Toolchain', type=tp, default='default')
 
     await ctx.make.configure(source_path, toolchain)
 
@@ -136,9 +138,15 @@ async def build(ctx: CommandsContext, force=False, **kwds):
     if force:
         await ctx.make.clean()
     await ctx.make.build()
-    # from dan.cxx import target_toolchain
-    # target_toolchain.compile_commands.update()
 
+@cli.command()
+@common_opts
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def install_dependencies(ctx: CommandsContext, **kwds):
+    """Build targets"""
+    ctx(**kwds)  # update kwds
+    await ctx.make.install_dependencies()
 
 @cli.command()
 @common_opts

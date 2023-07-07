@@ -66,6 +66,20 @@ class LinkageFailure(BaseFailure):
         super().__init__(f'failed to link {", ".join([str(o) for o in objects])}: {err.stdout}{err.stderr}', err, options, command, toolchain, diags, target)
         self.objects = objects
 
+class SystemName(str):
+    
+    @property
+    def is_windows(self):
+        if self == 'windows':
+            return True
+        if self.startswith('msys'):
+            return True
+        return False
+    
+    @property
+    def is_linux(self):
+        return self == 'linux'
+
 
 class Toolchain(Logging):
     def __init__(self, data: dict[str,str], tools: dict, settings: ToolchainSettings, cache: dict = None) -> None:
@@ -77,7 +91,7 @@ class Toolchain(Logging):
         self.cpp_std = 17
         self.type = data['type']
         # self.arch = data['arch']
-        self.system = data['system']
+        self.system = SystemName(data['system'])
         self.version = Version(data['version'])
         self.settings = settings
         self.cache = dict() if cache is None else cache
@@ -123,7 +137,13 @@ class Toolchain(Logging):
         
         from dan.core.osinfo import OSInfo
         osi = OSInfo()
-        self.cache['is_host'] = self.system == osi.name and self.arch == osi.arch
+        osi.name = SystemName(osi.name)
+        is_host = False
+        if self.arch == osi.arch:
+            if self.system == osi.name or self.system.is_windows and osi.name.is_windows:
+                is_host = True
+
+        self.cache['is_host'] = is_host
 
     async def get_default_defines(self) -> dict[str, str]:
         return self.cache['defines']

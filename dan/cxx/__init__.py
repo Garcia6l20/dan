@@ -3,7 +3,7 @@ from dan.core.cache import Cache
 
 from dan.core.errors import InvalidConfiguration
 from dan.core.settings import Settings
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.toolchain import Toolchain, BuildType
 from dan.cxx.detect import get_toolchains
 
 target_toolchain: Toolchain = None
@@ -69,8 +69,8 @@ def init_toolchains(name: str = None, settings: Settings = None):
     if target_toolchain.is_host:
         host_toolchain = target_toolchain
     else:
-        import logging
-        logging.warning(f'Cross compilation is currently not tested !')
+        from dan import logging
+        logging.getLogger('cxx').warning('Cross compilation is currently not tested !')
         host_toolchain = None
 
     from dan.core.include import context

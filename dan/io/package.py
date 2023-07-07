@@ -10,8 +10,6 @@ from dan.io.repositories import get_packages_path, get_repo_instance
 
 
 class PackageBuild(Target, internal=True):
-
-    _all_builds: dict[str, 'PackageBuild'] = dict()
     
     def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
@@ -22,6 +20,8 @@ class PackageBuild(Target, internal=True):
         self.preload_dependencies.add(self.repo)
         self._package_makefile = None
         self._build_path = None
+        self.toolchain = self.context.get('cxx_target_toolchain')
+        self.lock: aiofiles.FileLock = None
 
     @property
     def package_makefile(self):
@@ -66,8 +66,12 @@ class PackageBuild(Target, internal=True):
         else:
             version_option.value = str(self.version)
 
-        toolchain = self.context.get('cxx_target_toolchain')
-        self._build_path = packages_path / toolchain.system / toolchain.arch / toolchain.build_type.name / self.package / str(self.version)
+        pkgs_root = packages_path / self.toolchain.system / self.toolchain.arch / self.toolchain.build_type.name
+        makefile.pkgs_path = pkgs_root / self.package / str(self.version)
+
+        self._build_path = makefile.pkgs_path
+        self.lock = aiofiles.FileLock(self.build_path / 'build.lock')
+
         self.install_settings = InstallSettings(self.build_path)
         
         # update package build-path
@@ -78,6 +82,11 @@ class PackageBuild(Target, internal=True):
         # TODO handle multiple outputs, then set our outputs to all installed packages
         pkg_name = makefile.all_installed[-1].name     
         self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{pkg_name}.pc'
+        
+        for pkg in find_files(r'.+\.pc$', [self.install_settings.libraries_destination, self.install_settings.data_destination]):
+            self.output = pkg
+            break
+
         sources.output = self.build_path / 'src' # TODO source_prefix in install settings
 
         return await super().__initialize__()
@@ -87,38 +96,38 @@ class PackageBuild(Target, internal=True):
         return self._build_path
     
     async def __build__(self):
-        ident = f'{self.package}-{self.version}'
-        if ident in self._all_builds:
-            self.debug(f'{ident} already built by {self._all_builds[ident].fullname}')
-            await self._all_builds[ident].build()
-            return
+        if self.lock.locked:
+            self.debug('package %s %s already building...', self.name, self.version)
+            # wait for it
+            async with self.lock:
+                return
 
-        self._all_builds[ident] = self
+        async with self.lock:
 
-        makefile = self.package_makefile
-        build_path = makefile.build_path
+            makefile = self.package_makefile
+            build_path = makefile.build_path
 
-        # FIXME: shall a makefile have an associated toolchain ?
-        toolchain = None
-        async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
-            for target in makefile.all_installed:
-                if hasattr(target, 'toolchain'):
-                    if toolchain is None:
-                        toolchain = target.toolchain
-                    else:
-                        assert toolchain == target.toolchain, 'Toolchain missmatch'
-                group.create_task(target.install(self.install_settings, InstallMode.dev))
+            # FIXME: shall a makefile have an associated toolchain ?
+            toolchain = None
+            async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
+                for target in makefile.all_installed:
+                    if hasattr(target, 'toolchain'):
+                        if toolchain is None:
+                            toolchain = target.toolchain
+                        else:
+                            assert toolchain == target.toolchain, 'Toolchain missmatch'
+                    group.create_task(target.install(self.install_settings, InstallMode.dev))
 
-        makefile.cache.ignore()
-        del makefile
+            makefile.cache.ignore()
+            del makefile
 
-        os.chdir(self.build_path.parent)
+            os.chdir(self.build_path.parent)
 
-        self.debug('cleaning')
-        async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
-            if toolchain is not None and not toolchain.build_type.is_debug_mode:
-                group.create_task(aiofiles.rmtree(self.output / 'src'))
-            group.create_task(aiofiles.rmtree(build_path, force=True))
+            self.debug('cleaning')
+            async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
+                if toolchain is not None and not toolchain.build_type.is_debug_mode:
+                    group.create_task(aiofiles.rmtree(self.output / 'src'))
+                group.create_task(aiofiles.rmtree(build_path, force=True))
 
 
 class Package(Target, internal=True):
@@ -139,17 +148,19 @@ class Package(Target, internal=True):
         super().__init__(**kwargs)
         if self.name in self.__all:
             raise RuntimeError(f'duplicate package: {self.name}')
-        self.__all[self.name] = self
+        self.__all[self.package] = self
 
     @classmethod
-    def instance(cls, name, version, *args, **kwargs):
-        if name in cls.__all:
-            pkg = cls.__all[name]
-            if not version.is_compatible(pkg.version):
+    def instance(cls, name, version, *args, package=None, **kwargs):
+        if package is None:
+            package = name
+        if package in cls.__all:
+            pkg = cls.__all[package]
+            if version is not None and not version.is_compatible(pkg.version):
                 raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
             return pkg, False
         else:
-            return Package(name, version, *args, **kwargs), True
+            return Package(name, version, package, *args, **kwargs), True
 
     
     async def __initialize__(self):
@@ -179,24 +190,51 @@ class Package(Target, internal=True):
                                       spec=self.spec,
                                       makefile=self.makefile)
         self.dependencies.add(self.pkg_build)
-        self.pkgconfig_path = Path('pkgs') / 'lib' / 'pkgconfig'
-        self.dan_path = Path('pkgs') / 'lib' / 'dan'
+        lib_path = Path('pkgs') / 'lib'
+        self.pkgconfig_path = lib_path / 'pkgconfig'
+        self.cmake_path = lib_path / 'cmake' / self.name
+        self.dan_path = lib_path / 'dan'
+        
         self.output = self.pkgconfig_path / f'{self.name}.pc'
+
         return await super().__initialize__()
     
+    async def _import_cmake_pkg(self, pkg: Path):
+        self.debug('copying %s to %s', pkg, self.build_path / self.cmake_path)
+        content = [
+            f'set(CMAKE_CURRENT_LIST_FILE "{pkg.absolute().as_posix()}")\n',
+            f'set(CMAKE_CURRENT_LIST_DIR "{pkg.parent.absolute().as_posix()}")\n'
+        ]
+        async with aiofiles.open(pkg) as f:
+            content.extend(await f.readlines())
+        dest = self.build_path / self.cmake_path / pkg.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        async with aiofiles.open(dest, 'w') as f:
+            await f.writelines(content)
+
+    
     async def __build__(self):
-        self.pkgconfig_path.mkdir(exist_ok=True, parents=True)
-        self.dan_path.mkdir(exist_ok=True, parents=True)      
+        (self.build_path / self.pkgconfig_path).mkdir(exist_ok=True, parents=True)
+        (self.build_path / self.dan_path).mkdir(exist_ok=True, parents=True)
+        (self.build_path / self.cmake_path).mkdir(exist_ok=True, parents=True)
 
         async with asyncio.TaskGroup(f'importing {self.name} package') as group:
             for pkg in find_files(r'.+\.pc$', [self.pkg_build.install_settings.libraries_destination / 'pkgconfig']):
                 self.debug('copying %s to %s', pkg, self.build_path / self.pkgconfig_path)
                 group.create_task(aiofiles.copy(pkg, self.build_path / self.pkgconfig_path))
 
-            for pkg in find_files(r'.+\.py$', [self.pkg_build.install_settings.libraries_destination / 'dan']):
+            for pkg in find_files(r'.+\.pc$', [self.pkg_build.install_settings.data_destination / 'pkgconfig']):
+                self.debug('copying %s to %s', pkg, self.build_path / self.pkgconfig_path)
+                group.create_task(aiofiles.copy(pkg, self.build_path / self.pkgconfig_path))
+
+            for pkg in find_files(r'.+\.py$', [self.pkg_build.install_settings.data_destination / 'dan']):
                 self.debug('copying %s to %s', pkg, self.build_path / self.dan_path)
                 group.create_task(aiofiles.copy(pkg, self.build_path / self.dan_path))
-        
+
+            for pkg in find_files(r'.+\.cmake$', [self.pkg_build.install_settings.libraries_destination / 'cmake']):
+                self.debug('copying %s to %s', pkg, self.build_path / self.cmake_path)
+                group.create_task(self._import_cmake_pkg(pkg))
+
         if self.output.exists():
             from dan.pkgconfig.package import Data, find_package
             data = Data(self.output)

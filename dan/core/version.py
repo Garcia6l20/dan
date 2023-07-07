@@ -149,7 +149,7 @@ class VersionSpec:
             op = m[2]
             version = Version(m[3])
             return name, VersionSpec(version, op)
-        return None, None
+        return data, None
 
 
     def __init__(self, version: Version, op: str) -> None:

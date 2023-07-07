@@ -27,6 +27,7 @@ dependencies = [
     "tqdm",
     'importlib-metadata',
     'dataclasses-json',
+    'lockfile',
 ]
 
 [tool.setuptools]

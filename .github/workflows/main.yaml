@@ -46,8 +46,7 @@ jobs:
           with_conan: false
           targets: |
             libraries.use-simple-lib \
-            dan.io.test-mbedtls      \
-            dan.io.UseCatch2
+            dan-examples.cxx.dan.io.test-spdlog
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
@@ -68,6 +67,7 @@ jobs:
           #       while fmt (built within examples) does not compile with defaul msys-gcc :)
           install: >-
             mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v3
@@ -98,6 +98,7 @@ jobs:
       - name: Configure
         run: |
           cd examples
+          dan-io configure -s github.api_token=${{ secrets.GITHUB_TOKEN }}
           dan configure -v                \
             -t default                    \
             -s install.destination=dist   \
