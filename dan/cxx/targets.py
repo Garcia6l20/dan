@@ -108,20 +108,26 @@ class OptionSet:
                  name: str,
                  public: list | set = set(),
                  private: list | set = set(),
-                 transform: t.Callable = None) -> None:
+                 transform_out: t.Callable[[t.Any], t.Any] = None,
+                 transform_in: t.Callable[[t.Any], t.Any] = None) -> None:
         self._parent = parent
         self._name = name
-        self._transform = transform or (lambda x: x)
+        self._transform_out = transform_out or self.__nop_transform
+        self._transform_in = transform_in or self.__nop_transform
         self._public = list(public)
         self._private = list(private)
 
+    @staticmethod
+    def __nop_transform(x):
+        return x
+
     @property
     def private(self) -> list:
-        return unique(self._transform(self._private))
+        return unique(self._transform_out(self._private))
 
     @property
     def public(self) -> list:
-        items: list = self._transform(self._public)
+        items: list = self._transform_out(self._public)
         for dep in self._parent.cxx_dependencies:
             items.extend(getattr(dep, self._name).public)
         return unique(items)
@@ -154,11 +160,11 @@ class OptionSet:
         if public:
             for value in values:
                 if not value in self._public:
-                    self._public.append(value)
+                    self._public.append(self._transform_in(value))
         else:
             for value in values:
                 if not value in self._private:
-                    self._private.append(value)
+                    self._private.append(self._transform_in(value))
 
     def update(self, values: 'OptionSet', private=False):
         self._public = values._public
@@ -184,6 +190,11 @@ class CXXTarget(Target, internal=True):
     public_link_options: set[str] = set()
     private_link_options: set[str] = set()
 
+    def __make_src_path(self, path):
+        if not isinstance(path, Path):
+            path = Path(path)
+        return path if path.is_absolute() else self.source_path / path
+
     def __init__(self,
                  *args,
                  **kwargs) -> None:
@@ -191,34 +202,28 @@ class CXXTarget(Target, internal=True):
         self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
 
         self.includes = OptionSet(self, 'includes',
-                                #   self.public_includes, self.private_includes,
-                                  transform=self.toolchain.make_include_options)
+                                  self.public_includes, self.private_includes,
+                                  transform_out=self.toolchain.make_include_options,
+                                  transform_in=self.__make_src_path)
 
         self.compile_options = OptionSet(self, 'compile_options',
                                          self.public_compile_options, self.private_compile_options)
 
         self.link_libraries = OptionSet(self, 'link_libraries',
-                                        self.public_link_libraries, self.private_link_libraries, transform=self.toolchain.make_link_options)
+                                        self.public_link_libraries, self.private_link_libraries,
+                                        transform_out=self.toolchain.make_link_options)
         
         self.library_paths = OptionSet(self, 'library_paths',
-                                        self.public_lib_paths, self.private_lib_paths, transform=self.toolchain.make_libpath_options)
+                                        self.public_lib_paths, self.private_lib_paths,
+                                        transform_out=self.toolchain.make_libpath_options)
 
         self.compile_definitions = OptionSet(self, 'compile_definitions',
-                                             self.public_compile_definitions, self.private_compile_definitions, transform=self.toolchain.make_compile_definitions)
+                                             self.public_compile_definitions, self.private_compile_definitions,
+                                             transform_out=self.toolchain.make_compile_definitions)
 
         self.link_options = OptionSet(self, 'link_options',
                                       self.public_link_options, self.private_link_options)
-
-        for path in self.public_includes:
-            path = Path(path)
-            self.includes.add(
-                path if path.is_absolute() else self.source_path / path,
-                public=True)
-
-        for path in self.private_includes:
-            path = Path(path)
-            self.includes.add(
-                path if path.is_absolute() else self.source_path / path)
+       
 
     @property
     def cxx_dependencies(self) -> list['CXXTarget']:
