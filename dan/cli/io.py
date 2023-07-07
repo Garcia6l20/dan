@@ -6,15 +6,21 @@ import contextlib
 
 from dan.cli import click
 from dan.core.requirements import parse_package
+from dan.core.cache import Cache
+from dan.io.repositories import RepositoriesSettings, _get_settings
 from dan.make import Make
+
+def get_source_path():
+    from dan.cxx.detect import get_dan_path
+    source_path = get_dan_path() / 'deps'
+    source_path.mkdir(exist_ok=True, parents=True)
+    return source_path
 
 _make : Make = None
 async def get_make(toolchain='default', quiet=True):
     global _make
     if _make is None:
-        from dan.cxx.detect import get_dan_path
-        source_path = get_dan_path() / 'deps'
-        source_path.mkdir(exist_ok=True, parents=True)
+        source_path = get_source_path()
         os.chdir(source_path)
         (source_path / 'dan-build.py').touch()
         make = Make(source_path / 'build', quiet=quiet)
@@ -57,6 +63,25 @@ async def make_context(toolchain='default', quiet=True):
 @click.group()
 def cli():
     pass
+
+@cli.command()
+@click.option('--setting', '-s', 'settings', type=click.SettingsParamType(RepositoriesSettings), multiple=True)
+async def configure(settings):
+    io_settings = _get_settings()
+    make = Make(get_source_path(), quiet=False)
+    def get_setting(name):
+        parts = name.split('.')
+        setting = io_settings
+        for part in parts[:-1]:
+            if not hasattr(setting, part):
+                raise RuntimeError(f'no such setting: {name}')
+            setting = getattr(setting, part)
+        if not hasattr(setting, parts[-1]):
+            raise RuntimeError(f'no such setting: {name}')
+        value = getattr(setting, parts[-1])
+        return setting, value, type(setting)
+    make._apply_inputs(settings, get_setting, lambda k, v: click.logger.info(f'setting: {k} = {v}'))
+    await Cache.save_all()
 
 @cli.group()
 def ls():

@@ -1,12 +1,12 @@
 import dataclasses
 from enum import Enum
 import types as typs
-import typing as t
 from click import *
 
 import inspect
 import asyncio
 
+import dan.core.typing as t
 from dan import logging
 
 class AsyncContext(Context):
@@ -49,6 +49,8 @@ class SettingsParamType(ParamType):
                     type = field.type
                     if isinstance(type, typs.GenericAlias):
                         type = t.get_origin(type)
+                    elif t.is_optional(type):
+                        type = t.get_args(type)[0]
                     if dataclasses.is_dataclass(type):
                         subfields = dataclasses.fields(type)
                         subparts = parts[1:]

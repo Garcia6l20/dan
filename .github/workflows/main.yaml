@@ -98,6 +98,7 @@ jobs:
       - name: Configure
         run: |
           cd examples
+          dan-io configure -s github.api_token="${{ secrets.GITHUB_TOKEN }}"
           dan configure -v                \
             -t default                    \
             -s install.destination=dist   \

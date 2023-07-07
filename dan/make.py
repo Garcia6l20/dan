@@ -11,9 +11,9 @@ import re
 from dataclasses_json import dataclass_json
 import sys
 import tqdm
-import typing as t
 from collections.abc import Iterable
 
+import dan.core.typing as t
 from dan.core import diagnostics as diag
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
@@ -361,14 +361,18 @@ class Make(Logging):
                     orig = type(input)
                 if hasattr(orig, '__annotations__') and sname in orig.__annotations__:
                     tp = orig.__annotations__[sname]
-                    orig = t.get_origin(tp)
-                    if orig is None:
-                        orig = tp
+                    if t.is_optional(tp):
+                        orig = t.get_args(tp)[0]
                         tp = None
                     else:
-                        args = t.get_args(tp)
-                        if args:
-                            tp = args[0]
+                        orig = t.get_origin(tp)
+                        if orig is None:
+                            orig = tp
+                            tp = None
+                        else:
+                            args = t.get_args(tp)
+                            if args:
+                                tp = args[0]
                 else:
                     tp = None
                 in_value = self._parse_str_value(name, value, orig, tp)
