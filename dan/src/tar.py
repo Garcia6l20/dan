@@ -28,24 +28,28 @@ async def fetch_file(url, dest: Path):
 class TarSources(Target, internal=True):
 
     url: str
+    archive_name: str = None
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.output: Path = 'sources'
+        self.output = str(self.name)
 
     async def __build__(self):
         self.info(f'downloading {self.url}')
-        archive_name = self.url.split("/")[-1]
+        archive_name = self.archive_name or self.url.split("/")[-1]
         await fetch_file(self.url, self.build_path / archive_name)
         self.info(f'extracting {archive_name}')
         if archive_name.endswith('.zip'):
             with zipfile.ZipFile(self.build_path / archive_name) as f:
                 root = os.path.commonprefix(f.namelist())
-                f.extractall(self.output.parent)
+                f.extractall(self.output.with_suffix('.tmp_extract'))
         else:
             with tarfile.open(self.build_path / archive_name) as f:
                 root = os.path.commonprefix(f.getnames())
-                f.extractall(self.output.parent)
-        async with asyncio.TaskGroup() as g:
-            g.create_task(aiofiles.os.rename(self.output.parent / root, self.output))
-            g.create_task(aiofiles.os.remove(self.build_path / archive_name))
+                f.extractall(self.output.with_suffix('.tmp_extract'))
+        
+        await aiofiles.os.rename(self.output.with_suffix('.tmp_extract') / root, self.output)
+        await aiofiles.os.remove(self.build_path / archive_name)
+
+        if len(root) > 0:
+            await aiofiles.rmtree(self.output.with_suffix('.tmp_extract'))
