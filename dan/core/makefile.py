@@ -44,7 +44,7 @@ class MakeFile(sys.__class__):
     @property
     def cache(self) -> Cache:
         if not self.__cache:
-            self.__cache = Cache(
+            self.__cache = Cache.instance(
                 self.build_path / f'{self.name}.cache', cache_name=self.fullname, binary=True)
         return self.__cache
     

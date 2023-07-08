@@ -69,8 +69,8 @@ class Data:
                     k = m.group(1).lower()
                     v = m.group(2)
                     self._items[k] = v
-        self.__requires = None
-        self.__version = None
+        self._requires = None
+        self._version = None
 
     __split_expr = re.compile(r'(.+?)[:=](.+)')
 
@@ -89,26 +89,40 @@ class Data:
                     break
         return value
     
+    def __getstate__(self):
+        return {
+            'path': self._path,
+            'items': self._items,
+            'requires': self._requires,
+            'version': self._version,
+        }
+    
+    def __setstate__(self, data):
+        self._path = data['path']
+        self._items = data['items']
+        self._requires = data['requires']
+        self._version = data['version']
+
     @property
     def path(self) -> Path:
         return self._path
     
     @property
     def requires(self) -> list[RequiredPackage]:
-        if self.__requires is None:
-            self.__requires = list()
+        if self._requires is None:
+            self._requires = list()
             reqs = self.get('requires')
             if reqs is not None:
-                self.__requires = parse_package_requires(reqs)
-        return self.__requires
+                self._requires = parse_package_requires(reqs)
+        return self._requires
     
     @property
     def version(self) -> Version:
-        if self.__version is None:
+        if self._version is None:
             v = self.get('version')
             if v:
-                self.__version = Version(v)
-        return self.__version
+                self._version = Version(v)
+        return self._version
 
 
 class Package(CXXTarget, internal=True):
@@ -116,7 +130,7 @@ class Package(CXXTarget, internal=True):
 
     default = False
 
-    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, data: Data = None, **kwargs) -> None:
+    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, dan_plugin=None, search_plugin=True, data: Data = None, **kwargs) -> None:
         if data is not None:
             self.config_path = data.path
             self.data = data
@@ -126,19 +140,20 @@ class Package(CXXTarget, internal=True):
         self.search_paths = search_paths
         if not self.config_path:
             raise MissingPackage(name)
-        self.search_paths.insert(0, self.config_path.parent)
+        if not self.config_path.parent in self.search_paths:
+            self.search_paths.insert(0, self.config_path.parent)
         self.pn = name
         self.all[name] = self
 
         super().__init__(f'{name}-pkgconfig', **kwargs)
 
-        dan_plugin = find_file(rf'{name}\.py', [self.config_path.parent.parent])
-        if dan_plugin is not None:
-            spec = importlib.util.spec_from_file_location(
-                f'{name}_plugin', dan_plugin)
-            module = importlib.util.module_from_spec(spec)
-            setattr(module, 'self', self)
-            spec.loader.exec_module(module)
+        if dan_plugin:
+            self.__dan_plugin = dan_plugin
+        elif search_plugin:
+            self.__dan_plugin = find_file(rf'{name}\.py', [self.config_path.parent.parent])
+        else:
+            self.__dan_plugin = None
+        self.__load_plugin()
         self.__cflags = None
         self.__libs = None
         self.__lib_paths = None
@@ -147,6 +162,33 @@ class Package(CXXTarget, internal=True):
 
 
         self.version = self.data.version
+    
+    def __load_plugin(self):
+        if self.__dan_plugin is not None:
+            spec = importlib.util.spec_from_file_location(
+                f'{self.name}_plugin', self.__dan_plugin)
+            module = importlib.util.module_from_spec(spec)
+            setattr(module, 'self', self)
+            spec.loader.exec_module(module)
+
+
+    def __getstate__(self):
+        return {
+            'pn': self.pn,
+            'search_paths': self.search_paths,
+            'dan_plugin': self.__dan_plugin,
+            'config_path': self.config_path,
+            'data': self.data,
+        }
+    
+    def __setstate__(self, data):
+        from dan.core.include import context
+        makefile = context.current.root
+        self.__init__(data['pn'], data['search_paths'], data['config_path'],
+                      data=data['data'],
+                      dan_plugin=data['dan_plugin'],
+                      search_plugin=False,
+                      makefile=makefile)
 
     @property
     def modification_time(self):
@@ -250,25 +292,47 @@ class Package(CXXTarget, internal=True):
 
 _jinja_env: jinja2.Environment = None
 
+from dan.core.cache import Cache
 
 def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
     
+    pkg = None
+
     if name in Package.all:
         pkg = Package.all[name]
         if spec and not spec.is_compatible(pkg.version):
             raise RuntimeError(f'incompatible package {name} ({pkg.version} {spec})')
         return pkg
+
     if makefile is None:
         from dan.core.include import context
         makefile = context.current
+
+    makefile = makefile.root
+
+    cache: list[Package] = Cache.instance(makefile.build_path / 'pkgconfig.cache', cache_name='pkgconfig', binary=True).data
+    if name in cache:
+        cached_pkg = cache[name]
+        if spec and not spec.is_compatible(cached_pkg.version):
+            raise RuntimeError(f'incompatible package {name} ({cached_pkg.version} {spec})')
+        return cached_pkg
+
     search_paths = search_paths or makefile.pkgs_path
     for config in find_pkg_configs(name, search_paths):
         if spec is not None:
             data = Data(config)
             if spec.is_compatible(data.version):
-                return Package(name, data=data, makefile=makefile)
+                pkg = Package(name, data=data, makefile=makefile)
+                break
+
         else:
-            return Package(name, config_path=config, makefile=makefile)
+            pkg = Package(name, config_path=config, makefile=makefile)
+            break
+    
+    if pkg:
+        cache[name] = pkg
+
+    return pkg
 
 
 def _get_jinja_env():

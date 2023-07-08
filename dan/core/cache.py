@@ -30,7 +30,10 @@ class Cache(t.Generic[T]):
                 raise RuntimeError(f'Cache {self.name} already created, use Cache.instance')
             else:
                 raise RuntimeError(f'Cache {self.name} is not unique, use cache_name to distinguish {other.path} from {self.path}')
+
         assert not self.name in self.__caches, 'a cache should be unique'
+        self.__caches[self.name] = self
+
         if self.path.exists():
             with open(self.path, 'rb') as f:
                 if dataclasses.is_dataclass(self.dataclass):
@@ -46,7 +49,6 @@ class Cache(t.Generic[T]):
         
         self.__initial_state = self._dump()
         self.__dirty = False
-        self.__caches[self.name] = self
     
     @classmethod
     def instance(cls, path: Path|str, *args, cache_name:str = None, **kwargs):

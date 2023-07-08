@@ -53,8 +53,19 @@ class RequiredPackage(Logging):
             name, self.version_spec = VersionSpec.parse(args[0])
         super().__init__(name)
         self.target : 'Target' = None
+        self.pn = name
         self.package, self.name, self.repository = parse_package(name)
         self.__skipped = list()
+
+    def __getstate__(self) -> object:
+        return {
+            'pn': self.pn,
+            'version_spec': self.version_spec,
+        }
+    
+    def __setstate__(self, data):
+        self.__init__(data['pn'], data['version_spec'])
+
 
     def is_compatible(self, t: 'Target'):
         if self.version_spec is not None:
