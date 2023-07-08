@@ -34,7 +34,27 @@ def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
 def has_package(name,  paths=list()):
     return find_pkg_config(name,  paths) is not None
 
-
+def parse_package_requires(reqs):
+    result = []
+    reqs = [r for r in re.split(r'[\s,]', reqs) if len(r.strip()) > 0]
+    tmp = []
+    it = iter(reqs)
+    ii = next(it, None)
+    while ii is not None:
+        if any(op in ii for op in ('=', '>', '<')):
+            tmp.append(ii)
+            ii = next(it)
+            tmp.append(ii)
+            result.append(parse_requirement(' '.join(tmp)))
+            tmp = []
+        else:
+            if len(tmp):
+                result.append(parse_requirement(' '.join(tmp)))
+                tmp = [ii]
+            else:
+                tmp.append(ii)
+        ii = next(it, None)
+    return result
 
 class Data:
     def __init__(self, path) -> None:
@@ -79,20 +99,7 @@ class Data:
             self.__requires = list()
             reqs = self.get('requires')
             if reqs is not None:
-                reqs = reqs.strip()
-                # conan generates invalid requires clause
-                # it should be 'comma separated values but it is not'
-                #  eg.: 'boost-headers boost-_cmake'
-                if any([c in reqs for c in ',=']):
-                    # the right way
-                    for req in reqs.split(','):
-                        req = parse_requirement(req)
-                        self.__requires.append(req)
-                else:
-                    # conan's way
-                    for req in reqs.split(' '):
-                        req = parse_requirement(req)
-                        self.__requires.append(req)
+                self.__requires = parse_package_requires(reqs)
         return self.__requires
     
     @property
