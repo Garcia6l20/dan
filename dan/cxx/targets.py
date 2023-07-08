@@ -293,6 +293,8 @@ class CXXObjectsTarget(CXXTarget, internal=True):
             source = Path(source)
             if source.is_absolute():
                 root = source_root
+                if root.is_file():
+                    root = root.parent
             else:
                 root = self.source_path
             sources.append(source)
