@@ -54,6 +54,8 @@ def parse_package_requires(reqs):
             else:
                 tmp.append(ii)
         ii = next(it, None)
+    if len(tmp):
+        result.append(parse_requirement(' '.join(tmp)))
     return result
 
 class Data:
