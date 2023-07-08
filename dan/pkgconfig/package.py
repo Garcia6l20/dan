@@ -5,6 +5,7 @@ from dan.core.pathlib import Path
 import re
 import importlib.util
 
+from dan.core.cache import Cache
 from dan.core.find import find_file, find_files, library_paths_lookup
 from dan.core.pm import re_match
 from dan.core.requirements import RequiredPackage, parse_requirement
@@ -181,6 +182,9 @@ class Package(CXXTarget, internal=True):
             'dan_plugin': self.__dan_plugin,
             'config_path': self.config_path,
             'data': self.data,
+            '__cflags': self.__cflags,
+            '__libs': self.__libs,
+            '__lib_paths': self.__lib_paths,
         }
     
     def __setstate__(self, data):
@@ -191,6 +195,9 @@ class Package(CXXTarget, internal=True):
                       dan_plugin=data['dan_plugin'],
                       search_plugin=False,
                       makefile=makefile)
+        self.__cflags = data['__cflags']
+        self.__libs = data['__libs']
+        self.__lib_paths = data['__lib_paths']
 
     @property
     def modification_time(self):
@@ -294,17 +301,10 @@ class Package(CXXTarget, internal=True):
 
 _jinja_env: jinja2.Environment = None
 
-from dan.core.cache import Cache
 
 def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
     
     pkg = None
-
-    if name in Package.all:
-        pkg = Package.all[name]
-        if spec and not spec.is_compatible(pkg.version):
-            raise RuntimeError(f'incompatible package {name} ({pkg.version} {spec})')
-        return pkg
 
     if makefile is None:
         from dan.core.include import context
