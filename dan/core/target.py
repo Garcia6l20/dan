@@ -348,6 +348,13 @@ class Target(Logging, MakefileRegister, internal=True):
 
         self._output: Path = None
         self._build_path = None
+        
+        if inspect.isclass(self.source_path) and issubclass(self.source_path, Target):
+            # delayed resolution
+            def _get_source_path(TargetClass, self):
+                return self.get_dependency(TargetClass).output
+            self.preload_dependencies.add(self.source_path)
+            type(self).source_path = property(functools.partial(_get_source_path, self.source_path))
 
         if type(self).output != Target.output:
             # hack class-defined output

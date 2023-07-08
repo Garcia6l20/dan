@@ -290,6 +290,8 @@ class CXXObjectsTarget(CXXTarget, internal=True):
             assert callable(
                 self.sources), f'{self.name} sources parameter should be an iterable or a callable returning an iterable'
         sources = list()
+        if self.source_path != self.makefile.source_path:
+            self.sources = [self.source_path / source for source in self.sources]
         source_root = Path(os.path.commonprefix(self.sources))
         for source in self.sources:
             source = Path(source)
