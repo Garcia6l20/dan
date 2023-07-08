@@ -24,11 +24,11 @@ class MissingPackage(RuntimeError):
 
 
 def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'.*{name}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
+    return find_file(fr'{re.escape(name)}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
 
 
 def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
-    yield from find_files(fr'.*{name}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
+    yield from find_files(fr'{re.escape(name)}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
 
 
 def has_package(name,  paths=list()):
