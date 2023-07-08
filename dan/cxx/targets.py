@@ -114,8 +114,10 @@ class OptionSet:
         self._name = name
         self._transform_out = transform_out or self.__nop_transform
         self._transform_in = transform_in or self.__nop_transform
-        self._public = list(public)
-        self._private = list(private)
+        self._public = list()
+        self._private = list()
+        self.add(*public, public=True)
+        self.add(*private, public=False)
 
     @staticmethod
     def __nop_transform(x):
