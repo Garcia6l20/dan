@@ -125,11 +125,11 @@ class OptionSet:
 
     @property
     def private(self) -> list:
-        return unique(self._transform_out(self._private))
+        return unique(self._transform_out([self._transform_in(p) for p in self._private]))
 
     @property
     def public(self) -> list:
-        items: list = self._transform_out(self._public)
+        items: list = self._transform_out([self._transform_in(p) for p in self._public])
         for dep in self._parent.cxx_dependencies:
             items.extend(getattr(dep, self._name).public)
         return unique(items)
@@ -152,21 +152,21 @@ class OptionSet:
 
     @property
     def private_raw(self) -> list:
-        return self._private
+        return [self._transform_in(p) for p in self._private]
 
     @property
     def public_raw(self) -> list:
-        return self._public
+        return [self._transform_in(p) for p in self._public]
 
     def add(self, *values, public=False):
         if public:
             for value in values:
                 if not value in self._public:
-                    self._public.append(self._transform_in(value))
+                    self._public.append(value)
         else:
             for value in values:
                 if not value in self._private:
-                    self._private.append(self._transform_in(value))
+                    self._private.append(value)
 
     def update(self, values: 'OptionSet', private=False):
         self._public = values._public
