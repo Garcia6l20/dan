@@ -17,19 +17,30 @@ from dan.cxx.targets import CXXTarget, Library
 from dan.cxx.toolchain import LibraryList
 
 import typing as t
+import os
 
 
 class MissingPackage(RuntimeError):
     def __init__(self, name) -> None:
         super().__init__(f'package {name} not found')
 
+_pkg_config_paths = None
+def _get_pkg_config_paths():
+    global _pkg_config_paths
+    if _pkg_config_paths is None:
+        paths = os.getenv('PKG_CONFIG_PATH', None)
+        if paths is None:
+            _pkg_config_paths = list()
+        else:
+            _pkg_config_paths = [Path(p) for p in paths.split(os.pathsep)]
+    return _pkg_config_paths
 
 def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'{re.escape(name)}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
+    return find_file(fr'{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
 
 
 def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
-    yield from find_files(fr'{re.escape(name)}\.pc$', [*paths, '$PKG_CONFIG_PATH', *library_paths_lookup])
+    yield from find_files(fr'{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
 
 
 def has_package(name,  paths=list()):
