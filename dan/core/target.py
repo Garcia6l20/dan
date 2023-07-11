@@ -43,7 +43,7 @@ class Dependencies:
                         self._content.append(pkg)
                         break
                 else:
-                    if Path(self.parent.source_path / dependency).exists():
+                    if isinstance(self.parent.source_path, Path) and Path(self.parent.source_path / dependency).exists():
                         self._content.append(FileDependency(
                             self.parent.source_path / dependency))
                     else:
