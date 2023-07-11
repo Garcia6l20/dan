@@ -383,6 +383,7 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     libs = lib.toolchain.to_unix_flags(libs)
 
     cflags = lib.compile_definitions.public
+    cflags.extend(lib.compile_options.public)
     cflags.extend(lib.toolchain.make_include_options(['${includedir}']))
     cflags = lib.toolchain.to_unix_flags(cflags)
 

@@ -19,6 +19,11 @@ class RuntimeType(Enum):
     static = 0
     dynamic = 1
 
+class CppStd:
+    def __init__(self, stdver: int|str) -> None:
+        self.stdver = stdver
+
+
 class LibraryList:
     def __init__(self, *items: t.Iterable):
         self._lst = list()
@@ -88,7 +93,6 @@ class Toolchain(Logging):
         self.tools = tools
         self._compile_commands: CompileCommands = None
         self.cxx_flags = set()
-        self.cpp_std = 17
         self.type = data['type']
         # self.arch = data['arch']
         self.system = SystemName(data['system'])
@@ -161,6 +165,9 @@ class Toolchain(Logging):
         raise NotImplementedError()
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
+        raise NotImplementedError()
+    
+    def make_compile_options(self, options: set[str]) -> list[str]:
         raise NotImplementedError()
 
     def make_include_options(self, include_paths: set[Path]) -> list[str]:

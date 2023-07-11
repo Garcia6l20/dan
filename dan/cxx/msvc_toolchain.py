@@ -6,7 +6,7 @@ import aiofiles
 from dan.core.runners import sync_run
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, RuntimeType, Toolchain, Path, FileDependency, CppStd
 from dan.core import diagnostics as diag
 from dan.core.pm import re_match
 import os
@@ -60,7 +60,7 @@ class MSVCToolchain(Toolchain):
 
     @property
     def default_cxxflags(self):
-        return [f'/std:c++{self.cpp_std}', *self.settings.cxx_flags]
+        return [*self.settings.cxx_flags]
     
     async def get_default_include_paths(self, lang = 'c++') -> list[str]:
         return self._default_include_paths
@@ -92,6 +92,16 @@ class MSVCToolchain(Toolchain):
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return [f'/D{d}' for d in definitions]
+    
+    def make_compile_options(self, options: set[str]) -> list[str]:
+        result = list()
+        for o in options:
+            match o:
+                case CppStd():
+                    result.append(f'/std:c++{o.stdver}')
+                case _:
+                    result.append(o)
+        return result
 
     def make_library_name(self, basename: str, shared: bool) -> str:
         return f'{basename}.{"dll" if shared else "lib"}'

@@ -3,7 +3,7 @@ from dan.core import diagnostics as diag
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
 from dan.core.utils import unique
-from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency
+from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, CppStd
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
 
@@ -47,7 +47,7 @@ class UnixToolchain(Toolchain):
 
     @cached_property
     def default_cxxflags(self):
-        flags = [f'-std=c++{self.cpp_std}', *self.settings.cxx_flags]
+        flags = [*self.settings.cxx_flags]
         if self.env:
             if 'CXXFLAGS' in self.env:
                 flags.extend(self.env["CXXFLAGS"].strip().split(' '))
@@ -92,6 +92,16 @@ class UnixToolchain(Toolchain):
 
     def make_compile_definitions(self, definitions: set[str]) -> list[str]:
         return unique([f'-D{d}' for d in definitions])
+
+    def make_compile_options(self, options: set[str]) -> list[str]:
+        result = list()
+        for o in options:
+            match o:
+                case CppStd():
+                    result.append(f'-std=c++{o.stdver}')
+                case _:
+                    result.append(o)
+        return result
 
     def make_library_name(self, basename: str, shared: bool) -> str:
         return f'lib{basename}.{"so" if shared else "a"}'

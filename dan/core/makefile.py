@@ -214,3 +214,9 @@ class MakeFile(sys.__class__):
         while m.parent is not None:
             m = m.parent
         return m
+    
+    def get_attribute(self, name, recursive = False):
+        value = getattr(self, name, None)
+        if value is None and recursive and self.parent is not None:
+            return self.parent.get_attribute(name, recursive=recursive)
+        return value
