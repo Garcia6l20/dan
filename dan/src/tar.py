@@ -1,5 +1,6 @@
 import os
-from click import Path
+import tempfile
+from pathlib import Path
 import tqdm
 from dan.core import aiofiles, asyncio
 from dan.core.target import Target
@@ -34,22 +35,31 @@ class TarSources(Target, internal=True):
         super().__init__(*args, **kwargs)
         self.output = str(self.name)
 
-    async def __build__(self):
-        self.info(f'downloading {self.url}')
-        archive_name = self.archive_name or self.url.split("/")[-1]
-        await fetch_file(self.url, self.build_path / archive_name)
-        self.info(f'extracting {archive_name}')
-        if archive_name.endswith('.zip'):
-            with zipfile.ZipFile(self.build_path / archive_name) as f:
+    def __extract__(self, archive_path: Path, dest: Path):
+        if archive_path.suffix == '.zip':
+            with zipfile.ZipFile(archive_path) as f:
                 root = os.path.commonprefix(f.namelist())
-                f.extractall(self.output.with_suffix('.tmp_extract'))
+                f.extractall(dest)
         else:
-            with tarfile.open(self.build_path / archive_name) as f:
+            mode = 'r:*'
+            if len(archive_path.suffixes) and archive_path.suffixes[-1] == '.xz':
+                mode = 'r:xz'
+            with tarfile.open(archive_path, mode) as f:
                 root = os.path.commonprefix(f.getnames())
-                f.extractall(self.output.with_suffix('.tmp_extract'))
-        
-        await aiofiles.os.rename(self.output.with_suffix('.tmp_extract') / root, self.output)
-        await aiofiles.os.remove(self.build_path / archive_name)
+                f.extractall(dest)
+        return root
 
-        if len(root) > 0:
-            await aiofiles.rmtree(self.output.with_suffix('.tmp_extract'))
+    async def __build__(self):
+        archive_name = self.archive_name or self.url.split("/")[-1]
+        archive_path = self.build_path / archive_name
+        if archive_path.exists():
+            self.debug('%s already available (download skipped)', archive_path)
+        else:
+            self.info(f'downloading {self.url}')
+            await fetch_file(self.url, self.build_path / archive_name)
+        with tempfile.TemporaryDirectory(prefix=f'{self.name}-') as tmp_dest:
+            extract_dest = Path(tmp_dest) / 'a'
+            self.info(f'extracting {archive_name}')
+            root = await asyncio.get_event_loop().run_in_executor(None, self.__extract__, archive_path, extract_dest)
+            await aiofiles.os.rename(extract_dest / root, self.output)
+            await aiofiles.os.remove(archive_path)
