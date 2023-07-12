@@ -510,13 +510,13 @@ class Target(Logging, MakefileRegister, internal=True):
             await result
 
         if self.up_to_date:
-            self.info('up to date !')
+            self.debug('up to date !')
             return
         elif self.output is not None and self.output.exists():
-            self.info('outdated !')
+            self.debug('outdated !')
 
         with utils.chdir(self.build_path):
-            self.info('building...')
+            self.debug('building...')
             if diags.enabled:
                 self.diagnostics.clear()
             result = self.__build__()
@@ -541,7 +541,7 @@ class Target(Logging, MakefileRegister, internal=True):
         async with asyncio.TaskGroup(f'cleaning {self.name} outputs') as group:
             output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
             if output and output.exists():
-                self.info('cleaning...')
+                self.info('debug...')
                 if output.is_dir():
                     group.create_task(aiofiles.rmtree(output, force=True))
                 else:
