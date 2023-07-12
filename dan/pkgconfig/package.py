@@ -36,11 +36,11 @@ def _get_pkg_config_paths():
     return _pkg_config_paths
 
 def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
+    return find_file(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
 
 
 def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
-    yield from find_files(fr'{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
+    yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
 
 
 def has_package(name,  paths=list()):
