@@ -136,7 +136,8 @@ class UnixToolchain(Toolchain):
                     dep = dep[:-2]
                 all_deps.append(dep.strip())
             _obj = all_deps.pop(0)
-            _src = all_deps.pop(0)
+            if len(all_deps) > 0:
+                _src = all_deps.pop(0)
             return all_deps
         else:
             return set()
