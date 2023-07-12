@@ -378,6 +378,9 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
             [Path(f'${{libdir}}/{lib.name}')]))
         libs.extend(lib.toolchain.make_link_options(
             [Path(f'${{libdir}}/{lib.name}')]))
+    for p in lib.library_paths.public:
+        if p not in libs:
+            libs.append(p)
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
     libs = lib.toolchain.to_unix_flags(libs)
