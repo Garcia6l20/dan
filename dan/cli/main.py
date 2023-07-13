@@ -1,13 +1,12 @@
 import os
 import sys
 from dan import logging
-import asyncio
 
 from dan.core.find import find_file
 from dan.core.pathlib import Path
 from dan.cli import click
 
-from dan.core import diagnostics
+from dan.core import diagnostics, asyncio
 from dan.core.cache import Cache
 from dan.core.settings import Settings
 from dan.cxx.targets import Executable
@@ -329,6 +328,9 @@ async def get_targets(ctx: CommandsContext, **kwargs):
     await ctx.make.initialize()
     out = []
     targets = ctx.make.context.root.all_targets
+    async with asyncio.TaskGroup() as g:
+        for target in targets:
+            g.create_task(target.load_dependencies())
     for target in targets:
         out.append({
             'name': target.name,
@@ -336,7 +338,8 @@ async def get_targets(ctx: CommandsContext, **kwargs):
             'buildPath': str(target.build_path),
             'output': str(target.output),
             'executable': isinstance(target, Executable),
-            'type': type(target).__name__
+            'type': type(target).__name__,
+            'env': target.env if isinstance(target, Executable) else None,
         })
     import json
     click.echo(json.dumps(out))

@@ -437,9 +437,9 @@ class Target(Logging, MakefileRegister, internal=True):
             self.__cache = self.makefile.cache.data[name]
         return self.__cache
 
-    async def __load_unresolved_dependencies(self):
+    async def __load_unresolved_dependencies(self, install=True):
         if len(self.requires) > 0:
-            self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self))
+            self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self, install=install))
 
     @asyncio.cached
     async def preload(self):
@@ -458,6 +458,11 @@ class Target(Logging, MakefileRegister, internal=True):
         if inspect.iscoroutine(res):
             res = await res
         return res
+
+    @asyncio.cached
+    async def load_dependencies(self):
+        async with asyncio.TaskGroup(f'loading {self.name}\'s dependencies') as group:
+            group.create_task(self.__load_unresolved_dependencies(install=False))
 
     @asyncio.cached
     async def initialize(self):
