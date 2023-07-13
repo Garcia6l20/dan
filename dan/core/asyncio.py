@@ -245,7 +245,9 @@ class TaskGroup:
             raise RuntimeError(f"TaskGroup {self!r} is finished")
         if self._aborting:
             raise RuntimeError(f"TaskGroup {self!r} is shutting down")
-        if context is None:
+        if isfuture(coro):
+            task = coro
+        elif context is None:
             task = self._loop.create_task(coro, name=name)
         else:
             task = self._loop.create_task(coro, context=context, name=name)
