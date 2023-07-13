@@ -40,7 +40,10 @@ class AsyncStreamProducer:
 
         async def __aiter__(self):
             while True:
-                line = await self.q.get()
+                try:
+                    line = await self.q.get()
+                except asyncio.CancelledError:
+                    return
                 if line is None:
                     self.q.task_done()
                     return
