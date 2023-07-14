@@ -123,14 +123,16 @@ class Code(Logging):
                     case r'[/-]D:?(.+)' as m:
                         defines.append(m[1])
 
-            return {
+            config = {
                 'includePath': includes,
                 'defines': defines,
-                'standard': f'c++{target.toolchain.cpp_std}',
                 'compilerPath': os.path.normcase(target.toolchain.cxx),
                 'intelliSenseMode': get_intellisense_mode(target.toolchain),
                 # 'compilerArgs': target.cxx_flags,
             }
+            if target.cpp_std is not None:
+                config['standard'] = f'c++{target.cpp_std.stdver}'
+            return config
 
     async def get_sources_configuration(self, sources):
         result = list()
