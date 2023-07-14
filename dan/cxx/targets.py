@@ -536,22 +536,17 @@ class Executable(CXXObjectsTarget, internal=True):
             subsystem_opt.append(f'/subsystem:{self.subsystem}')
         return [*subsystem_opt, *self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private]
 
-    @dan_cached()
+    @cached_property
     def env(self):
         env = dict()
         paths = list()
-        from dan.pkgconfig import Package as PkgConfig
-        from dan.core.requirements import RequiredPackage
-        for dep in self.dependencies:
-            if isinstance(dep, RequiredPackage) and isinstance(dep.target, PkgConfig):
-                dep = dep.target
-            if isinstance(dep, PkgConfig):
-                exec_prefix = getattr(dep, 'exec_prefix', None)
-                if exec_prefix is not None:
-                    paths.append(Path(exec_prefix).as_posix())
-                    
+
         if 'PATH' in self.toolchain.env:
             paths.extend(self.toolchain.env['PATH'].split(os.pathsep))
+            
+        from dan.pkgconfig.package import get_cached_bindirs
+        paths.extend([str(d) for d in get_cached_bindirs()])
+        
         if len(paths):
             env['PATH'] = os.pathsep.join(paths)
         return env

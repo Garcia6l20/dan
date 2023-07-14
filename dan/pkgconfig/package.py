@@ -36,11 +36,11 @@ def _get_pkg_config_paths():
     return _pkg_config_paths
 
 def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
+    return find_file(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
 
 
 def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
-    yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup])
+    yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
 
 
 def has_package(name,  paths=list()):
@@ -312,6 +312,14 @@ class Package(CXXTarget, internal=True):
 
 _jinja_env: jinja2.Environment = None
 
+_pkgconfig_cache = None
+def __get_packages_cache() -> dict[str, Package]:
+    from dan.core.include import context
+    global _pkgconfig_cache
+    if _pkgconfig_cache is None:
+        _pkgconfig_cache = Cache.instance(context.root.build_path / 'pkgconfig.cache', cache_name='pkgconfig', binary=True)
+    return _pkgconfig_cache.data
+
 
 def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
     
@@ -323,7 +331,7 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
     makefile = makefile.root
 
-    cache: list[Package] = Cache.instance(makefile.build_path / 'pkgconfig.cache', cache_name='pkgconfig', binary=True).data
+    cache = __get_packages_cache()
     if name in cache:
         cached_pkg = cache[name]
         if spec and not spec.is_compatible(cached_pkg.version):
@@ -347,6 +355,19 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
     return pkg
 
+def get_cached_bindirs():
+    bindirs = set()
+    for pkg in __get_packages_cache().values():
+        bindir = getattr(pkg, 'bindir', None)
+        if bindir is not None:
+            bindirs.add(Path(bindir))
+            continue
+        exec_prefix = getattr(pkg, 'exec_prefix', None)
+        if exec_prefix is not None:
+            bindir = Path(exec_prefix) / 'bin'
+            if bindir.exists():
+                bindirs.add(bindir)
+    return bindirs
 
 def _get_jinja_env():
     global _jinja_env
