@@ -20,8 +20,6 @@ class Project(Target, internal=True):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
-        if not self.toolchain.system.is_linux and not self.toolchain.system.startswith('msys'):
-            raise RuntimeError('libav can only be built on linux or msys2-mingw')
         self.output = 'libav.built'
         
 
@@ -45,10 +43,13 @@ class Project(Target, internal=True):
             for k, v in self.env.items():
                 env[k] = v
         env['PKG_CONFIG_PATH'] = str(self.makefile.root.pkgs_path)
+        env['CC'] = str(self.toolchain.cc)
+        env['CXX'] = str(self.toolchain.cxx)
         return env
 
     async def __build__(self):
-        pass
+        if not self.toolchain.system.is_linux and not self.toolchain.system.startswith('msys'):
+            raise RuntimeError('libav can only be built on linux or msys2-mingw')
 
     async def do_compile(self, obj, options, env):
         self.info('generating %s', obj)
@@ -113,7 +114,6 @@ class Project(Target, internal=True):
 
         env = self.__get_env()
         await async_run(['bash', f'{self.source_path}/configure', *config_options], cwd=self.source_path, logger=self, env=env)
-        await async_run([self.__get_make(), 'clean'], cwd=self.source_path, logger=self)
 
         builds = dict()
         installs = list()
