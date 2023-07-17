@@ -61,5 +61,21 @@ class TarSources(Target, internal=True):
             extract_dest = Path(tmp_dest) / 'a'
             self.info(f'extracting {archive_name}')
             root = await asyncio.get_event_loop().run_in_executor(None, self.__extract__, archive_path, extract_dest)
-            await aiofiles.os.rename(extract_dest / root, self.output)
+            max_try_count = 5
+            try_count = 0
+            while True:
+                try:
+                    await aiofiles.os.renames(extract_dest / root, self.output)
+                    break
+                except PermissionError as err:
+                    # NOTE: under windows, moving folders may fail because of "Quick Access" using it
+                    #       this is a dumb workaround
+                    try_count += 1
+                    if try_count < max_try_count:
+                        self.warning('failed to move source directory: %s, retrying...', err)
+                        await asyncio.sleep(0.02)
+                    else:
+                        self.error('still failing to move source directory (after %d attempts): %s', max_try_count, err)
+                        raise err
+
             await aiofiles.os.remove(archive_path)
