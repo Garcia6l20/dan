@@ -398,7 +398,7 @@ async def build(ctx: CommandsContext, force=False, **kwds):
 
 @code.command()
 @minimal_options
-@click.argument('SOURCES', nargs=-1)
+@click.argument('SOURCES', nargs=-1, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})

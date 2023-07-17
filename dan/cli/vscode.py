@@ -1,14 +1,13 @@
 import json
 import os
-from pathlib import Path
 
-from dan.core.asyncio import ExceptionGroup
 from dan.core.pm import re_match
-from dan.cxx.toolchain import CompilationFailure, LinkageFailure, Toolchain
+from dan.cxx.toolchain import Toolchain
 
 from dan.make import Make
 from dan.cxx.targets import CXXObject
 from dan.logging import Logging
+from dan.core.utils import unique
 
 def get_intellisense_mode(toolchain : Toolchain):
     mode = list()
@@ -124,7 +123,7 @@ class Code(Logging):
                         defines.append(m[1])
 
             config = {
-                'includePath': includes,
+                'includePath': unique(includes),
                 'defines': defines,
                 'compilerPath': os.path.normcase(target.toolchain.cxx),
                 'intelliSenseMode': get_intellisense_mode(target.toolchain),
