@@ -96,7 +96,7 @@ class CXXObject(Target, internal=True):
             raise
         self.compile_args = [str(a) for a in commands[0]]
         self.debug('scanning dependencies of %s', self.source.name)
-        deps = await self.toolchain.scan_dependencies(self.source_path / self.source, self.private_cxx_flags, self.build_path)
+        deps = await self.toolchain.scan_dependencies(self.source_path / self.source, self.output, self.private_cxx_flags)
         deps = [d for d in deps
                 if self.makefile.root.source_path in Path(d).parents
                 or self.build_path in Path(d).parents]

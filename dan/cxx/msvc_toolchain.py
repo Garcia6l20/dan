@@ -138,8 +138,8 @@ class MSVCToolchain(Toolchain):
                     out.append(flag)
         return out
 
-    async def scan_dependencies(self, sourcefile: Path, options: list[str], build_path: Path) -> set[FileDependency]:
-        deps_path = build_path / sourcefile.with_suffix(".json").name
+    async def scan_dependencies(self, sourcefile: Path, output: list[str], options: set[str]) -> set[FileDependency]:
+        deps_path = output.with_suffix(".json")
         deps = set()
         if deps_path.exists():
             async with aiofiles.open(deps_path, 'r') as f:
