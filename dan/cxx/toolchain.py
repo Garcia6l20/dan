@@ -191,7 +191,7 @@ class Toolchain(Logging):
     async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         raise NotImplementedError()
 
-    async def scan_dependencies(self, file: Path, options: set[str], build_path: Path) -> set[FileDependency]:
+    async def scan_dependencies(self, sourcefile: Path, output: Path, options: set[str]) -> set[FileDependency]:
         raise NotImplementedError()
 
     def compile_generated_files(self, output: Path) -> set[Path]:

@@ -1,5 +1,5 @@
 from functools import cached_property
-from dan.core import diagnostics as diag
+from dan.core import aiofiles, diagnostics as diag
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
 from dan.core.utils import unique
@@ -119,28 +119,20 @@ class UnixToolchain(Toolchain):
                 raise RuntimeError(
                     f'Unhandled source file extention: {sourcefile.suffix}')
 
-    async def scan_dependencies(self, sourcefile: Path, options: list[str], build_path: Path) -> set[FileDependency]:
-        args = self.get_base_compile_args(sourcefile)
-        args.extend(['-M', str(sourcefile), *options])
-
-        if auto_fpic:
-            args.insert(1, '-fPIC')
-
-        build_path.mkdir(parents=True, exist_ok=True)
-        output = build_path / sourcefile.name
-        out, _, _ = await self.run('scan', output, args, log=False, cwd=build_path)
-        if out:
-            all_deps = list()
-            for dep in out.splitlines():
-                if dep.endswith('\\'):
-                    dep = dep[:-2]
-                all_deps.append(dep.strip())
-            _obj = all_deps.pop(0)
-            if len(all_deps) > 0:
-                _src = all_deps.pop(0)
-            return all_deps
-        else:
-            return set()
+    async def scan_dependencies(self, sourcefile: Path, output: Path, options: set[str]) -> set[FileDependency]:
+        deps_path = output.with_suffix(".o.d")
+        deps = list()
+        if deps_path.exists():
+            async with aiofiles.open(deps_path, 'r') as f:
+                for dep in await f.readlines():
+                    dep = dep.strip()
+                    if dep.endswith('\\'):
+                        dep = dep[:-2]
+                    deps.append(dep.strip())
+                _obj = deps.pop(0)
+                if len(deps) > 0:
+                    _src = deps.pop(0)
+        return set(deps)
 
     def compile_generated_files(self, output: Path) -> set[Path]:
         return {output.with_suffix(output.suffix + '.d')}
