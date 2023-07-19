@@ -1,7 +1,6 @@
 from dan import self, include
-from dan.cxx import target_toolchain
 
-target_toolchain.cpp_std = 17
+cpp_std = 17
 
 include('simple')
 include('libraries')

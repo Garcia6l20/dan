@@ -192,7 +192,7 @@ class CXXTarget(Target, internal=True):
     public_link_options: set[str] = set()
     private_link_options: set[str] = set()
 
-    cpp_std: int|str = None
+    __cpp_std: int|str = None
 
     def __make_src_path(self, path):
         if not isinstance(path, Path):
@@ -228,30 +228,20 @@ class CXXTarget(Target, internal=True):
 
         self.link_options = OptionSet(self, 'link_options',
                                       self.public_link_options, self.private_link_options)
-        
-        self.__set_cpp_std()
+
+    @property
+    def cpp_std(self):
+        if self.__cpp_std is None:
+            self.__cpp_std = self.makefile.get_attribute('cpp_std', recursive=True)
+            if self.__cpp_std is None:
+                self.__cpp_std = -1
+        if self.__cpp_std == -1:
+            return None
+        return self.__cpp_std
     
-    def __set_cpp_std(self):
-
-        if self.cpp_std is None:
-            self.cpp_std = self.cache.get('cpp_std', None)
-            if self.cpp_std == -1:
-                return
-        elif not isinstance(self.cpp_std, CppStd):
-            self.cpp_std = CppStd(self.cpp_std)
-
-        if self.cpp_std is not None:
-            self.compile_options.add(self.cpp_std)
-        else:
-            self.cpp_std = self.makefile.get_attribute('cpp_std', recursive=True)
-            if self.cpp_std is not None:
-                if not isinstance(self.cpp_std, CppStd):
-                    self.cpp_std = CppStd(self.cpp_std)
-                self.compile_options.add(self.cpp_std)
-                self.cache['cpp_std'] = self.cpp_std
-            else:
-                self.cache['cpp_std'] = -1
-        
+    @cpp_std.setter
+    def cpp_std(self, value):
+        self.__cpp_std = value
 
     @property
     def cxx_dependencies(self) -> list['CXXTarget']:
@@ -292,7 +282,11 @@ class CXXTarget(Target, internal=True):
 
     @cached_property
     def private_cxx_flags(self):
-        flags = self.includes.private
+        flags = []
+        cpp_std = self.cpp_std
+        if cpp_std is not None:
+            flags.extend(self.toolchain.make_compile_options([cpp_std if isinstance(cpp_std, CppStd) else CppStd(cpp_std)]))
+        flags.extend(self.includes.private)
         flags.extend(self.cxx_flags)
         flags.extend(self.compile_options.private)
         flags.extend(self.compile_definitions.private)

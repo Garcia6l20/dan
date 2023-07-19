@@ -5,6 +5,8 @@ from dan.testing import Test, Case
 
 catch2, = requires('catch2 = 3')
 
+cpp_std = 17
+
 @catch2.discover_tests
 class UseCatch2(Executable):
     sources = 'test_catch2.cpp',
