@@ -276,11 +276,10 @@ async def runtime_dependencies(ctx: CommandsContext, not_found, target, **kwargs
         if t.fullname == target:
             break
     from dan.cxx import ldd
-    
-    dlls, _deps = await ldd.get_runtime_dependencies(t)
-    for dll, dll_path in sorted(dlls.items(), key=lambda e: e[0].casefold()):
-        if dll_path or not_found:
-            print(' ' * 7, dll, '=>', dll_path or 'not found')
+    with ctx.make.context:
+        for lib, lib_path in await ldd.get_runtime_dependencies(t):
+            if lib_path or not_found:
+                print(' ' * 7, lib, '=>', lib_path or 'not found')
 
 @cli.command()
 @common_opts

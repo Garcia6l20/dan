@@ -29,6 +29,7 @@ dependencies = [
     'dataclasses-json',
     'lockfile',
     'pefile',
+    'pyelftools',
 ]
 
 [tool.setuptools]

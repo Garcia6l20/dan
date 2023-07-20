@@ -1,6 +1,8 @@
 from asyncio import *
 
 import threading
+import concurrent
+import multiprocessing
 import typing as t
 
 from dan.core.functools import BaseDecorator
@@ -78,6 +80,17 @@ def sync_wait(coro):
         raise thread.err
     return thread.result
 
+__async_pool = concurrent.futures.ThreadPoolExecutor(
+    max_workers=multiprocessing.cpu_count(),
+)
+
+
+async def async_wait(fn, *args, **kwargs):
+    loop = get_running_loop()
+    def wrapper():
+        return fn(*args, **kwargs)
+    return await loop.run_in_executor(__async_pool, wrapper)
+
 
 class ExceptionGroup(Exception):
 
@@ -119,6 +132,7 @@ class TaskGroup:
         self._parent_cancel_requested = False
         self._tasks = set()
         self._errors = []
+        self._results = []
         self._base_error = None
         self._on_completed_fut = None
         self._name = name
@@ -193,7 +207,6 @@ class TaskGroup:
         while self._tasks:
             if self._on_completed_fut is None:
                 self._on_completed_fut = self._loop.create_future()
-
             try:
                 await self._on_completed_fut
             except CancelledError as ex:
@@ -282,6 +295,7 @@ class TaskGroup:
 
         exc = task.exception()
         if exc is None:
+            self._results.append(task.result())
             return
 
         self._errors.append(exc)
@@ -321,3 +335,10 @@ class TaskGroup:
             self._abort()
             self._parent_cancel_requested = True
             self._parent_task.cancel()
+    
+    def results(self):
+        if not self._entered:
+            raise RuntimeError(f"TaskGroup {self!r} has not been entered")
+        if self._exiting and self._tasks:
+            raise RuntimeError(f"TaskGroup {self!r} is not finished")
+        return self._results
