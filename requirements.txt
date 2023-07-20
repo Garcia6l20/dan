@@ -8,3 +8,4 @@ termcolor
 tqdm
 dataclasses-json
 lockfile
+pefile

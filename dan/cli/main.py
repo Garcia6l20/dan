@@ -263,6 +263,25 @@ def toolchains(**kwargs):
         click.echo(name)
 
 
+@ls.command()
+@common_opts
+@click.option('-n', '--not-found', help='Show not-found dependencies', is_flag=True)
+@click.argument('TARGET', type=click.TargetParamType(target_types=[Executable]))
+@pass_context
+async def runtime_dependencies(ctx: CommandsContext, not_found, target, **kwargs):
+    """Inspect stuff"""
+    ctx(**kwargs)
+    await ctx.make.initialize()
+    for t in ctx.make.root.all_targets:
+        if t.fullname == target:
+            break
+    from dan.cxx import ldd
+    
+    dlls, _deps = await ldd.get_runtime_dependencies(t)
+    for dll, dll_path in sorted(dlls.items(), key=lambda e: e[0].casefold()):
+        if dll_path or not_found:
+            print(' ' * 7, dll, '=>', dll_path or 'not found')
+
 @cli.command()
 @common_opts
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
