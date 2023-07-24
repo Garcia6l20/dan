@@ -12,7 +12,10 @@ from dan.core.utils import unique
 def get_intellisense_mode(toolchain : Toolchain):
     mode = list()
     if toolchain.system is not None:
-        mode.append(toolchain.system)
+        if toolchain.system.startswith('msys'):
+            mode.append('windows')
+        else:
+            mode.append(toolchain.system)
     mode.append(toolchain.type)
     mode.append(toolchain.arch)
     return '-'.join(mode)
@@ -118,19 +121,19 @@ class Code(Logging):
             for flag in target.private_cxx_flags:
                 match re_match(flag):
                     case r'[/-]I:?(.+)' as m:
-                        includes.append(os.path.normcase(m[1]))
+                        includes.append(m[1])
                     case r'[/-]D:?(.+)' as m:
                         defines.append(m[1])
 
             config = {
-                'includePath': unique(includes),
+                'includePath': [os.path.normcase(i) for i in unique(includes)],
                 'defines': defines,
                 'compilerPath': os.path.normcase(target.toolchain.cxx),
                 'intelliSenseMode': get_intellisense_mode(target.toolchain),
                 # 'compilerArgs': target.cxx_flags,
             }
             if target.cpp_std is not None:
-                config['standard'] = f'c++{target.cpp_std.stdver}'
+                config['standard'] = f'c++{target.cpp_std}'
             return config
 
     async def get_sources_configuration(self, sources):
