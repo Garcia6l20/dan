@@ -1,5 +1,5 @@
 from pathlib import Path
-from dan.cxx import Executable
+from dan.cxx import Executable, Library
 from dan.core import asyncio
 from dan import logging
 
@@ -350,6 +350,6 @@ else:
             result.append((lib, data['realpath']))
         return result
 
-async def get_runtime_dependencies(t : Executable):
+async def get_runtime_dependencies(t : Executable|Library):
     lookup_dirs = t.env['PATH'].split(os.pathsep)
     return await dep_list(t.output, lookup_dirs)
