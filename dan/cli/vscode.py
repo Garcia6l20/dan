@@ -1,5 +1,6 @@
 import json
 import os
+from dan.core import asyncio
 
 from dan.core.pm import re_match
 from dan.cxx.toolchain import Toolchain
@@ -155,9 +156,31 @@ class Code(Logging):
         #   - standard?: see above
         #   - windowsSdkVersion?: string
         from dan.cxx import target_toolchain as toolchain
+        from dan.cxx.targets import CXXTarget
+        cpp_std = 11
+        browse_path = set()
+        compiler_args = set()
+        cxx_targets = [t for t in self.make.root.all_targets if isinstance(t, CXXTarget)]
+        async with asyncio.TaskGroup("initializing cxx targets") as g:
+            for target in cxx_targets:
+                g.create_task(target.initialize())
+
+        for target in cxx_targets:
+            browse_path.update(target.includes.private_raw)
+            browse_path.update(target.includes.public_raw)
+            compiler_args.update(target.cxx_flags)
+            if target.cpp_std > cpp_std:
+                cpp_std = target.cpp_std
+
+        from dan.pkgconfig.package import get_packages_cache
+        for package in get_packages_cache().values():
+            compiler_args.update(package.cxx_flags)
+
+
         result = {
-            'browsePath': [],
+            'browsePath': [os.path.normcase(p) for p in browse_path],
             'compilerPath': str(toolchain.cxx),
-            'standard': f'c++{toolchain.cpp_std}'
+            'compilerArgs': list(compiler_args),
+            'standard': f'c++{cpp_std}'
         }
         return json.dumps(result)

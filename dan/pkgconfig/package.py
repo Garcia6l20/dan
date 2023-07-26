@@ -313,7 +313,7 @@ class Package(CXXTarget, internal=True):
 _jinja_env: jinja2.Environment = None
 
 _pkgconfig_cache = None
-def __get_packages_cache() -> dict[str, Package]:
+def get_packages_cache() -> dict[str, Package]:
     from dan.core.include import context
     global _pkgconfig_cache
     if _pkgconfig_cache is None:
@@ -331,7 +331,7 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
     makefile = makefile.root
 
-    cache = __get_packages_cache()
+    cache = get_packages_cache()
     if name in cache:
         cached_pkg = cache[name]
         if spec and not spec.is_compatible(cached_pkg.version):
@@ -357,7 +357,7 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
 def get_cached_bindirs():
     bindirs = set()
-    for pkg in __get_packages_cache().values():
+    for pkg in get_packages_cache().values():
         bindir = getattr(pkg, 'bindir', None)
         if bindir is not None:
             bindirs.add(Path(bindir))
