@@ -171,6 +171,19 @@ async def install(ctx: CommandsContext, mode: str, **kwargs):
 
 
 @cli.command()
+@common_opts
+@click.option('--type', '-t', 'pkg_type', type=click.Choice(['tar.gz', 'zip']), default='tar.gz')
+@click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def package(ctx: CommandsContext, pkg_type, mode: str, **kwargs):
+    """Package given targets"""
+    async with ctx(**kwargs) as make:
+        mode = InstallMode[mode]
+        await make.package(pkg_type, mode)
+
+
+@cli.command()
 @click.option('--verbose', '-v', is_flag=True,
               help='Pring debug informations')
 @click.option('--yes', '-y', is_flag=True, help='Proceed without asking')

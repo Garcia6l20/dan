@@ -470,6 +470,47 @@ class Make(Logging):
             async with aiofiles.open(manifest_path, 'w') as f:
                 await f.writelines([os.path.relpath(p, manifest_path.parent) + '\n' for p in installed_files])
 
+    async def package(self, pkg_type: str, mode: InstallMode = InstallMode.user):
+        import tempfile
+        targets = self.targets
+        if len(targets) == 1:
+            base_name = targets[0].name
+            version = targets[0].version
+        else:
+            base_name = self.root.name
+        
+        if not version:
+            version = self.root.version
+
+        if version:
+            base_name += f'-v{version}'
+            
+
+        archive_name = f'{base_name}.{pkg_type}'
+
+        with tempfile.TemporaryDirectory(prefix=archive_name) as tmp_dir:
+            self.settings.install.destination = tmp_dir
+            tmp_dir = Path(tmp_dir)
+            if pkg_type.startswith('tar'):
+                import tarfile
+                comp_type = pkg_type.split('.')[1]
+                self.info('creating %s', archive_name)
+                await self.install(mode)
+                with tarfile.open(archive_name, f'w:{comp_type}') as archive:
+                    for it in tmp_dir.iterdir():
+                        archive.add(it, arcname=it.relative_to(tmp_dir))
+            elif pkg_type == 'zip':
+                import zipfile
+                self.info('creating %s', archive_name)
+                await self.install(mode)
+                with zipfile.ZipFile(archive_name, 'w') as archive:
+                    for folder_name, sub_folders, file_names in os.walk(tmp_dir):
+                        for filename in file_names:
+                            file_path = Path(folder_name) / filename
+                            archive.write(file_path, file_path.relative_to(tmp_dir))
+            else:
+                raise RuntimeError(f'Unhandled package type: {pkg_type}')
+
     @property
     def executable_targets(self) -> list[Executable]:
         return [exe for exe in self.targets if isinstance(exe, Executable)]
