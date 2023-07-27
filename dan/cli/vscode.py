@@ -105,7 +105,11 @@ class Code(Logging):
                 }
 
         return json.dumps(make_suite_info(self.make.context.root), indent=2 if pretty else None)
-        
+
+    async def _init_target(self, target):
+        with target.skip_missing_dependencies:
+            await target.initialize()
+
     async def _make_source_configuration(self, target: CXXObject):
             # interface:
             #   - includePath: string[]
@@ -117,8 +121,8 @@ class Code(Logging):
             #   - compilerArgs?: string[];
             #   - windowsSdkVersion?: string;
             includes = await target.toolchain.get_default_include_paths()
-            defines = [f'{k}={v}' for k, v in (await target.toolchain.get_default_defines()).items()]
-            await target.initialize()
+            defines = [f'{k}={v}' for k, v in (await target.toolchain.get_default_defines()).items()]            
+            await self._init_target(target)
             for flag in target.private_cxx_flags:
                 match re_match(flag):
                     case r'[/-]I:?(.+)' as m:
@@ -131,7 +135,7 @@ class Code(Logging):
                 'defines': defines,
                 'compilerPath': os.path.normcase(target.toolchain.cxx),
                 'intelliSenseMode': get_intellisense_mode(target.toolchain),
-                # 'compilerArgs': target.cxx_flags,
+                'compilerArgs': target.cxx_flags,
             }
             if target.cpp_std is not None:
                 config['standard'] = f'c++{target.cpp_std}'
@@ -163,7 +167,7 @@ class Code(Logging):
         cxx_targets = [t for t in self.make.root.all_targets if isinstance(t, CXXTarget)]
         async with asyncio.TaskGroup("initializing cxx targets") as g:
             for target in cxx_targets:
-                g.create_task(target.initialize())
+                g.create_task(self._init_target(target))
 
         for target in cxx_targets:
             browse_path.update(target.includes.private_raw)
