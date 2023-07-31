@@ -9,6 +9,7 @@ import dan.core.typing as t
 class InstallMode(Enum):
     user = 0
     dev = 1
+    portable = 2
 
 
 class BuildType(Enum):

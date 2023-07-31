@@ -126,7 +126,8 @@ class PackageBuild(Target, internal=True):
             self.debug('cleaning')
             async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
                 if toolchain is not None and not toolchain.build_type.is_debug_mode:
-                    group.create_task(aiofiles.rmtree(self.output / 'src'))
+                    sources = self.get_sources()
+                    group.create_task(aiofiles.rmtree(sources.output))
                 group.create_task(aiofiles.rmtree(build_path, force=True))
 
 

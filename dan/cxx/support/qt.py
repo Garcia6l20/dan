@@ -95,5 +95,5 @@ def moc(modules: list[str] = None, major=6):
         class QtWapped(_QtMoccer, cls):
             qt_modules = modules
             qt_major = major
-        return cls
+        return QtWapped
     return decorator

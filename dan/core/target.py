@@ -1,3 +1,4 @@
+import contextlib
 from functools import cached_property
 import functools
 from dan.core.register import MakefileRegister
@@ -436,8 +437,19 @@ class Target(Logging, MakefileRegister, internal=True):
                 self.makefile.cache.data[name] = dict()
             self.__cache = self.makefile.cache.data[name]
         return self.__cache
+    
+    _install_missing_dependencies = True
 
-    async def __load_unresolved_dependencies(self, install=True):
+    @property
+    @contextlib.contextmanager
+    def skip_missing_dependencies(self):
+        self._install_missing_dependencies = False
+        yield
+        self._install_missing_dependencies = True
+
+    async def __load_unresolved_dependencies(self, install=None):
+        if install is None:
+            install = self._install_missing_dependencies
         if len(self.requires) > 0:
             self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self, install=install))
 

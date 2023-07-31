@@ -1,5 +1,7 @@
 import os
 import sys
+import contextlib
+
 from dan import logging
 
 from dan.core.find import find_file
@@ -56,24 +58,31 @@ class CommandsContext:
         self._make_kwds = {**kwds}
         self._make = None
 
-    def __call__(self, *args, **kwds):
+    def update(self, *args, **kwds):
         if len(args):
             self._make_args.extend(*args)
         self._make_kwds.update(**kwds)
-
-    @property
-    def make(self):
+    
+    @contextlib.asynccontextmanager
+    async def __call__(self, *args, **kwargs):
+        no_init = kwargs.pop('no_init', False)
+        self.update(*args, **kwargs)
         if self._make is None:
             self._make = Make(*self._make_args, **self._make_kwds)
-        return self._make
+            if not no_init:
+                await self._make.initialize()
+        with self._make.context:
+            yield self._make
 
+    async def __aexit__(self, *exc):
+        pass
 
 pass_context = click.make_pass_decorator(CommandsContext)
 
 @pass_context
 def show_diags(ctx: CommandsContext):
     if diagnostics.enabled:
-        diags = ctx.make.diagnostics
+        diags = ctx._make.diagnostics
         if diags:
             click.echo(f'DIAGNOSTICS: {diags.to_json()}')
 
@@ -105,23 +114,23 @@ def cli(ctx: click.AsyncContext, **kwds):
 @pass_context
 async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
-    ctx(**kwds)  # update kwds
-    if toolchain is None and ctx.make.config.toolchain is None:
-        from dan.cxx.detect import get_toolchains
-        tp = click.Choice(get_toolchains(create=False)["toolchains"].keys())
-        toolchain = click.prompt('Toolchain', type=tp, default='default')
+    async with ctx(no_init=True, **kwds) as make:
+        if toolchain is None and make.config.toolchain is None:
+            from dan.cxx.detect import get_toolchains
+            tp = click.Choice(get_toolchains(create=False)["toolchains"].keys())
+            toolchain = click.prompt('Toolchain', type=tp, default='default')
 
-    await ctx.make.configure(source_path, toolchain)
+        await make.configure(source_path, toolchain)
 
-    if len(settings):
-        await ctx.make.apply_settings(*settings)
+        if len(settings):
+            await make.apply_settings(*settings)
 
-    # NOTE: intializing make after applying setting
-    #       to check settings are valid implicitly (cache save skipped)
-    await ctx.make.initialize()
+        # NOTE: intializing make after applying setting
+        #       to check settings are valid implicitly (cache save skipped)
+        await make.initialize()
 
-    if len(options):
-        await ctx.make.apply_options(*options)
+        if len(options):
+            await make.apply_options(*options)
 
 
 @cli.command()
@@ -133,19 +142,21 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwds):
     """Build targets"""
-    ctx(**kwds)  # update kwds
-    if force:
-        await ctx.make.clean()
-    await ctx.make.build()
+    async with ctx(**kwds) as make:
+        if force:
+            await make.clean()
+        await make.build()
 
 @cli.command()
 @common_opts
+@click.option('--force', '-f', is_flag=True,
+              help='Force re-install')
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
-async def install_dependencies(ctx: CommandsContext, **kwds):
+async def install_dependencies(ctx: CommandsContext, force, **kwds):
     """Build targets"""
-    ctx(**kwds)  # update kwds
-    await ctx.make.install_dependencies()
+    async with ctx(**kwds) as make:
+        await make.install_dependencies(force=force)
 
 @cli.command()
 @common_opts
@@ -154,9 +165,22 @@ async def install_dependencies(ctx: CommandsContext, **kwds):
 @pass_context
 async def install(ctx: CommandsContext, mode: str, **kwargs):
     """Install targets"""
-    ctx(**kwargs)
-    mode = InstallMode[mode]
-    await ctx.make.install(mode)
+    async with ctx(**kwargs) as make:
+        mode = InstallMode[mode]
+        await make.install(mode)
+
+
+@cli.command()
+@common_opts
+@click.option('--type', '-t', 'pkg_type', type=click.Choice(['tar.gz', 'zip']), default='tar.gz')
+@click.argument('MODE', type=click.Choice([v.name for v in InstallMode]), default=InstallMode.user.name)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def package(ctx: CommandsContext, pkg_type, mode: str, **kwargs):
+    """Package given targets"""
+    async with ctx(**kwargs) as make:
+        mode = InstallMode[mode]
+        await make.package(pkg_type, mode)
 
 
 @cli.command()
@@ -213,15 +237,14 @@ def ls(ctx: CommandsContext):
 async def targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
     """List targets"""
     kwargs['quiet'] = True
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    out = []
-    for target in ctx.make.targets:
-        if show_type:
-            out.append(target.fullname + ' - ' + type(target).__name__)
-        else:
-            out.append(target.fullname)
-    click.echo('\n'.join(out))
+    async with ctx(**kwargs) as make:
+        out = []
+        for target in make.targets:
+            if show_type:
+                out.append(target.fullname + ' - ' + type(target).__name__)
+            else:
+                out.append(target.fullname)
+        click.echo('\n'.join(out))
 
 
 @ls.command()
@@ -231,14 +254,13 @@ async def targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
 async def tests(ctx: CommandsContext, **kwargs):
     """List tests"""
     kwargs['quiet'] = True
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    for t in ctx.make.tests:
-        if len(t) > 1:
-            for c in t.cases:
-                click.echo(f'{t.fullname}:{c.name}')
-        else:
-            click.echo(t.fullname)
+    async with ctx(**kwargs) as make:
+        for t in make.tests:
+            if len(t) > 1:
+                for c in t.cases:
+                    click.echo(f'{t.fullname}:{c.name}')
+            else:
+                click.echo(t.fullname)
 
 @ls.command()
 @common_opts
@@ -247,13 +269,12 @@ async def tests(ctx: CommandsContext, **kwargs):
 async def options(ctx: CommandsContext, **kwargs):
     """List tests"""
     kwargs['quiet'] = True
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    for o in ctx.make.all_options:
-        current = ''
-        if o.value != o.default:
-            current = f', current: {o.value}'
-        click.echo(f'{o.fullname}: {o.help} (type: {o.type.__name__}, default: {o.default}{current})')
+    async with ctx(**kwargs) as make:
+        for o in make.all_options:
+            current = ''
+            if o.value != o.default:
+                current = f', current: {o.value}'
+            click.echo(f'{o.fullname}: {o.help} (type: {o.type.__name__}, default: {o.default}{current})')
 
 @ls.command()
 def toolchains(**kwargs):
@@ -263,14 +284,30 @@ def toolchains(**kwargs):
         click.echo(name)
 
 
+@ls.command()
+@common_opts
+@click.option('-n', '--not-found', help='Show not-found dependencies', is_flag=True)
+@click.argument('TARGET', type=click.TargetParamType(target_types=[Executable]))
+@pass_context
+async def runtime_dependencies(ctx: CommandsContext, not_found, target, **kwargs):
+    """Inspect stuff"""
+    async with ctx(**kwargs) as make:
+        for t in make.root.all_targets:
+            if t.fullname == target:
+                break
+        from dan.cxx import ldd
+        for lib, lib_path in await ldd.get_runtime_dependencies(t):
+            if lib_path or not_found:
+                print(' ' * 7, lib, '=>', lib_path or 'not found')
+
 @cli.command()
 @common_opts
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def clean(ctx, **kwargs):
     """Clean generated stuff"""
-    ctx(**kwargs)
-    await ctx.make.clean()
+    async with ctx(**kwargs) as make:
+        await make.clean()
 
 
 @cli.command()
@@ -279,9 +316,9 @@ async def clean(ctx, **kwargs):
 @pass_context
 async def run(ctx, **kwargs):
     """Run executable(s)"""
-    ctx(**kwargs)
-    rc = await ctx.make.run()
-    sys.exit(rc)
+    async with ctx(**kwargs) as make:
+        rc = await make.run()
+        sys.exit(rc)
 
 
 @cli.command()
@@ -290,9 +327,9 @@ async def run(ctx, **kwargs):
 @pass_context
 async def test(ctx, **kwargs):
     """Run tests"""
-    ctx(**kwargs)
-    rc = await ctx.make.test()
-    sys.exit(rc)
+    async with ctx(**kwargs) as make:
+        rc = await make.test()
+        sys.exit(rc)
 
 
 @cli.command()
@@ -324,25 +361,24 @@ def code():
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    out = []
-    targets = ctx.make.context.root.all_targets
-    async with asyncio.TaskGroup() as g:
+    async with ctx(**kwargs) as make:
+        out = []
+        targets = make.context.root.all_targets
+        async with asyncio.TaskGroup() as g:
+            for target in targets:
+                g.create_task(target.load_dependencies())
         for target in targets:
-            g.create_task(target.load_dependencies())
-    for target in targets:
-        out.append({
-            'name': target.name,
-            'fullname': target.fullname,
-            'buildPath': str(target.build_path),
-            'output': str(target.output),
-            'executable': isinstance(target, Executable),
-            'type': type(target).__name__,
-            'env': target.env if isinstance(target, Executable) else None,
-        })
-    import json
-    click.echo(json.dumps(out))
+            out.append({
+                'name': target.name,
+                'fullname': target.fullname,
+                'buildPath': str(target.build_path),
+                'output': str(target.output),
+                'executable': isinstance(target, Executable),
+                'type': type(target).__name__,
+                'env': target.env if isinstance(target, Executable) else None,
+            })
+        import json
+        click.echo(json.dumps(out))
 
 @code.command()
 @common_opts
@@ -350,16 +386,15 @@ async def get_targets(ctx: CommandsContext, **kwargs):
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    import json
-    out = list()
-    for t in ctx.make.context.root.all_tests:
-        out.append(t.fullname)
-        if len(t) > 1:
-            for c in t.cases:
-                out.append(f'{t.fullname}:{c.name}')
-    click.echo(json.dumps(out))
+    async with ctx(**kwargs) as make:
+        import json
+        out = list()
+        for t in make.context.root.all_tests:
+            out.append(t.fullname)
+            if len(t) > 1:
+                for c in t.cases:
+                    out.append(f'{t.fullname}:{c.name}')
+        click.echo(json.dumps(out))
 
 
 @code.command()
@@ -369,10 +404,9 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    code = Code(ctx.make)
-    click.echo(code.get_test_suites(pretty))
+    async with ctx(**kwargs) as make:
+        code = Code(make)
+        click.echo(code.get_test_suites(pretty))
 
 
 @code.command()
@@ -388,12 +422,12 @@ def get_toolchains(**kwargs):
               help='Clean before building')
 @click.argument('TARGETS', nargs=-1)
 @pass_context
-async def build(ctx: CommandsContext, force=False, **kwds):
+async def build(ctx: CommandsContext, force=False, **kwargs):
     """Build targets (vscode version)"""
-    ctx(**kwds, diags=True)  # update kwds
-    if force:
-        await ctx.make.clean()
-    await ctx.make.build()
+    async with ctx(**kwargs, diags=True) as make:
+        if force:
+            await make.clean()
+        await make.build()
 
 
 @code.command()
@@ -402,10 +436,9 @@ async def build(ctx: CommandsContext, force=False, **kwds):
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    code = Code(ctx.make)
-    click.echo(await code.get_sources_configuration(sources))
+    async with ctx(**kwargs) as make:
+        code = Code(make)
+        click.echo(await code.get_sources_configuration(sources))
 
 
 @code.command()
@@ -413,10 +446,9 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
 @pass_context
 async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
-    ctx(**kwargs)
-    await ctx.make.initialize()
-    code = Code(ctx.make)
-    click.echo(await code.get_workspace_browse_configuration())
+    async with ctx(**kwargs) as make:
+        code = Code(make)
+        click.echo(await code.get_workspace_browse_configuration())
 
 @cli.result_callback()
 @pass_context

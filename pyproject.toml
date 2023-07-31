@@ -28,6 +28,8 @@ dependencies = [
     'importlib-metadata',
     'dataclasses-json',
     'lockfile',
+    'pefile',
+    'pyelftools',
 ]
 
 [tool.setuptools]
@@ -38,6 +40,7 @@ include = ["dan*"]
 
 [tool.setuptools.package-data]
 "dan.pkgconfig.templates" = ["*.jinja2"]
+"dan.cli.templates" = ["*"]
 "dan.cxx.data" = ["*"]
 
 [tool.setuptools.data-files]

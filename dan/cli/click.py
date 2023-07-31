@@ -97,6 +97,14 @@ class OptionsParamType(ParamType):
 
 
 class TargetParamType(ParamType):
+    def __init__(self, target_types=None) -> None:
+        from dan.core.target import Target
+        if target_types is None:
+            self.target_types = (Target)
+        else:
+            self.target_types = tuple(target_types)
+        super().__init__()
+
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from click.shell_completion import CompletionItem
         from dan.make import Make
@@ -108,7 +116,7 @@ class TargetParamType(ParamType):
         
         comps = []
         for target in make.root.all_targets:
-            if target.fullname.startswith(incomplete):
+            if isinstance(target, self.target_types) and target.fullname.startswith(incomplete):
                 comps.append(CompletionItem(target.fullname, type='nospace'))
         
         return comps

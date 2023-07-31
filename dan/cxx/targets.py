@@ -8,7 +8,7 @@ from functools import cached_property
 
 from dan.core.pathlib import Path
 from dan.core import cache
-from dan.core.target import Target, Installer
+from dan.core.target import Target, Installer, InstallMode
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
@@ -291,6 +291,26 @@ class CXXTarget(Target, internal=True):
         flags.extend(self.compile_options.private)
         flags.extend(self.compile_definitions.private)
         return unique(flags)
+    
+    async def __install__(self, installer: Installer):
+        if installer.mode == InstallMode.portable:
+            
+            exclude_paths = []
+            if self.toolchain.system.is_windows:
+                exclude_paths.append(Path(os.getenv('SYSTEMROOT')))
+            def check(p: Path):
+                for e in exclude_paths:
+                    if e in p.parents:
+                        return False
+                return True
+            from dan.cxx.ldd import get_runtime_dependencies
+            async with asyncio.TaskGroup(f'{self.name} runtime dependencies installation') as g:
+                for dep, path in await get_runtime_dependencies(self):
+                    if path is not None: # not found ?
+                        path = Path(path)
+                        if check(path):
+                            g.create_task(installer.install_bin(path))
+        await super().__install__(installer)
 
 StrOrPath = str|Path
 StrOrPathIterable = Iterable[StrOrPath]
