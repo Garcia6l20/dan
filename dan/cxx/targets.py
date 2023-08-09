@@ -423,6 +423,10 @@ class Library(CXXObjectsTarget, internal=True):
             libs = super().libs
         
         return libs
+    
+    def __make_link_options(self):
+        return [*self.lib_paths, *self.libs, *self.link_options.public, *self.link_options.private]
+
 
     async def __initialize__(self):
         self._init_sources()
@@ -431,7 +435,11 @@ class Library(CXXObjectsTarget, internal=True):
             if len(self.sources) == 0:
                 self.library_type = LibraryType.INTERFACE
             else:
-                self.library_type = LibraryType.STATIC
+                from dan.core.settings import DefaultLibraryType
+                if self.toolchain.settings.default_library_type == DefaultLibraryType.static:
+                    self.library_type = LibraryType.STATIC
+                else:
+                    self.library_type = LibraryType.SHARED
 
         from .msvc_toolchain import MSVCToolchain
         if self.shared and isinstance(self.toolchain, MSVCToolchain):
@@ -453,7 +461,7 @@ class Library(CXXObjectsTarget, internal=True):
         if generate is not None:
             if previous_args and \
                     previous_args != await generate(
-                        [obj.routput for obj in self.objs], self.output, self.libs, dry_run=True):
+                        [obj.routput for obj in self.objs], self.output, self.__make_link_options(), dry_run=True):
                 self.__dirty = True
             else:
                 self.__dirty = False
@@ -473,9 +481,9 @@ class Library(CXXObjectsTarget, internal=True):
             'creating %s library %s...', self.library_type.name.lower(), self.output.name)
 
         if self.static:
-            await self.toolchain.static_lib([obj.routput for obj in self.objs], self.output, self.libs)
+            await self.toolchain.static_lib([obj.routput for obj in self.objs], self.output, self.__make_link_options())
         elif self.shared:
-            await self.toolchain.shared_lib([obj.routput for obj in self.objs], self.output, {*self.private_cxx_flags, *self.libs})
+            await self.toolchain.shared_lib([obj.routput for obj in self.objs], self.output, self.__make_link_options())
             from .msvc_toolchain import MSVCToolchain
             if isinstance(self.toolchain, MSVCToolchain):
                 self.compile_definitions.add(

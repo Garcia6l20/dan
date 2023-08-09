@@ -22,6 +22,10 @@ class BuildType(Enum):
     def is_debug_mode(self):
         """Return true if the build type should produce debug symbols (ie.: debug and release_debug_infos)"""
         return self in (BuildType.debug, BuildType.release_debug_infos)
+    
+class DefaultLibraryType(Enum):
+    static = 0
+    shared = 1
 
 @dataclass(eq=True, unsafe_hash=True)
 class InstallSettings:
@@ -51,6 +55,7 @@ class InstallSettings:
 @dataclass
 class ToolchainSettings:
     cxx_flags: list[str] = field(default_factory=lambda: list())
+    default_library_type: DefaultLibraryType = DefaultLibraryType.static
 
 @dataclass
 class Settings:

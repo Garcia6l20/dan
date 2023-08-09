@@ -23,8 +23,10 @@ class UnixToolchain(Toolchain):
         # self.as_ = data['as'] if 'as' in data else tools['as']
         # self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
         self.env = data['env'] if 'env' in data else None
-        self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cc)
-        self.debug('cxx compiler is %s %s (%s)', self.type, self.version, self.cxx)
+        self.debug('cxx compiler is %s %s (%s)',
+                   self.type, self.version, self.cc)
+        self.debug('cxx compiler is %s %s (%s)',
+                   self.type, self.version, self.cxx)
 
     @cached_property
     def default_cflags(self):
@@ -104,10 +106,15 @@ class UnixToolchain(Toolchain):
         return result
 
     def make_library_name(self, basename: str, shared: bool) -> str:
-        return f'lib{basename}.{"so" if shared else "a"}'
+        if not shared:
+            return f'lib{basename}.a'
+        elif self.system.is_windows:
+            return f'lib{basename}.dll'
+        else:
+            return f'lib{basename}.so'
 
     def make_executable_name(self, basename: str) -> str:
-        return f'{basename}.exe' if self.system.startswith('msys') else basename
+        return f'{basename}.exe' if self.system.is_windows else basename
 
     def get_base_compile_args(self, sourcefile: Path) -> list[str]:
         match sourcefile.suffix:
@@ -140,7 +147,7 @@ class UnixToolchain(Toolchain):
     @property
     def cxxmodules_flags(self) -> list[str]:
         return ['-std=c++20', '-fmodules-ts']
-    
+
     def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
         args = self.get_base_compile_args(sourcefile)
         args.extend([*self.compile_options, *options, '-MD', '-MT', str(output),
@@ -159,19 +166,19 @@ class UnixToolchain(Toolchain):
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         return [
-            [self.ar, 'cr', output, *objects], # *options],
+            [self.ar, 'cr', output, *objects],  # *options],
             [self.ranlib, output],
         ]
 
     def make_shared_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> tuple[Path, CommandArgsList]:
-        args = [self.cxx, '-shared', *
-                unique(self.default_ldflags, options), *objects, '-o', output]
+        args = [self.cxx, '-shared', *objects, *
+                unique(self.default_ldflags, options), '-o', output]
         commands = [args]
         if self._build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
         return commands
-    
-    async def get_default_include_paths(self, lang = 'c++') -> list[Path]:
+
+    async def get_default_include_paths(self, lang='c++') -> list[Path]:
         cache_key = f'default_{lang}_includes'
         includes = self.cache.get(cache_key, None)
         if includes is None:
@@ -190,7 +197,7 @@ class UnixToolchain(Toolchain):
 
     async def _gen_gcc_compile_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         _from = list()
-        prev: diag.Diagnostic|diag.RelatedInformation = None
+        prev: diag.Diagnostic | diag.RelatedInformation = None
         prev_diag: diag.Diagnostic = None
         async for line in lines:
             match re_match(line):
@@ -210,7 +217,7 @@ class UnixToolchain(Toolchain):
                     lineno = int(m[3]) - 1
                     prev = info = diag.RelatedInformation(
                         location=diag.Location(diag.Uri(filename),
-                        range=diag.Range(start=diag.Position(lineno), end=diag.Position(lineno))),
+                                               range=diag.Range(start=diag.Position(lineno), end=diag.Position(lineno))),
                         message=message)
                     _from.append(info)
                 case r'(.+?): In instantiation of \'(.+)\'' as m:
@@ -222,30 +229,32 @@ class UnixToolchain(Toolchain):
                     message = m[4]
                     prev = info = diag.RelatedInformation(
                         location=diag.Location(diag.Uri(filename),
-                        range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
+                                               range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
                         message=message)
                     _from.append(info)
                 case r'(.+?):(\d+):(?:(\d+):)?\s(note):\s(.+)$' as m:
                     filename = m[1]
-                    character=int(m[3]) if m[3] else 0
+                    character = int(m[3]) if m[3] else 0
                     lineno = int(m[2]) - 1
-                    message=m[5]
+                    message = m[5]
                     if prev_diag is None:
-                        self.warning('diagnostics: a note is expected to append after a diagnositc')
+                        self.warning(
+                            'diagnostics: a note is expected to append after a diagnositc')
                     else:
                         info = diag.RelatedInformation(
                             location=diag.Location(diag.Uri(filename),
-                            range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
+                                                   range=diag.Range(start=diag.Position(lineno, character), end=diag.Position(lineno, character))),
                             message=message)
                         prev_diag.related_information.insert(0, info)
                         prev = info
                 case r'(.+?):(\d+):(?:(\d+):)?\s(?:fatal )?(error|warning):\s(.+)$' as m:
-                    character=int(m[3]) if m[3] else 0
+                    character = int(m[3]) if m[3] else 0
                     lineno = int(m[2]) - 1
-                    message=m[5]
+                    message = m[5]
                     prev_diag = prev = diag.Diagnostic(
                         message=message,
-                        range=diag.Range(start=diag.Position(line=lineno, character=character), end=diag.Position(line=lineno)),
+                        range=diag.Range(start=diag.Position(
+                            line=lineno, character=character), end=diag.Position(line=lineno)),
                         severity=diag.Severity[m[4].upper()],
                         source=self.type,
                         filename=m[1],
@@ -255,12 +264,13 @@ class UnixToolchain(Toolchain):
 
     async def _handle_compile_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         match self.type:
-            case 'gcc'|'clang':
+            case 'gcc' | 'clang':
                 async for d in self._gen_gcc_compile_diags(lines):
                     yield d
             case _:
-                raise NotImplementedError(f'handle_compile_output errors not implemented for {self.type}')
-    
+                raise NotImplementedError(
+                    f'handle_compile_output errors not implemented for {self.type}')
+
     async def _gen_ld_link_diags(self, lines) -> t.Iterable[diag.Diagnostic]:
         function = None
         object = None
@@ -295,8 +305,9 @@ class UnixToolchain(Toolchain):
 
     async def _handle_link_output(self, lines) -> t.Iterable[diag.Diagnostic]:
         match self.type:
-            case 'gcc'|'clang':
+            case 'gcc' | 'clang':
                 async for d in self._gen_ld_link_diags(lines):
                     yield d
             case _:
-                raise NotImplementedError(f'handle_link_output not implemented for {self.type}')
+                raise NotImplementedError(
+                    f'handle_link_output not implemented for {self.type}')
