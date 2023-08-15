@@ -1,11 +1,11 @@
 from typing import Iterable
 from dan.core.pathlib import Path
 from dan.core import aiofiles
-from dan.core.target import Target
+from dan.src.base import SourcesProvider
 from dan.core.runners import async_run
 
 
-class GitSources(Target, internal=True):
+class GitSources(SourcesProvider, internal=True):
 
     url: str = None
     refspec: str = None

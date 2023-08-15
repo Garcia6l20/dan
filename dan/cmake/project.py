@@ -1,3 +1,4 @@
+from pathlib import Path
 from dan.core.requirements import RequiredPackage
 from dan.core.target import Target, FileDependency, Installer
 from dan.core.runners import async_run
@@ -8,6 +9,38 @@ from dan.cxx import Toolchain
 
 import typing as t
 
+import platform
+
+async def get_ninja():
+    from dan.cxx.detect import get_dan_path
+    match platform.system():
+        case 'Windows':
+            suffix = '.exe'
+        case _:
+            suffix = ''
+    bin_path = get_dan_path() / 'os-utils' / 'bin'
+    ninja_path = bin_path / f'ninja{suffix}'
+    ninja_version = '1.11.1'
+    if not ninja_path.exists():
+        match platform.system():
+            case 'Windows':
+                name = 'ninja-win'
+            case 'Linux':
+                name = 'ninja-linux'
+            case 'Darwin':
+                name = 'ninja-mac'
+        import tempfile
+        import zipfile
+        from dan.utils.net import fetch_file
+        with tempfile.TemporaryDirectory(prefix=f'dan-ninja-') as tmp_dest:
+            tmp_dest = Path(tmp_dest)
+            archive_name = f'{name}.zip'
+            await fetch_file(f'https://github.com/ninja-build/ninja/releases/download/v{ninja_version}/{archive_name}', tmp_dest / archive_name)
+            with zipfile.ZipFile(tmp_dest / archive_name) as f:
+                f.extractall(bin_path)
+    return ninja_path
+
+
 
 class Project(Target, internal=True):
 
@@ -15,6 +48,7 @@ class Project(Target, internal=True):
     cmake_config_definitions: dict[str, str] = dict()
     cmake_patch_debug_postfix: list = None
     cmake_options: dict[str, tuple[str, t.Any, str]] = None
+    cmake_generator: str = 'Ninja'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -52,15 +86,20 @@ class Project(Target, internal=True):
         cmake_options['CMAKE_PREFIX_PATH'] = self.makefile.root.pkgs_path.as_posix()
 
         base_opts = []
-        if self.toolchain.system.startswith('msys'):
-            make = find_executable(r'.+make', self.toolchain.env['PATH'].split(';'), default_paths=False)
-            base_opts.extend((f'-GMinGW Makefiles', f'-DCMAKE_MAKE_PROGRAM={make.as_posix()}'))
+        if self.cmake_generator.startswith('Ninja'):
+            ninja = await get_ninja()
+            base_opts.extend((f'-G{self.cmake_generator}', f'-DCMAKE_MAKE_PROGRAM={ninja.as_posix()}'))
+        else:
+            raise RuntimeError('Only Ninja generators are currently supported')
+        
+        if 'multi' in self.cmake_generator.lower():
+            base_opts.append(f'-DCMAKE_CONFIGURATION_TYPES={self.toolchain.build_type.name.title()}')
+        else:
+            base_opts.append(f'-DCMAKE_BUILD_TYPE={self.toolchain.build_type.name.title()}')
 
         await self._cmake(
             self.source_path,
             *base_opts,
-            f'-DCMAKE_BUILD_TYPE={self.toolchain.build_type.name.upper()}',
-            f'-DCMAKE_CONFIGURATION_TYPES={self.toolchain.build_type.name.upper()}',
             f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
             f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
             *[f'-D{k}={v}' for k, v in self.cmake_config_definitions.items()],
@@ -69,9 +108,10 @@ class Project(Target, internal=True):
         await self._cmake('--build', '.', '--parallel', *self._target_args)
     
     async def __install__(self, installer: Installer):
-        await self.build()
         await self._cmake('.', f'-DCMAKE_INSTALL_PREFIX={installer.settings.destination}')
-        await self._cmake('--install', '.', *self._target_args)
+        await self.build()
+        await self._cmake('--install', '.')
+
         await super().__install__(installer)
         async with aiofiles.open(self.build_path / 'install_manifest.txt') as manifest_file:
             manifest = await manifest_file.readlines()

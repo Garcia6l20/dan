@@ -27,6 +27,8 @@ library_paths_lookup = [
 
 def find_file(expr, paths, flags = 0) -> Path:
     r = re.compile(expr, flags)
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
     for path in paths:
         for root, _, files in os.walk(os.path.expandvars(os.path.expanduser(path))):
             for file in files:
@@ -36,6 +38,8 @@ def find_file(expr, paths, flags = 0) -> Path:
 
 def find_files(expr, paths, flags = 0) -> t.Generator[Path, None, None]:
     r = re.compile(expr, flags)
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
     for path in paths:
         for root, _, _files in os.walk(os.path.expandvars(os.path.expanduser(path))):
             for file in _files:
