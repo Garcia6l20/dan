@@ -157,6 +157,10 @@ class OptionSet:
     @property
     def public_raw(self) -> list:
         return [self._transform_in(p) for p in self._public]
+    
+    @property
+    def all_raw(self) -> list:
+        return [*self.private_raw, *self.public_raw]
 
     def add(self, *values, public=False):
         if public:
@@ -172,6 +176,13 @@ class OptionSet:
         self._public = values._public
         if private:
             self._private = values._private
+
+    def extend(self, values: t.Iterable, private=False):
+        if private:
+            self._private.extend(values)
+        else:
+            self._public.extend(values)
+
 
 class CXXTarget(Target, internal=True):
     public_includes: set[str] = set()
@@ -250,6 +261,15 @@ class CXXTarget(Target, internal=True):
     @property
     def library_dependencies(self) -> list['Library']:
         return [dep for dep in self.dependencies if isinstance(dep, Library)]
+
+    @cached_property
+    def shared_dependencies_path(self):
+        paths = []
+        for lib in [d for d in self.dependencies if isinstance(d, Library) and d.shared]:
+            paths.append(lib.build_path.as_posix())
+        for target in self.cxx_dependencies:
+            paths.extend(target.shared_dependencies_path)
+        return paths
 
     @cached_property
     def lib_paths(self) -> list[str]:
@@ -565,10 +585,12 @@ class Executable(CXXObjectsTarget, internal=True):
 
         if 'PATH' in self.toolchain.env:
             paths.extend(self.toolchain.env['PATH'].split(os.pathsep))
-            
+
         from dan.pkgconfig.package import get_cached_bindirs
         paths.extend([str(d) for d in get_cached_bindirs()])
         
+        paths.extend(self.shared_dependencies_path)
+
         if len(paths):
             env['PATH'] = os.pathsep.join(paths)
         return env
