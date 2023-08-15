@@ -15,7 +15,7 @@ class PackageBuild(Target, internal=True):
         self.spec = spec
         self.pn = name
         super().__init__(f'{name}-build', *args, version=version, **kwargs)
-        self.package = name if package is None else package
+        self.package = package
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
         self._package_makefile = None
@@ -26,10 +26,11 @@ class PackageBuild(Target, internal=True):
     @property
     def package_makefile(self):
         if self._package_makefile is None:
-            target = self.repo.find(self.pn, self.package)
+            self._package_makefile, target = self.repo.find(self.pn, self.package)
             if target is None:
                 raise RuntimeError(f'cannot find {self.pn} in {self.repo.name}')
-            self._package_makefile = target.makefile
+            if self.package is None:
+                self.package = self._package_makefile.name
         return self._package_makefile
 
     def get_sources(self):
@@ -154,9 +155,11 @@ class Package(Target, internal=True):
     @classmethod
     def instance(cls, name, version, *args, package=None, **kwargs):
         if package is None:
-            package = name
-        if package in cls.__all:
-            pkg = cls.__all[package]
+            pn = name
+        else:
+            pn = package
+        if pn in cls.__all:
+            pkg = cls.__all[pn]
             if version is not None and not version.is_compatible(pkg.version):
                 raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
             return pkg, False

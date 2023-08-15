@@ -112,13 +112,11 @@ class PackageRepository(Target, internal=True):
         pkgs = self.pkgs_makefile
         return {f'{lib.makefile.name}:{lib.name}@{self.name}': lib for lib in pkgs.all_installed}
 
-    def find(self, name: str, package: str) -> Target:
-        if package is None:
-            package = name
-
+    def find(self, name: str, package: str) -> tuple[MakeFile, Target]:
         for lib in self.pkgs_makefile.all_installed:
-            if name in lib.provides and lib.makefile.name == package:
-                return lib
+            if name in lib.provides and (package is None or lib.makefile.name == package):
+                return lib.makefile, lib
+        return None, None
 
 
 def get_repo_instance(repo_name: str, makefile=None) -> PackageRepository:
