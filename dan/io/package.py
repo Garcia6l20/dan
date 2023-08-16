@@ -21,33 +21,47 @@ class PackageBuild(Target, internal=True):
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
         self._package_makefile = None
+        self._target = None
+        self._source_target = None
         self._build_path = None
         self.toolchain = self.context.get('cxx_target_toolchain')
         self.lock: aiofiles.FileLock = None
 
+    def __resolve(self):
+        self._package_makefile, self._target = self.repo.find(self.pn, self.package)
+        if self._target is None:
+            raise RuntimeError(f'cannot find {self.pn} in {self.repo.name}')
+        if self.package is None:
+            self.package = self._package_makefile.name
+        from dan.src.base import SourcesProvider
+        for dep in self._target.preload_dependencies:
+            if isinstance(dep, SourcesProvider):
+                self._source_target = dep
+                break
+        if self._source_target is None:
+            raise RuntimeError(f'cannot find {self.pn} package\'s sources target')
+
     @property
     def package_makefile(self):
         if self._package_makefile is None:
-            self._package_makefile, target = self.repo.find(self.pn, self.package)
-            if target is None:
-                raise RuntimeError(f'cannot find {self.pn} in {self.repo.name}')
-            if self.package is None:
-                self.package = self._package_makefile.name
+            self.__resolve()
         return self._package_makefile
+    
+    @property
+    def sources_target(self):
+        if self._source_target is None:
+            self.__resolve()
+        return self._source_target
+    
+    @property
+    def target(self):
+        if self._target is None:
+            self.__resolve()
+        return self._target
 
-    def get_sources(self):
-        makefile = self.package_makefile
-        sources = None
-        for target in makefile.all_targets:
-            if 'source' in target.name:
-                sources = target
-                break
-        if sources is None:
-            raise RuntimeError(f'Cannot find {self.pn} package\'s sources target')
-        return sources
 
     async def __initialize__(self):
-        sources = self.get_sources()
+        sources = self.sources_target
         if self.spec is not None:
             avail_versions = await sources.available_versions()
             if avail_versions is None:
