@@ -1,10 +1,9 @@
 from pathlib import Path
-from dan.core.requirements import RequiredPackage
+from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import Target, FileDependency, Installer
 from dan.core.runners import async_run
-from dan.core.pm import re_match
-from dan.core import aiofiles
-from dan.core.find import find_executable, find_file
+from dan.core import aiofiles, asyncio
+from dan.core.find import find_file
 from dan.cxx import Toolchain
 
 import typing as t
@@ -107,9 +106,12 @@ class Project(Target, internal=True):
         )
         await self._cmake('--build', '.', '--parallel', *self._target_args)
     
+    @asyncio.cached(unique = True)
+    async def install(self, settings: InstallSettings, mode: InstallMode):
+        self.cmake_config_definitions['CMAKE_INSTALL_PREFIX'] = settings.destination
+        return await super().install(settings, mode)
+
     async def __install__(self, installer: Installer):
-        await self._cmake('.', f'-DCMAKE_INSTALL_PREFIX={installer.settings.destination}')
-        await self.build()
         await self._cmake('--install', '.')
 
         await super().__install__(installer)
