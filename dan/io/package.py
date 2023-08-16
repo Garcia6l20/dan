@@ -105,6 +105,8 @@ class PackageBuild(Target, internal=True):
             break
 
         sources.output = self.build_path / 'src' # TODO source_prefix in install settings
+        if self.target.subdirectory is not None:
+            sources.output /= self.target.subdirectory
 
         return await super().__initialize__()
     

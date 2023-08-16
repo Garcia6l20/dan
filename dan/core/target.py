@@ -291,6 +291,7 @@ class Target(Logging, MakefileRegister, internal=True):
     preload_dependencies: set[TargetDependencyLike] = set()
 
     inherits_version = True
+    subdirectory: str = None
 
     def __init__(self,
                  name: str = None,
@@ -420,10 +421,16 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def build_path(self) -> Path:
-        if self._build_path is None:
-            return self.makefile.build_path
-        else:
+        if self._build_path is not None:
             return self._build_path
+        
+        build_path = self.makefile.build_path
+
+        if self.subdirectory is not None:
+            build_path /= self.subdirectory
+
+        return build_path
+        
     
     @property
     def requires(self):
