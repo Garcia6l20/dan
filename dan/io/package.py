@@ -10,6 +10,8 @@ from dan.io.repositories import get_packages_path, get_repo_instance
 
 
 class PackageBuild(Target, internal=True):
+
+    inherits_version = False
     
     def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
@@ -133,6 +135,8 @@ class PackageBuild(Target, internal=True):
 
 
 class Package(Target, internal=True):
+    
+    inherits_version = False
 
     __all: dict[str, 'Package'] = dict()
 

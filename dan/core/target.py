@@ -290,6 +290,8 @@ class Target(Logging, MakefileRegister, internal=True):
     dependencies: set[TargetDependencyLike] = set()
     preload_dependencies: set[TargetDependencyLike] = set()
 
+    inherits_version = True
+
     def __init__(self,
                  name: str = None,
                  parent: 'Target' = None,
@@ -335,7 +337,10 @@ class Target(Logging, MakefileRegister, internal=True):
             self._version = version
 
         if not hasattr(self, '_version'):
-            self._version = self.makefile.version
+            if self.inherits_version:
+                self._version = self.makefile.version
+            else:
+                self._version = None
 
         if self.description is None:
             self.description = self.makefile.description
