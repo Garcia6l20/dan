@@ -1,6 +1,6 @@
-from contextlib import contextmanager
 import importlib.util
 import os
+import sys
 
 from dan.core.asyncio import sync_wait
 from dan.core.makefile import MakeFile
@@ -172,6 +172,11 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         
     if module_path in context.imported_makefiles:
         return context.imported_makefiles[module_path]
+
+    if (module_path.parent / '__init__.py').exists():
+        p = str(module_path.parent.parent)
+        if not p in sys.path:
+            sys.path.append(p)
 
     module = importlib.util.module_from_spec(spec)
     context.imported_makefiles[module_path] = module
