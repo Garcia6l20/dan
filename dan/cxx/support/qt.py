@@ -4,7 +4,7 @@ from dan.core.pathlib import Path
 from dan.core.runners import async_run
 from dan.cxx.targets import CXXObject
 from dan.core.target import Target
-from dan.pkgconfig.package import Package
+from dan.pkgconfig.package import find_package
 
 
 class _UIObject(Target, internal=True):
@@ -81,7 +81,7 @@ class _MocObject(CXXObject, internal=True):
 class _Wrapper:
     
     async def __initialize__(self):
-        qt_core = Package(f'Qt{self.qt_major}Core', makefile=self.makefile)
+        qt_core =  find_package(f'Qt{self.qt_major}Core', makefile=self.makefile)
         await qt_core.initialize()
         
         _search_paths = None
@@ -114,7 +114,7 @@ class _Wrapper:
         self.includes.private.append(self.build_path)
 
         for module in self.qt_modules:
-            pkg = Package(f'Qt{self.qt_major}{module}', makefile=self.makefile)
+            pkg = find_package(f'Qt{self.qt_major}{module}', makefile=self.makefile)
             await pkg.initialize()
             self.dependencies.add(pkg)
 
@@ -150,7 +150,7 @@ class _Wrapper:
             from dan.core.find import find_files
             search_paths = set()
             for p in self.includes.all_raw:
-                if self.source_path in p.parents:
+                if self.source_path == p or self.source_path in p.parents:
                     search_paths.add(p)
             for file in find_files('.+\.h\w*', search_paths):
                 out, err, rc = await async_run([self.moc, file], logger=None, log=False, cwd=self.build_path, no_raise=True)

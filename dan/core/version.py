@@ -156,9 +156,11 @@ class VersionSpec:
         self.version = version
         self.op = op
         
-    def is_compatible(self, version: Version):
+    def is_compatible(self, version: str|Version):
         if isinstance(version, VersionSpec):
             version = version.version
+        elif isinstance(version, str):
+            version = Version(version)
         match self.op:
             case '==':
                 return version == self.version
@@ -177,3 +179,9 @@ class VersionSpec:
             
     def __str__(self) -> str:
         return f'{self.op} {self.version}'
+
+class _AnyVersion(VersionSpec):
+    def __init__(self) -> None:
+        super().__init__(Version(0, 0, 0), '>=')
+
+AnyVersion = _AnyVersion()
