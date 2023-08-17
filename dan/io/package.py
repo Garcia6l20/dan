@@ -7,51 +7,33 @@ from dan.core.target import Target
 from dan.core.find import find_file, find_files
 from dan.core.version import Version, VersionSpec
 from dan.io.repositories import get_packages_path, get_repo_instance
+from dan.src.base import SourcesProvider
 
 
 class PackageBuild(Target, internal=True):
 
     inherits_version = False
     
-    def __init__(self, name, version, package, repository, *args, spec: VersionSpec = None, **kwargs):
+    def __init__(self, name, version, repository, package_makefile, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
         self.pn = name
-        super().__init__(f'{name}-build', *args, version=version, **kwargs)
-        self.package = package
-        self.repo = get_repo_instance(repository, self.makefile)
+        super().__init__(name, *args, version=version, **kwargs)
+        self.repo = repository
         self.preload_dependencies.add(self.repo)
-        self._package_makefile = None
-        self._target = None
-        self._source_target = None
+        self.package_makefile = package_makefile
         self._build_path = None
         self.toolchain = self.context.get('cxx_target_toolchain')
         self.lock: aiofiles.FileLock = None
 
-    def __resolve(self):
-        self._package_makefile, self._target = self.repo.find(self.pn, self.package)
-        if self._target is None:
-            raise RuntimeError(f'cannot find {self.pn} in {self.repo.name}')
-        if self.package is None:
-            self.package = self._package_makefile.name
-        from dan.src.base import SourcesProvider
-        for dep in self._target.preload_dependencies:
-            if isinstance(dep, SourcesProvider):
-                self._source_target = dep
-                break
-        if self._source_target is None:
-            raise RuntimeError(f'cannot find {self.pn} package\'s sources target')
-
-    @property
-    def package_makefile(self):
-        if self._package_makefile is None:
-            self.__resolve()
-        return self._package_makefile
     
     @property
-    def sources_target(self):
-        if self._source_target is None:
-            self.__resolve()
-        return self._source_target
+    def sources_targets(self):
+        targets = []
+        for target in self.package_makefile.all_installed:
+            for dep in target.preload_dependencies:
+                if isinstance(dep, SourcesProvider):
+                    targets.append(dep)
+        return targets
     
     @property
     def target(self):
@@ -59,9 +41,9 @@ class PackageBuild(Target, internal=True):
             self.__resolve()
         return self._target
 
-
     async def __initialize__(self):
-        sources = self.sources_target
+        source_targets = self.sources_targets
+        sources = source_targets[0]
         if self.spec is not None:
             avail_versions = await sources.available_versions()
             if avail_versions is None:
@@ -84,7 +66,7 @@ class PackageBuild(Target, internal=True):
             version_option.value = str(self.version)
 
         pkgs_root = packages_path / self.toolchain.system / self.toolchain.arch / self.toolchain.build_type.name
-        makefile.pkgs_path = pkgs_root / self.package / str(self.version)
+        makefile.pkgs_path = pkgs_root / self.name / str(self.version)
 
         self._build_path = makefile.pkgs_path
         self.lock = aiofiles.FileLock(self.build_path / 'build.lock')
@@ -104,9 +86,12 @@ class PackageBuild(Target, internal=True):
             self.output = pkg
             break
 
-        sources.output = self.build_path / 'src' # TODO source_prefix in install settings
-        if self.target.subdirectory is not None:
-            sources.output /= self.target.subdirectory
+        for target in self.package_makefile.all_installed:
+            for source_target in target.preload_dependencies:
+                if isinstance(source_target, SourcesProvider):
+                    source_target.output = self.build_path / 'src' # TODO source_prefix in install settings
+                    if target.subdirectory is not None:
+                        source_target.output /= target.subdirectory
 
         return await super().__initialize__()
     
@@ -116,7 +101,7 @@ class PackageBuild(Target, internal=True):
     
     async def __build__(self):
         if self.lock.locked:
-            self.debug('package %s %s already building...', self.name, self.version)
+            self.info('package %s %s is locked, waiting for it to be released...', self.name, self.version)
             # wait for it
             async with self.lock:
                 return
@@ -128,7 +113,7 @@ class PackageBuild(Target, internal=True):
 
             # FIXME: shall a makefile have an associated toolchain ?
             toolchain = None
-            async with asyncio.TaskGroup(f'installing {self.package}\'s targets') as group:
+            async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
                 for target in makefile.all_installed:
                     if hasattr(target, 'toolchain'):
                         if toolchain is None:
@@ -168,23 +153,42 @@ class Package(Target, internal=True):
         if name is not None:
             self.name = name
         super().__init__(**kwargs)
-        if self.name in self.__all:
-            raise RuntimeError(f'duplicate package: {self.name}')
+
+        self.repo = get_repo_instance(repository, self.makefile)
+        self.preload_dependencies.add(self.repo)
+
+        self.package_makefile, self.target = self.repo.find(self.name, self.package)
+        if self.target is None:
+            raise RuntimeError(f'cannot find {self.name} in {self.repo.name}')
+        if self.package is None:
+            self.package = self.package_makefile.name
+
+        if self.package in self.__all:
+            raise RuntimeError(f'duplicate package: {self.package}')
+
         self.__all[self.package] = self
+
+    def find(self, name):
+        for t in self.package_makefile.all_installed:
+            if t.name == name or name in t.provides:
+                return t
 
     @classmethod
     def instance(cls, name, version, *args, package=None, **kwargs):
-        if package is None:
-            pn = name
-        else:
-            pn = package
-        if pn in cls.__all:
-            pkg = cls.__all[pn]
-            if version is not None and not version.is_compatible(pkg.version):
-                raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
-            return pkg, False
-        else:
-            return Package(name, version, package, *args, **kwargs), True
+
+        for _, pkg in cls.__all.items():
+            if pkg.name == package:
+                if version is not None and not version.is_compatible(pkg.version):
+                    raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
+                return pkg, False
+            else:
+                target = pkg.find(name)
+                if target is not None:
+                    if version is not None and not version.is_compatible(pkg.version):
+                        raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
+                    return pkg, False
+
+        return Package(name, version, package, *args, **kwargs), True
 
     
     async def __initialize__(self):
@@ -207,10 +211,10 @@ class Package(Target, internal=True):
             case None:
                 self.spec = None
 
-        self.pkg_build = PackageBuild(self.name,
+        self.pkg_build = PackageBuild(self.package,
                                       self.version,
-                                      self.package,
-                                      self.repository,
+                                      self.repo,
+                                      self.package_makefile,
                                       spec=self.spec,
                                       makefile=self.makefile)
         self.dependencies.add(self.pkg_build)
