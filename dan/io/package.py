@@ -111,16 +111,26 @@ class PackageBuild(Target, internal=True):
             makefile = self.package_makefile
             build_path = makefile.build_path
 
-            # FIXME: shall a makefile have an associated toolchain ?
-            toolchain = None
-            async with asyncio.TaskGroup(f'installing {self.name}\'s targets') as group:
-                for target in makefile.all_installed:
-                    if hasattr(target, 'toolchain'):
-                        if toolchain is None:
-                            toolchain = target.toolchain
-                        else:
-                            assert toolchain == target.toolchain, 'Toolchain missmatch'
-                    group.create_task(target.install(self.install_settings, InstallMode.dev))
+            async with asyncio.TaskGroup(f'downloading {self.name} sources') as g:
+                for target in self.sources_targets:
+                    g.create_task(target.build())
+
+            installed = set()
+            async def install_target(target):
+                if target in installed:
+                    return
+                installed.add(target)
+                for dep in target.target_dependencies:
+                    if dep.installed and dep.makefile == self.package_makefile:
+                        await install_target(dep)
+
+                self.info(f'installing {target.name}')
+                await target.install(self.install_settings, InstallMode.dev)
+
+            for target in makefile.all_installed:
+                if target in installed:
+                    continue
+                await install_target(target)
 
             makefile.cache.ignore()
             del makefile
@@ -128,7 +138,7 @@ class PackageBuild(Target, internal=True):
             os.chdir(self.build_path.parent)
 
             self.debug('cleaning')
-            async with asyncio.TaskGroup(f'cleanup {self.package}') as group:
+            async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
                 if toolchain is not None and not toolchain.build_type.is_debug_mode:
                     sources = self.get_sources()
                     group.create_task(aiofiles.rmtree(sources.output))

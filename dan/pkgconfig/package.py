@@ -35,11 +35,15 @@ def _get_pkg_config_paths():
             _pkg_config_paths = [Path(p) for p in paths.split(os.pathsep)]
     return _pkg_config_paths
 
-def find_pkg_config(name, paths=list()) -> Path:
+def find_pkg_config(name, paths: str|Path|list[str|Path] = list()) -> Path:
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
     return find_file(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
 
 
-def find_pkg_configs(name, paths=list()) -> t.Generator[Path, None, None]:
+def find_pkg_configs(name, paths: str|Path|list[str|Path] = list()) -> t.Generator[Path, None, None]:
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
     yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
 
 
