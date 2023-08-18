@@ -185,7 +185,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             if len(context.missing) == 0:
                 raise err
         except Exception as err:
-            context.error('makefile error while including \'%s\': %s', module_path, err)
+            context.error('makefile error while including %s: %s', module_path, err)
             raise MakeFileError(module_path) from err
 
 
