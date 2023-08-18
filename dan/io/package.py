@@ -67,6 +67,7 @@ class PackageBuild(Target, internal=True):
 
         pkgs_root = packages_path / self.toolchain.system / self.toolchain.arch / self.toolchain.build_type.name
         makefile.pkgs_path = pkgs_root / self.name / str(self.version)
+        src_path = packages_path / 'src' / self.name / str(self.version)
 
         self._build_path = makefile.pkgs_path
         self.lock = aiofiles.FileLock(self.build_path / 'build.lock')
@@ -89,7 +90,7 @@ class PackageBuild(Target, internal=True):
         for target in self.package_makefile.all_installed:
             for source_target in target.preload_dependencies:
                 if isinstance(source_target, SourcesProvider):
-                    source_target.output = self.build_path / 'src' # TODO source_prefix in install settings
+                    source_target.output = src_path
                     if target.subdirectory is not None:
                         source_target.output /= target.subdirectory
 
@@ -137,12 +138,11 @@ class PackageBuild(Target, internal=True):
 
             os.chdir(self.build_path.parent)
 
-            self.debug('cleaning')
-            async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
-                if toolchain is not None and not toolchain.build_type.is_debug_mode:
-                    sources = self.get_sources()
-                    group.create_task(aiofiles.rmtree(sources.output))
-                group.create_task(aiofiles.rmtree(build_path, force=True))
+            if not self.toolchain.build_type.is_debug_mode:
+                # in debug mode we keep build directory in order to keep debug symbols (might be changed in the future)
+                self.debug('cleaning')
+                async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
+                    group.create_task(aiofiles.rmtree(build_path, force=True))
 
 
 class Package(Target, internal=True):
