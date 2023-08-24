@@ -204,7 +204,7 @@ class Package(CXXTarget, internal=True):
     
     def __setstate__(self, data):
         from dan.core.include import context
-        makefile = context.current.root
+        makefile = context.root
         self.__init__(data['pn'], data['search_paths'], data['config_path'],
                       data=data['data'],
                       dan_plugin=data['dan_plugin'],
