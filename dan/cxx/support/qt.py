@@ -22,7 +22,7 @@ class _UIObject(Target, internal=True):
     async def __build__(self):
         p = self.parent
         self.output.parent.mkdir(exist_ok=True, parents=True)
-        await async_run([p.uic, '-o', self.output,  self.ui_file], logger=p, log=False, cwd=self.build_path)
+        await async_run([p.uic, '-o', self.output,  self.ui_file], logger=p, log=False, cwd=self.build_path, env=self.toolchain.env)
 
 class _RCCObject(CXXObject, internal=True):
 
@@ -36,7 +36,7 @@ class _RCCObject(CXXObject, internal=True):
 
     async def __build__(self):
         p = self.parent
-        out, err, rc = await async_run([p.rcc, self.resource_file], logger=p, log=False, cwd=self.build_path)
+        out, err, rc = await async_run([p.rcc, self.resource_file], logger=p, log=False, cwd=self.build_path, env=self.toolchain.env)
         async with aiofiles.open(self.source, 'w') as f:
             await f.write(out)
 
@@ -57,7 +57,7 @@ class _MocSource(Target, internal=True):
     async def __build__(self):
         p = self.parent
         self.output.parent.mkdir(parents=True, exist_ok=True)
-        await async_run([p.moc, '-o', self.output,  self.header_file], logger=p, log=False, cwd=self.build_path)
+        await async_run([p.moc, '-o', self.output,  self.header_file], logger=p, log=False, cwd=self.build_path, env=self.toolchain.env)
 
 class _MocObject(CXXObject, internal=True):
 
@@ -75,7 +75,7 @@ class _MocObject(CXXObject, internal=True):
     async def __build__(self):
         p = self.parent
         self.source.parent.mkdir(parents=True, exist_ok=True)
-        await async_run([p.moc, '-o', self.source,  self.header_file], logger=p, log=False, cwd=self.build_path)
+        await async_run([p.moc, '-o', self.source,  self.header_file], logger=p, log=False, cwd=self.build_path, env=self.toolchain.env)
         await super().__build__()
 
 class _Wrapper:
@@ -152,9 +152,11 @@ class _Wrapper:
             for p in self.includes.all_raw:
                 if self.source_path == p or self.source_path in p.parents:
                     search_paths.add(p)
+            self.debug('looking for source files to moc in: %s', ', '.join([p.as_posix() for p in search_paths]))
             for file in find_files('.+\.h\w*', search_paths):
-                out, err, rc = await async_run([self.moc, file], logger=None, log=False, cwd=self.build_path, no_raise=True)
+                out, err, rc = await async_run([self.moc, file], logger=None, log=False, cwd=self.build_path, no_raise=True, env=self.toolchain.env)
                 if rc != 0 or len(out) == 0:
+                    self.debug('skipping %s: %s%s', file.name, out, err)
                     continue
                 self.moc_sources.append(file)
                 if self.qt_build_moc:
@@ -164,6 +166,8 @@ class _Wrapper:
             self.cache['moc_sources'] = self.moc_sources
         elif not self.qt_build_moc:
             self.dependencies.add(_MocSource(file, self))
+
+        self.debug('source files to moc: %s', ', '.join([p.name for p in self.moc_sources]))
 
 
     async def __clean__(self):
