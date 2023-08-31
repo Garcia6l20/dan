@@ -33,7 +33,7 @@ class UnixToolchain(Toolchain):
         flags = list()
         match self.build_type:
             case BuildType.debug:
-                flags.extend(('-g', ))
+                flags.extend(('-Og', '-g'))
             case BuildType.release:
                 flags.extend(('-O3', '-DNDEBUG'))
             case BuildType.release_min_size:
