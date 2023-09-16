@@ -31,7 +31,7 @@ class LibraryList:
     
     def add(self, item):
         if not item in self._lst:
-            self._lst.insert(0, item)
+            self._lst.append(item)
 
     def extend(self, items):
         for item in items:
