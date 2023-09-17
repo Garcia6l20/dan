@@ -130,25 +130,17 @@ class OptionSet:
     @property
     def public(self) -> list:
         items: list = self._transform_out([self._transform_in(p) for p in self._public])
-        for dep in self._parent.cxx_dependencies:
-            items.extend(getattr(dep, self._name).public)
+        for dep in self._parent._recursive_dependencies((CXXTarget)):
+            opts = getattr(dep, self._name)
+            items.extend(opts._transform_out([opts._transform_in(p) for p in opts._public]))
         return unique(items)
-    
-    def __recurse_public(self) -> list:
-        opts = list()
-        for dep in self._parent.cxx_dependencies:
-            opts.extend(getattr(dep, self._name).__recurse_public())
-        opts.extend(self.public)
-        return opts
 
     @property
     def all(self) -> list:
-        opts = list()
-        for dep in self._parent.cxx_dependencies:
-            opts.extend(getattr(dep, self._name).__recurse_public())
-        opts.extend(self.private)
-        opts.extend(self.public)
-        return unique(opts)
+        items = list()
+        items.extend(self.private)
+        items.extend(self.public)
+        return unique(items)
 
     @property
     def private_raw(self) -> list:
