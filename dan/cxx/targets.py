@@ -512,6 +512,19 @@ class Library(CXXObjectsTarget, internal=True):
             self.output.touch()
 
         self.debug('done')
+    
+    def __install_headers__(self, installer: Installer) -> list:
+        tasks = list()
+        header_expr = re.compile(self.header_match)
+        for public_include_dir in self.includes.public_raw:
+            headers = public_include_dir.rglob('*.h*')
+            for header in headers:
+                if header_expr.match(str(header)):
+                    subdirs = header.relative_to(public_include_dir).parent
+                    tasks.append(installer.install_header(header, subdirs))
+        return tasks
+        
+
 
     async def __install__(self, installer: Installer):
 
@@ -527,13 +540,7 @@ class Library(CXXObjectsTarget, internal=True):
             tasks.append(installer.install_static_library(self.output))
 
         if installer.dev:
-            header_expr = re.compile(self.header_match)
-            for public_include_dir in self.includes.public_raw:
-                headers = public_include_dir.rglob('*.h*')
-                for header in headers:
-                    if header_expr.match(str(header)):
-                        subdirs = header.relative_to(public_include_dir).parent
-                        tasks.append(installer.install_header(header, subdirs))
+            tasks.extend(self.__install_headers__(installer))
 
             # TODO: how to handle debug symbols ? check where debug it is usually installed and do the same
             # for obj in self.objs:
