@@ -1,4 +1,5 @@
 import os
+import re
 
 from dan.core import aiofiles, asyncio
 from dan.core.pathlib import Path
@@ -83,7 +84,7 @@ class PackageBuild(Target, internal=True):
         pkg_name = makefile.all_installed[-1].name     
         self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{pkg_name}.pc'
         
-        for pkg in find_files(r'.+\.pc$', [self.install_settings.libraries_destination, self.install_settings.data_destination]):
+        for pkg in find_files(rf'.+{pkg_name}.+\.pc$', [self.install_settings.libraries_destination, self.install_settings.data_destination], re.IGNORECASE):
             self.output = pkg
             break
 
