@@ -5,6 +5,7 @@ from pathlib import Path
 from dan.core.pathlib import Path
 from dan.core.target import Target
 from dan.core import aiofiles, asyncio
+from dan.core.runners import async_run
 from dan.src.base import SourcesProvider
 import tarfile
 import zipfile
@@ -16,6 +17,7 @@ class TarSources(SourcesProvider, internal=True):
     url: str
     archive_name: str = None
     extract_filter = None
+    patches = None
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -64,4 +66,10 @@ class TarSources(SourcesProvider, internal=True):
             self.info(f'extracting {archive_name}')
             root = await asyncio.get_event_loop().run_in_executor(None, self.__extract__, archive_path, extract_dest)
             await asyncio.get_event_loop().run_in_executor(None, shutil.move, extract_dest / root, self.output)
+            
+            if self.patches is not None:
+                for patch in self.patches:
+                    self.info('applying %s', patch)
+                    await async_run(['bash', '-c', 'cd', self.output , '&&', 'patch', '-p0', '<', self.source_path / patch], logger=self, cwd=self.output)
+
             await aiofiles.os.remove(archive_path)

@@ -452,6 +452,18 @@ class Target(Logging, MakefileRegister, internal=True):
     
     _install_missing_dependencies = True
 
+    def _recursive_dependencies(self, types = None, seen = None):
+        if seen is None:
+            seen = set()
+        for dep in self.dependencies:
+            if dep in seen:
+                continue
+            seen.add(dep)
+            if types is None or isinstance(dep, types):
+                yield dep
+                if isinstance(dep, Target):
+                    yield from dep._recursive_dependencies(types, seen)
+
     @property
     @contextlib.contextmanager
     def skip_missing_dependencies(self):

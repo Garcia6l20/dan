@@ -351,7 +351,7 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
                 break
 
         else:
-            pkg = Package(name, config_path=config, makefile=makefile)
+            pkg = Package(name, config_path=config, search_paths=search_paths, makefile=makefile)
             break
     
     if pkg:

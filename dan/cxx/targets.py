@@ -29,7 +29,13 @@ class CXXObject(Target, internal=True):
         self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
         obj_fname = source.with_suffix('.obj' if self.toolchain.type == 'msvc' else '.o')
         if source.is_absolute():
-            self.output = self.build_path / obj_fname.name
+            if source.parent.is_relative_to(self.parent.source_path):
+                rpath = source.parent.relative_to(self.parent.source_path)
+                self.output = self.build_path / rpath / obj_fname.name
+            elif obj_fname.is_relative_to(self.build_path):
+                self.output = obj_fname
+            else:
+                self.output = self.build_path / obj_fname.name
         else:
             self.output = self.build_path / obj_fname
         self.__dirty = False
@@ -130,25 +136,17 @@ class OptionSet:
     @property
     def public(self) -> list:
         items: list = self._transform_out([self._transform_in(p) for p in self._public])
-        for dep in self._parent.cxx_dependencies:
-            items.extend(getattr(dep, self._name).public)
+        for dep in self._parent._recursive_dependencies((CXXTarget)):
+            opts = getattr(dep, self._name)
+            items.extend(opts._transform_out([opts._transform_in(p) for p in opts._public]))
         return unique(items)
-    
-    def __recurse_public(self) -> list:
-        opts = list()
-        for dep in self._parent.cxx_dependencies:
-            opts.extend(getattr(dep, self._name).__recurse_public())
-        opts.extend(self.public)
-        return opts
 
     @property
     def all(self) -> list:
-        opts = list()
-        for dep in self._parent.cxx_dependencies:
-            opts.extend(getattr(dep, self._name).__recurse_public())
-        opts.extend(self.private)
-        opts.extend(self.public)
-        return unique(opts)
+        items = list()
+        items.extend(self.private)
+        items.extend(self.public)
+        return unique(items)
 
     @property
     def private_raw(self) -> list:
@@ -352,19 +350,20 @@ class CXXObjectsTarget(CXXTarget, internal=True):
         sources = list()
         if self.source_path != self.makefile.source_path:
             self.sources = [self.source_path / source for source in self.sources]
-        source_root = Path(os.path.commonprefix(self.sources))
-        for source in self.sources:
-            source = Path(source)
-            if source.is_absolute():
-                root = source_root
-                if root.is_file():
-                    root = root.parent
-            else:
-                root = self.source_path
-            sources.append(source)
-            self.objs.append(
-                CXXObject(Path(source), self, root=root))
-        self.sources = sources
+        if self.sources:
+            source_root = Path(os.path.commonpath(self.sources))
+            for source in self.sources:
+                source = Path(source)
+                if source.is_absolute():
+                    root = source_root
+                    if root.is_file():
+                        root = root.parent
+                else:
+                    root = self.source_path
+                sources.append(source)
+                self.objs.append(
+                    CXXObject(Path(source), self, root=root))
+            self.sources = sources
             
 
     @property
@@ -513,6 +512,19 @@ class Library(CXXObjectsTarget, internal=True):
             self.output.touch()
 
         self.debug('done')
+    
+    def __install_headers__(self, installer: Installer) -> list:
+        tasks = list()
+        header_expr = re.compile(self.header_match)
+        for public_include_dir in self.includes.public_raw:
+            headers = public_include_dir.rglob('*.h*')
+            for header in headers:
+                if header_expr.match(str(header)):
+                    subdirs = header.relative_to(public_include_dir).parent
+                    tasks.append(installer.install_header(header, subdirs))
+        return tasks
+        
+
 
     async def __install__(self, installer: Installer):
 
@@ -528,13 +540,7 @@ class Library(CXXObjectsTarget, internal=True):
             tasks.append(installer.install_static_library(self.output))
 
         if installer.dev:
-            header_expr = re.compile(self.header_match)
-            for public_include_dir in self.includes.public_raw:
-                headers = public_include_dir.rglob('*.h*')
-                for header in headers:
-                    if header_expr.match(str(header)):
-                        subdirs = header.relative_to(public_include_dir).parent
-                        tasks.append(installer.install_header(header, subdirs))
+            tasks.extend(self.__install_headers__(installer))
 
             # TODO: how to handle debug symbols ? check where debug it is usually installed and do the same
             # for obj in self.objs:

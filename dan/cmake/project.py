@@ -7,6 +7,7 @@ from dan.core.find import find_file
 from dan.cxx import Toolchain
 
 import typing as t
+import os
 
 import platform
 
@@ -48,15 +49,28 @@ class Project(Target, internal=True):
     cmake_patch_debug_postfix: list = None
     cmake_options: dict[str, tuple[str, t.Any, str]] = None
     cmake_generator: str = 'Ninja'
+    cmake_subdirectory: str = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cmake_cache_dep = FileDependency(self.build_path / 'CMakeCache.txt')
         self.dependencies.add(self.cmake_cache_dep)
         self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
+        self.__env = None
+
+    def get_env(self):
+        if self.__env is None:
+            env = self.toolchain.env
+            from dan.cxx.detect import get_dan_path
+            epath = env.get('PATH', os.environ['PATH']).split(os.pathsep)
+            epath.insert(0, str(get_dan_path() / 'os-utils' / 'bin'))
+            env['PATH'] = os.pathsep.join(epath)
+            self.__env = env
+        return self.__env
+
 
     async def _cmake(self, *cmake_args, **kwargs):
-        return await async_run(['cmake', *cmake_args], logger=self, cwd=self.build_path, **kwargs, env=self.toolchain.env)
+        return await async_run(['cmake', *cmake_args], logger=self, cwd=self.build_path, **kwargs, env=self.get_env())
 
     @property
     def _target_args(self):
@@ -96,8 +110,11 @@ class Project(Target, internal=True):
         else:
             base_opts.append(f'-DCMAKE_BUILD_TYPE={self.toolchain.build_type.name.title()}')
 
+        if self.cmake_subdirectory:
+            source_path = self.source_path / self.cmake_subdirectory
+
         await self._cmake(
-            self.source_path,
+            source_path,
             *base_opts,
             f'-DCMAKE_C_COMPILER={self.toolchain.cc.as_posix()}',
             f'-DCMAKE_CXX_COMPILER={self.toolchain.cxx.as_posix()}',
