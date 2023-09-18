@@ -110,8 +110,9 @@ class Project(Target, internal=True):
         else:
             base_opts.append(f'-DCMAKE_BUILD_TYPE={self.toolchain.build_type.name.title()}')
 
+        source_path = self.source_path
         if self.cmake_subdirectory:
-            source_path = self.source_path / self.cmake_subdirectory
+            source_path /= self.cmake_subdirectory
 
         await self._cmake(
             source_path,
