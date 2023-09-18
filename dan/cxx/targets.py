@@ -29,7 +29,13 @@ class CXXObject(Target, internal=True):
         self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
         obj_fname = source.with_suffix('.obj' if self.toolchain.type == 'msvc' else '.o')
         if source.is_absolute():
-            self.output = self.build_path / obj_fname.name
+            if source.parent.is_relative_to(self.parent.source_path):
+                rpath = source.parent.relative_to(self.parent.source_path)
+                self.output = self.build_path / rpath / obj_fname.name
+            elif obj_fname.is_relative_to(self.build_path):
+                self.output = obj_fname
+            else:
+                self.output = self.build_path / obj_fname.name
         else:
             self.output = self.build_path / obj_fname
         self.__dirty = False
@@ -344,19 +350,20 @@ class CXXObjectsTarget(CXXTarget, internal=True):
         sources = list()
         if self.source_path != self.makefile.source_path:
             self.sources = [self.source_path / source for source in self.sources]
-        source_root = Path(os.path.commonprefix(self.sources))
-        for source in self.sources:
-            source = Path(source)
-            if source.is_absolute():
-                root = source_root
-                if root.is_file():
-                    root = root.parent
-            else:
-                root = self.source_path
-            sources.append(source)
-            self.objs.append(
-                CXXObject(Path(source), self, root=root))
-        self.sources = sources
+        if self.sources:
+            source_root = Path(os.path.commonpath(self.sources))
+            for source in self.sources:
+                source = Path(source)
+                if source.is_absolute():
+                    root = source_root
+                    if root.is_file():
+                        root = root.parent
+                else:
+                    root = self.source_path
+                sources.append(source)
+                self.objs.append(
+                    CXXObject(Path(source), self, root=root))
+            self.sources = sources
             
 
     @property
