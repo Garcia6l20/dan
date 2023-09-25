@@ -519,7 +519,7 @@ class Library(CXXObjectsTarget, internal=True):
         for public_include_dir in self.includes.public_raw:
             headers = public_include_dir.rglob('*.h*')
             for header in headers:
-                if header_expr.match(str(header)):
+                if header_expr.match(header.as_posix()):
                     subdirs = header.relative_to(public_include_dir).parent
                     tasks.append(installer.install_header(header, subdirs))
         return tasks
