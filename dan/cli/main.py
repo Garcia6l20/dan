@@ -368,6 +368,37 @@ def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
     else:
         create_toolchains(paths if len(paths) else None)
 
+@cli.command()
+@common_opts
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def env(ctx: CommandsContext, **kwds):
+    """Show environment."""
+    kwds['quiet'] = True
+    async with ctx(**kwds) as make:
+        for k, v in make.env.items():
+            click.echo(f'{k}={v}')
+
+
+@cli.command()
+@common_opts
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def shell(ctx: CommandsContext, **kwds):
+    """Open a new shell with suitable environment."""
+    from dan.core.runners import sync_run
+    from copy import copy
+    # kwds['quiet'] = True
+    async with ctx(**kwds) as make:
+        env = dict(os.environ)
+        for k, v in make.env.items():
+            env[k] = v
+
+        click.logger.info('entering dan shell...')
+        click.logger.debug('env: %s', env)
+        
+        sync_run('bash', cwd=make.root.build_path, env=env, pipe=False)
+
 
 @cli.group()
 def code():

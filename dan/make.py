@@ -190,6 +190,20 @@ class Make(logging.Logging):
     @property
     def root(self) -> MakeFile:
         return self.context.root
+    
+    @property
+    def env(self) -> dict[str, str]:
+        from dan.cxx.detect import get_dan_path
+        env = self.toolchain.env
+        epath = env.get('PATH', os.environ['PATH']).split(os.pathsep)
+        epath.insert(0, str(get_dan_path() / 'os-utils' / 'bin'))
+        for t in self.executable_targets:
+            parts = t.env.get('PATH', os.environ['PATH']).split(os.pathsep)
+            for p in parts:
+                if not p in epath:
+                    epath.append(p)
+        env['PATH'] = os.pathsep.join(epath)
+        return env
 
     async def configure(self, source_path: str, toolchain: str = None):
         self.config.source_path = str(source_path)
