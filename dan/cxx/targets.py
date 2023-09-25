@@ -12,7 +12,7 @@ from dan.core.target import Target, Installer, InstallMode
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
-from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd
+from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd, BuildType
 from dan.core.cache import cached_property as dan_cached
 
 class CXXObject(Target, internal=True):
@@ -39,6 +39,10 @@ class CXXObject(Target, internal=True):
         else:
             self.output = self.build_path / obj_fname
         self.__dirty = False
+
+    @property
+    def build_type(self):
+        return self.parent.build_type
 
     @property
     def cxx_flags(self):
@@ -77,7 +81,7 @@ class CXXObject(Target, internal=True):
         previous_args = self.compile_args
         if previous_args is not None:
             args = self.toolchain.make_compile_commands(
-                self.source_path / self.source, self.output, self.private_cxx_flags)[0]
+                self.source_path / self.source, self.output, self.private_cxx_flags, self.build_type)[0]
             args = [str(arg) for arg in args]
             if sorted(args) != sorted(previous_args):
                 self.__dirty = True
@@ -94,7 +98,7 @@ class CXXObject(Target, internal=True):
         self.info('generating %s...', self.output.name)
         try:
             self.output.parent.mkdir(parents=True, exist_ok=True)
-            commands, diags = await self.toolchain.compile(self.source_path / self.source, self.output, self.private_cxx_flags)
+            commands, diags = await self.toolchain.compile(self.source_path / self.source, self.output, self.private_cxx_flags, self.build_type)
             self.parent.diagnostics.insert(diags, str(self.source))
         except CompilationFailure as err:
             self.parent.diagnostics.insert(err.diags, str(self.source))
@@ -201,6 +205,8 @@ class CXXTarget(Target, internal=True):
     public_link_options: set[str] = set()
     private_link_options: set[str] = set()
 
+    build_type: BuildType = None
+
     __cpp_std: int|str = None
 
     def __make_src_path(self, path):
@@ -288,6 +294,10 @@ class CXXTarget(Target, internal=True):
         # # TODO move create private_libs()
         tmp.extend(self.link_libraries.private)
         return tmp
+    
+    @property
+    def build_type(self):
+        return self.toolchain.build_type
 
     @cached_property
     def cxx_flags(self):

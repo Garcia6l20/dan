@@ -200,7 +200,7 @@ class Toolchain(Logging):
     def debug_files(self, output: Path) -> set[Path]:
         return set()
 
-    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str], build_type=None) -> CommandArgsList:
         raise NotImplementedError()
     
     def from_unix_flags(self, flags: list[str]) -> list[str]:
@@ -211,8 +211,8 @@ class Toolchain(Logging):
         """Convert flags from target-compiler-style to unix-style"""
         return flags
 
-    async def compile(self, sourcefile: Path, output: Path, options: set[str], **kwds):
-        commands = self.make_compile_commands(sourcefile, output, options)
+    async def compile(self, sourcefile: Path, output: Path, options: set[str], build_type=None, **kwds):
+        commands = self.make_compile_commands(sourcefile, output, options, build_type)
         diags = []
         if diag.enabled:
             async def capture(stream):
@@ -278,12 +278,9 @@ class Toolchain(Logging):
         with tempfile.NamedTemporaryFile('w', suffix=extension) as f:
             f.write(source)
             f.flush()
-            try:
-                fname = Path(f.name)
-                sync_run(self.make_compile_commands(fname, fname.with_suffix('.o'), options)[0])
-                return True
-            except CommandError:
-                return False
+            fname = Path(f.name)
+            _, __, rc = sync_run(self.make_compile_commands(fname, fname.with_suffix('.o'), options)[0], no_raise=True)
+            return rc == 0
 
     def has_include(self, *includes, options: set[str] = set(), extension='.cpp'):
         source = '\n'.join([f'#include {inc}' for inc in includes])

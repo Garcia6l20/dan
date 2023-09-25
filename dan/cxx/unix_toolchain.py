@@ -28,18 +28,24 @@ class UnixToolchain(Toolchain):
         self.debug('cxx compiler is %s %s (%s)',
                    self.type, self.version, self.cxx)
 
-    @cached_property
-    def default_cflags(self):
+    def get_optimization_flags(self, build_type):
         flags = list()
-        match self.build_type:
+        if build_type is None:
+            build_type = self.build_type
+        match build_type:
             case BuildType.debug:
-                flags.extend(('-Og', '-g'))
+                flags.extend(('-g', ))
             case BuildType.release:
                 flags.extend(('-O3', '-DNDEBUG'))
             case BuildType.release_min_size:
                 flags.extend(('-Os', '-DNDEBUG'))
             case BuildType.release_debug_infos:
                 flags.extend(('-O2', '-g', '-DNDEBUG'))
+        return flags
+
+    @cached_property
+    def default_cflags(self):
+        flags = list()
         if self.env:
             if 'SYSROOT' in self.env:
                 flags.append(f'--sysroot={self.env["SYSROOT"]}')
@@ -116,12 +122,12 @@ class UnixToolchain(Toolchain):
     def make_executable_name(self, basename: str) -> str:
         return f'{basename}.exe' if self.system.is_windows else basename
 
-    def get_base_compile_args(self, sourcefile: Path) -> list[str]:
+    def get_base_compile_args(self, sourcefile: Path, build_type) -> list[str]:
         match sourcefile.suffix:
             case _ if sourcefile.suffix in cxx_extensions:
-                return [self.cxx, *self.default_cxxflags, *self.default_cflags]
+                return [self.cxx, *self.default_cxxflags, *self.get_optimization_flags(build_type), *self.default_cflags]
             case _ if sourcefile.suffix in c_extensions:
-                return [self.cc, *self.default_cflags]
+                return [self.cc, *self.get_optimization_flags(build_type), *self.default_cflags]
             case _:
                 raise RuntimeError(
                     f'Unhandled source file extention: {sourcefile.suffix}')
@@ -148,8 +154,8 @@ class UnixToolchain(Toolchain):
     def cxxmodules_flags(self) -> list[str]:
         return ['-std=c++20', '-fmodules-ts']
 
-    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str]) -> CommandArgsList:
-        args = self.get_base_compile_args(sourcefile)
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str], build_type=None) -> CommandArgsList:
+        args = self.get_base_compile_args(sourcefile, build_type)
         args.extend([*self.compile_options, *options, '-MD', '-MT', str(output),
                     '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)])
         if auto_fpic:
