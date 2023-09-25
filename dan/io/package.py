@@ -31,7 +31,7 @@ class PackageBuild(Target, internal=True):
     def sources_targets(self):
         targets = []
         for target in self.package_makefile.all_installed:
-            for dep in target.preload_dependencies:
+            for dep in target.preload_dependencies.all:
                 if isinstance(dep, SourcesProvider):
                     targets.append(dep)
         return targets
@@ -89,7 +89,7 @@ class PackageBuild(Target, internal=True):
             break
 
         for target in self.package_makefile.all_installed:
-            for source_target in target.preload_dependencies:
+            for source_target in target.preload_dependencies.all:
                 if isinstance(source_target, SourcesProvider):
                     source_target.output = src_path
                     if target.subdirectory is not None:
@@ -106,7 +106,8 @@ class PackageBuild(Target, internal=True):
             self.info('package %s %s is locked, waiting for it to be released...', self.name, self.version)
             # wait for it
             async with self.lock:
-                return
+                if self.up_to_date:
+                    return
 
         async with self.lock:
 
@@ -129,10 +130,11 @@ class PackageBuild(Target, internal=True):
                 self.info(f'installing {target.name}')
                 await target.install(self.install_settings, InstallMode.dev)
 
-            for target in makefile.all_installed:
-                if target in installed:
-                    continue
-                await install_target(target)
+            async with asyncio.TaskGroup(f'installing {self.name} targets') as g:
+                for target in makefile.all_installed:
+                    if target in installed:
+                        continue
+                    g.create_task(install_target(target))
 
             makefile.cache.ignore()
             del makefile

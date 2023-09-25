@@ -255,7 +255,7 @@ class Package(CXXTarget, internal=True):
 
     @property
     def package_dependencies(self):
-        return [pkg for pkg in self.dependencies if isinstance(pkg, Package)]
+        return [pkg for pkg in self.dependencies.all if isinstance(pkg, Package)]
 
     def __init_libs(self):
         self.__libs = LibraryList()
@@ -342,7 +342,7 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
             raise RuntimeError(f'incompatible package {name} ({cached_pkg.version} {spec})')
         return cached_pkg
 
-    search_paths = search_paths or makefile.pkgs_path
+    search_paths = search_paths or [makefile.pkgs_path]
     for config in find_pkg_configs(name, search_paths):
         if spec is not None:
             data = Data(config)
@@ -359,19 +359,30 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
     return pkg
 
+__bindirs = None
 def get_cached_bindirs():
-    bindirs = set()
-    for pkg in get_packages_cache().values():
-        bindir = getattr(pkg, 'bindir', None)
-        if bindir is not None:
-            bindirs.add(Path(bindir))
-            continue
-        exec_prefix = getattr(pkg, 'exec_prefix', None)
-        if exec_prefix is not None:
-            bindir = Path(exec_prefix) / 'bin'
-            if bindir.exists():
-                bindirs.add(bindir)
-    return bindirs
+    global __bindirs
+    if __bindirs is None:
+        __bindirs = set()
+        for pkg in get_packages_cache().values():
+            bindir = getattr(pkg, 'bindir', None)
+            if bindir is not None:
+                __bindirs.add(Path(bindir))
+            else:
+                exec_prefix = getattr(pkg, 'exec_prefix', None)
+                if exec_prefix is not None:
+                    bindir = Path(exec_prefix) / 'bin'
+                    if bindir.exists():
+                        __bindirs.add(bindir)
+            if pkg.toolchain.system.is_windows:
+                # on windows dlls needs to be in PATH
+                libdir = getattr(pkg, 'libdir', None)
+                if libdir is not None:
+                    libdir = Path(libdir)
+                    if find_file(r'.+.dll', [libdir]):
+                        __bindirs.add(libdir)
+
+    return __bindirs
 
 def _get_jinja_env():
     global _jinja_env
@@ -386,7 +397,7 @@ async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
     lib.info(f'creating pkgconfig: {dest}')
 
     requires = list()
-    for dep in lib.dependencies:
+    for dep in lib.dependencies.public:
         match dep:
             case RequiredPackage():
                 if dep.version_spec:

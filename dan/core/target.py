@@ -16,65 +16,82 @@ from dan.logging import Logging
 
 class Dependencies:
 
-    def __init__(self, parent: 'Target', deps: Iterable = list()):
+    def __init__(self, parent: 'Target', public: Iterable = None, private: Iterable = None):
         super().__init__()
         self.parent = parent
-        self._content = list()
-        for dep in deps:
-            self.add(dep)
+        self._public = list()
+        self._private = list()
+        if public is not None:
+            self.update(public, public=True)
+        if private is not None:
+            self.update(private, public=False)
 
     @property
     def makefile(self):
         return self.parent.makefile
 
-    def add(self, dependency):
-        if dependency in self._content:
+    def add(self, dependency, public=True):
+        content = self._public if public else self._private
+        if dependency in content:
             return
         from dan.pkgconfig.package import RequiredPackage
         match dependency:
             case Target() | FileDependency():
-                self._content.append(dependency)
+                content.append(dependency)
             case type():
                 assert issubclass(dependency, Target)
-                self._content.append(self.makefile.find(dependency))
+                content.append(self.makefile.find(dependency))
             case str():
                 from dan.pkgconfig.package import Package
                 for pkg in Package.all.values():
                     if pkg.name == dependency:
-                        self._content.append(pkg)
+                        content.append(pkg)
                         break
                 else:
                     if isinstance(self.parent.source_path, Path) and Path(self.parent.source_path / dependency).exists():
-                        self._content.append(FileDependency(
+                        content.append(FileDependency(
                             self.parent.source_path / dependency))
                     else:
                         from dan.pkgconfig.package import parse_requirement
-                        self._content.append(parse_requirement(dependency))
+                        content.append(parse_requirement(dependency))
             case Path():
                 dependency = FileDependency(
                     self.parent.source_path / dependency)
-                self._content.append(dependency)
+                content.append(dependency)
             case RequiredPackage():
-                self._content.append(dependency)
+                content.append(dependency)
             case _:
                 raise RuntimeError(
                     f'Unhandled dependency {dependency} ({type(dependency)})')
 
-    def update(self, dependencies):
+    def update(self, dependencies, public=True):
         for dep in dependencies:
-            self.add(dep)
+            self.add(dep, public=public)
 
     def __getattr__(self, attr):
-        for item in self._content:
+        for item in self._public:
             if item.name == attr:
                 return item
+        for item in self._private:
+            if item.name == attr:
+                return item
+    
+    @property
+    def public(self):
+        return self._public.__iter__()
 
-    def __iter__(self):
-        return self._content.__iter__()
+    @property
+    def private(self):
+        return self._private.__iter__()
+
+    @property
+    def all(self):
+        yield from self.private
+        yield from self.public
 
     @property
     def up_to_date(self):
-        for item in self:
+        for item in self.all:
             if not item.up_to_date:
                 return False
         return True
@@ -82,7 +99,7 @@ class Dependencies:
     @property
     def modification_time(self):
         t = 0.0
-        for item in self:
+        for item in self.all:
             mt = item.modification_time
             if mt and mt > t:
                 t = mt
@@ -280,15 +297,18 @@ class Installer:
 class Target(Logging, MakefileRegister, internal=True):
     name: str = None
     fullname: str = None
-    description: str = None,
+    description: str = None
     default: bool = True
     installed: bool = False
     output: Path = None
     options: dict[str, Any]|Options = dict()
     provides: Iterable[str] = None
 
-    dependencies: set[TargetDependencyLike] = set()
-    preload_dependencies: set[TargetDependencyLike] = set()
+    dependencies: Dependencies = set()
+    public_dependencies: set[TargetDependencyLike] = set()
+    private_dependencies: set[TargetDependencyLike] = set()
+
+    preload_dependencies: Dependencies = set()
 
     inherits_version = True
     subdirectory: str = None
@@ -347,9 +367,10 @@ class Target(Logging, MakefileRegister, internal=True):
             self.description = self.makefile.description
 
         self.other_generated_files: set[Path] = set()
-        self.dependencies = Dependencies(self, self.dependencies)
+
+        self.dependencies = Dependencies(self, [*self.dependencies, *self.public_dependencies], self.private_dependencies)
         self.preload_dependencies = Dependencies(
-            self, self.preload_dependencies)
+            self, None, self.preload_dependencies)
 
         super().__init__(self.fullname)
 
@@ -360,7 +381,7 @@ class Target(Logging, MakefileRegister, internal=True):
             # delayed resolution
             def _get_source_path(TargetClass, self):
                 return self.get_dependency(TargetClass).output
-            self.preload_dependencies.add(self.source_path)
+            self.preload_dependencies.add(self.source_path, public=False)
             type(self).source_path = property(functools.partial(_get_source_path, self.source_path))
 
         if type(self).output != Target.output:
@@ -435,7 +456,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @property
     def requires(self):
         from dan.pkgconfig.package import RequiredPackage
-        return [dep for dep in self.dependencies if isinstance(dep, RequiredPackage)]
+        return [dep for dep in self.dependencies.all if isinstance(dep, RequiredPackage)]
 
     @cached_property
     def fullname(self) -> str:
@@ -455,7 +476,7 @@ class Target(Logging, MakefileRegister, internal=True):
     def _recursive_dependencies(self, types = None, seen = None):
         if seen is None:
             seen = set()
-        for dep in self.dependencies:
+        for dep in self.dependencies.all:
             if dep in seen:
                 continue
             seen.add(dep)
@@ -483,7 +504,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
         async with asyncio.TaskGroup(f'building {self.name}\'s preload dependencies') as group:
             group.create_task(self.__load_unresolved_dependencies())
-            for dep in self.preload_dependencies:
+            for dep in self.preload_dependencies.all:
                 group.create_task(dep.build())
 
         async with asyncio.TaskGroup(f'preloading {self.name}\'s target dependencies') as group:
@@ -516,6 +537,7 @@ class Target(Logging, MakefileRegister, internal=True):
         res = self.__initialize__()
         if inspect.iscoroutine(res):
             res = await res
+            
         self.trace('initialized')
         return res
 
@@ -573,11 +595,11 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def target_dependencies(self):
-        return [t for t in {*self.dependencies, *self.preload_dependencies} if isinstance(t, Target)]
+        return [t for t in {*self.dependencies.all, *self.preload_dependencies.all} if isinstance(t, Target)]
 
     @property
     def file_dependencies(self):
-        return [t for t in self.dependencies if isinstance(t, FileDependency)]
+        return [t for t in self.dependencies.all if isinstance(t, FileDependency)]
 
     @asyncio.cached
     async def clean(self):
@@ -614,10 +636,10 @@ class Target(Logging, MakefileRegister, internal=True):
             def check(d): return d.name == dep
         else:
             def check(d): return isinstance(d, dep)
-        for dependency in self.dependencies:
+        for dependency in self.dependencies.all:
             if check(dependency):
                 return dependency
-        for dependency in self.preload_dependencies:
+        for dependency in self.preload_dependencies.all:
             if check(dependency):
                 return dependency
         if recursive:

@@ -254,16 +254,16 @@ class CXXTarget(Target, internal=True):
 
     @property
     def cxx_dependencies(self) -> list['CXXTarget']:
-        return [dep for dep in self.dependencies if isinstance(dep, CXXTarget)]
+        return [dep for dep in self.dependencies.all if isinstance(dep, CXXTarget)]
 
     @property
     def library_dependencies(self) -> list['Library']:
-        return [dep for dep in self.dependencies if isinstance(dep, Library)]
+        return [dep for dep in self.dependencies.all if isinstance(dep, Library)]
 
     @cached_property
     def shared_dependencies_path(self):
         paths = []
-        for lib in [d for d in self.dependencies if isinstance(d, Library) and d.shared]:
+        for lib in [d for d in self.dependencies.all if isinstance(d, Library) and d.shared]:
             paths.append(lib.build_path.as_posix())
         for target in self.cxx_dependencies:
             paths.extend(target.shared_dependencies_path)
