@@ -479,7 +479,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @asyncio.cached
     async def preload(self):
-        self.debug('preloading...')
+        self.trace('preloading...')
 
         async with asyncio.TaskGroup(f'building {self.name}\'s preload dependencies') as group:
             group.create_task(self.__load_unresolved_dependencies())
@@ -493,6 +493,7 @@ class Target(Logging, MakefileRegister, internal=True):
         res = self.__preload__()
         if inspect.iscoroutine(res):
             res = await res
+        self.trace('preloaded')
         return res
 
     @asyncio.cached
@@ -503,7 +504,7 @@ class Target(Logging, MakefileRegister, internal=True):
     @asyncio.cached
     async def initialize(self):
         await self.preload()
-        self.debug('initializing...')
+        self.trace('initializing...')
 
         if isinstance(self.version, Option):
             self.version = self.version.value
@@ -515,6 +516,7 @@ class Target(Logging, MakefileRegister, internal=True):
         res = self.__initialize__()
         if inspect.iscoroutine(res):
             res = await res
+        self.trace('initialized')
         return res
 
     @property
@@ -551,7 +553,7 @@ class Target(Logging, MakefileRegister, internal=True):
             await result
 
         if self.up_to_date:
-            self.debug('up to date !')
+            self.trace('up to date !')
             return
         elif self.output is not None and self.output.exists():
             self.debug('outdated !')
@@ -566,6 +568,7 @@ class Target(Logging, MakefileRegister, internal=True):
             if self.output is None:
                 (self.build_path / f'{self.name}.stamp').touch()
             self.cache['options_sha1'] = self.options.sha1
+            self.trace('built')
             return result
 
     @property

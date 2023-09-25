@@ -89,12 +89,19 @@ def setup_logger(logger: Logger):
                 handler, StreamHandler) else _no_color_formatter)
 
 
+TRACE = DEBUG - 5
+addLevelName(TRACE, "TRACE")
+
 class ColoredLogger(Logger):
 
     def __init__(self, name):
         super().__init__(name)
         self.propagate = False
         setup_logger(self)
+
+    def trace(self, message, *args, **kwargs):
+        if self.isEnabledFor(TRACE):
+            self._log(TRACE, message, args, **kwargs)
 
 
 setLoggerClass(ColoredLogger)
@@ -107,6 +114,7 @@ class Logging:
         if name.startswith('root.'):
             name = name.removeprefix('root.')
         self._logger = getLogger(name)
+        self.trace = self._logger.trace
         self.debug = self._logger.debug
         self.info = self._logger.info
         self.warning = self._logger.warning
@@ -124,6 +132,8 @@ def _get_makefile_logger():
             context.current, '_logger')
     return makefile_logger
 
+def trace(*args, **kwds):
+    return _get_makefile_logger().trace(*args, **kwds)
 
 def debug(*args, **kwds):
     return _get_makefile_logger().debug(*args, **kwds)

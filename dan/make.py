@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 import functools
 import itertools
-import logging
 import os
 import fnmatch
 import re
@@ -12,6 +11,8 @@ from dataclasses_json import dataclass_json
 import sys
 import tqdm
 from collections.abc import Iterable
+
+from dan import logging
 
 import dan.core.typing as t
 from dan.core import diagnostics as diag
@@ -25,7 +26,6 @@ from dan.core.settings import InstallMode, InstallSettings, Settings
 from dan.core.test import Test
 from dan.core.utils import unique
 from dan.cxx import init_toolchains
-from dan.logging import Logging
 from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
@@ -124,22 +124,28 @@ def gen_python_diags(err: Exception):
 
     return diagnostics
 
-class Make(Logging):
+class Make(logging.Logging):
     _config_name = 'dan.config.json'
     _cache_name = 'dan.cache'
 
-    def __init__(self, build_path: str, targets: list[str] = None, verbose: bool = False, quiet: bool = False, for_install: bool = False, jobs: int = None, no_progress=False, diags=False):
+    def __init__(self, build_path: str, targets: list[str] = None, verbose: int = 0, for_install: bool = False, jobs: int = None, no_progress=False, diags=False):
 
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
 
-        if quiet:
-            assert not verbose, "'quiet' cannot be combined with 'verbose'"
-            log_level = logging.ERROR
-        elif verbose:
-            log_level = logging.DEBUG
-        else:
-            log_level = logging.INFO
+        match verbose:
+            case 1:
+                log_level = logging.DEBUG
+            case 2:
+                log_level = logging.TRACE
+            case -1:
+                log_level = logging.ERROR
+            case 0:
+                log_level = logging.INFO
+            case _:
+                logging.getLogger().warning('unknown verbosity level: %s, using INFO', verbose)
+                log_level = logging.INFO
+
         logging.getLogger().setLevel(log_level)
 
         super().__init__('make')

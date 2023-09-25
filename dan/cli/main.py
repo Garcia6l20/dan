@@ -27,7 +27,7 @@ _common_opts = [
     *_minimal_options,
     click.option('--quiet', '-q', is_flag=True,
                  help='Dont print informations (errors only).', envvar='DAN_QUIET'),
-    click.option('--verbose', '-v', is_flag=True,
+    click.option('--verbose', '-v', count=True,
                  help='Pring debug informations.', envvar='DAN_VERBOSE'),
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
@@ -67,6 +67,9 @@ class CommandsContext:
     async def __call__(self, *args, **kwargs):
         no_init = kwargs.pop('no_init', False)
         self.update(*args, **kwargs)
+        quiet = self._make_kwds.pop('quiet', None)
+        if quiet:
+            self._make_kwds['verbose'] = -1
         if self._make is None:
             self._make = Make(*self._make_args, **self._make_kwds)
             if not no_init:
@@ -191,7 +194,12 @@ async def package(ctx: CommandsContext, pkg_type, mode: str, **kwargs):
 @click.argument('NAME')
 def uninstall(verbose: bool, yes: bool, root: str, name: str):
     """Uninstall previous installation"""
-    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+    if verbose == 0:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif verbose == 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.TRACE)
     if root:
         paths = [root]
     else:
@@ -337,11 +345,23 @@ async def test(ctx, **kwargs):
               help='Use a source script to resolve compilation environment')
 @click.option('-p', '--path', 'paths',
               help='Use given path for compilers lookup', multiple=True, type=click.Path(exists=True, file_okay=False))
-@click.option('--verbose', '-v', is_flag=True,
+@click.option('--verbose', '-v', count=True,
               help='Pring debug informations.', envvar='DAN_VERBOSE')
 def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
     """Scan system toolchains"""
-    logging.getLogger().setLevel(logging.DEBUG if verbose else logging.INFO)
+    match verbose:
+        case 1:
+            log_level = logging.DEBUG
+        case 2:
+            log_level = logging.TRACE
+        case -1:
+            log_level = logging.ERROR
+        case 0:
+            log_level = logging.INFO
+        case _:
+            logging.getLogger().warning('unknown verbosity level: %s, using INFO', verbose)
+            log_level = logging.INFO
+    logging.getLogger().setLevel(log_level)
     from dan.cxx.detect import create_toolchains, load_env_toolchain
     if script:
         load_env_toolchain(script)
