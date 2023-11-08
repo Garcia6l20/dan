@@ -423,6 +423,7 @@ async def get_targets(ctx: CommandsContext, **kwargs):
                 'name': target.name,
                 'fullname': target.fullname,
                 'buildPath': str(target.build_path),
+                'srcPath': str(target.source_path),
                 'output': str(target.output),
                 'executable': isinstance(target, Executable),
                 'type': type(target).__name__,
