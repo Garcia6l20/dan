@@ -31,6 +31,7 @@ async def get_ninja():
                 name = 'ninja-mac'
         import tempfile
         import zipfile
+        import stat
         from dan.utils.net import fetch_file
         with tempfile.TemporaryDirectory(prefix=f'dan-ninja-') as tmp_dest:
             tmp_dest = Path(tmp_dest)
@@ -38,6 +39,7 @@ async def get_ninja():
             await fetch_file(f'https://github.com/ninja-build/ninja/releases/download/v{ninja_version}/{archive_name}', tmp_dest / archive_name)
             with zipfile.ZipFile(tmp_dest / archive_name) as f:
                 f.extractall(bin_path)
+            ninja_path.chmod(ninja_path.stat().st_mode | stat.S_IEXEC)
     return ninja_path
 
 
