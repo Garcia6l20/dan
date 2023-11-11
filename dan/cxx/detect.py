@@ -1,4 +1,3 @@
-import logging
 import os
 from dan.core.pathlib import Path
 import subprocess
@@ -6,10 +5,11 @@ import sys
 import tempfile
 import functools
 
-import yaml
+import json
+import pickle
 from dan.core.find import find_executable
 
-from dan.core.osinfo import info as osinfo
+from dan import logging
 from dan.core.runners import sync_run
 from dan.core.version import Version
 from dan.core.win import vswhere
@@ -24,7 +24,10 @@ class CompilerId:
 
     def __str__(self) -> str:
         return f'{self.name}-{self.version}'
-
+    
+    @property
+    def is_unix(self):
+        return self.system not in ('windows', )
 
 GCC = "gcc"
 LLVM_GCC = "llvm-gcc"  # GCC frontend with LLVM backend
@@ -92,7 +95,14 @@ def dict_contains(defines, *defs):
 
 def get_target_system(defines: dict[str, str]) -> str:
     system = None
-    if dict_contains(defines, '_WIN32', '_WIN64'):
+    if dict_contains(defines, '__MSYS__', '__MINGW32__'):
+        if dict_contains(defines, '__MINGW64__'):
+            system = 'msys-mingw64'
+        elif dict_contains(defines, '__MINGW32__'):
+            system = 'msys-mingw32'
+        else:
+            system = 'msys'
+    elif dict_contains(defines, '_WIN32', '_WIN64'):
         system = 'windows'
     elif dict_contains(defines, '__ANDROID__'):
         system = 'android'
@@ -225,7 +235,7 @@ detectors = {
     'gcc': ['-dM', '-E', '-x', 'c'],
     'clang': ['-dM', '-E', '-x', 'c'],
     'clang-cl': ['--driver-mode=g++', '-dM', '-E', '-x', 'c'],
-    'sun-cc': ['-c', '-xdumpmacros'], 
+    'sun-cc': ['-c', '-xdumpmacros'],
     # cl (Visual Studio, MSVC)
     # "/nologo" Suppress Startup Banner
     # "/E" Preprocess to stdout
@@ -260,19 +270,22 @@ def parse_compiler_defines(output: str):
             break
     return defines
 
-def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None):
+def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None) -> dict[str, str]:
+    if env is None:
+        env = dict()
+    env['LC_LOCAL'] = 'C'
     with tempfile.TemporaryDirectory(prefix='dan-dci-') as tmpdir:
         output, _, rc = sync_run(
                 [executable, *detectors[compiler_type], *options, str(__empty_source)], env=env, cwd=tmpdir)
         return parse_compiler_defines(output)
 
 
-def detect_compiler_id(executable, env=None):
+def detect_compiler_id(executable, env=None, logger=None):
     # use a temporary file, as /dev/null might not be available on all platforms
     with tempfile.TemporaryDirectory(prefix='dan-dci-') as tmpdir:
         for name, detector in detectors.items():
             output, _, rc = sync_run(
-                [executable, *detector, str(__empty_source)], no_raise=True, env=env, cwd=tmpdir)
+                [executable, *detector, str(__empty_source)], no_raise=True, env=env, cwd=tmpdir, logger=logger)
             if 0 == rc:
                 defines = parse_compiler_defines(output)
                 compiler = _parse_compiler_version(defines)
@@ -283,9 +296,16 @@ def detect_compiler_id(executable, env=None):
 
 
 class Compiler:
-    def __init__(self, path: Path, env: dict[str, str] = None, tools: dict[str, Path] = dict()) -> None:
+    def __init__(self, path: Path, env: dict[str, str] = None, tools: dict[str, Path] = dict(), logger=None) -> None:
         self.path = path
-        self.compiler_id = detect_compiler_id(path, env=env)
+        if env is None:
+            env = dict()
+        env['LC_LOCAL'] = 'C'
+        epath = env.get('PATH', os.environ['PATH']).split(os.pathsep)
+        if not str(path.parent) in epath:
+            epath.insert(0, str(path.parent))
+        env['PATH'] = os.pathsep.join(epath)
+        self.compiler_id = detect_compiler_id(path, env=env, logger=logger)
         if self.compiler_id is None:
             raise RuntimeError(f'Cannot detect compiler ID of {self.path}')
         self.name = self.compiler_id.name
@@ -376,10 +396,14 @@ def get_environment_from_batch_command(env_cmd, initial=None):
     return result
 
 
-def get_compilers(logger: logging.Logger):
+def get_compilers(logger: logging.Logger, paths = None):
+    if paths is None:
+        default_paths = True
+    else:
+        default_paths = False
     from dan.core.find import find_executables, find_executable, find_file
     compilers: set[Compiler] = set()
-    if os.name == 'nt':
+    if paths is None and os.name == 'nt':
         infos = vswhere()
         for info in infos:
             logger.info(f'Loading Visual Studio: {info["displayName"]}')
@@ -387,8 +411,13 @@ def get_compilers(logger: logging.Logger):
             vcvars = find_file(r'vcvarsall.bat$', paths=paths)
             archs = [('x86_64', 'x64'), ('x86', 'x86')]
             for arch, vc_arch in archs:
+                logger.debug('Loading Visual Studio environment: %s (%s)', vcvars, vc_arch)
                 env = get_environment_from_batch_command([vcvars, vc_arch])
-                paths = env['PATH'].split(';')
+                logger.debug('Visual Studio environment: %s', env)
+                paths = env.get('PATH', env.get('Path', None))
+                if paths is None:
+                    raise RuntimeError('Cannot get PATH in Visual Studio environment')
+                paths = paths.split(os.pathsep)
                 cl = find_executable('cl', paths=paths, default_paths=False)
                 link = find_executable(
                     'link', paths=[cl.parent], default_paths=False)
@@ -396,37 +425,44 @@ def get_compilers(logger: logging.Logger):
                     'lib', paths=[cl.parent], default_paths=False)
                 if env:
                     cc = Compiler(cl, env=env,
-                                  tools={'link': link, 'lib': lib})
+                                  tools={'link': link, 'lib': lib}, logger=logger)
                     assert cc.arch == vc_arch
                     compilers.add(cc)
                 else:
                     logger.warning(
                         f'Cannot load msvc with {arch} architecture')
     else:
-        for gcc in find_executables(r'gcc(-\d+)?'):
+        logger.debug('looking for gcc%s', logging.lazy_fmt(lambda: '' if paths is None else ' in' + ', '.join(paths)))
+        for gcc in find_executables(r'gcc(-\d+)?(\.exe)?', paths, default_paths):
             gcc = gcc.resolve()
-            compilers.add(Compiler(gcc))
-        for clang in find_executables(r'clang(-\d+)?'):
+            compilers.add(Compiler(gcc, logger=logger))
+        logger.debug('looking for clang%s', logging.lazy_fmt(lambda: '' if paths is None else ' in' + ', '.join(paths)))
+        for clang in find_executables(r'clang(-\d+)?(\.exe)?', paths, default_paths):
             clang = clang.resolve()
-            compilers.add(Compiler(clang))
+            compilers.add(Compiler(clang, logger=logger))
     return compilers
 
+unix_tools = [
+    'nm', 'ranlib', 'strip', 'readelf', 'ar', 'ranlib', ('dbg', 'gdb')
+]
 
 if os.name != 'nt':
-    _required_tools = [
-        'nm', 'ranlib', 'strip', 'readelf', 'ar', 'ranlib'
-    ]
+    _required_tools = unix_tools
 else:
     _required_tools = list()
 
 
 def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
-    logger.info(f'scanning {compiler.compiler_id} toolchain')
+    logger.info('scanning %s toolchain (%s-%s)', compiler.compiler_id, compiler.system, compiler.arch)
     data = {
         'type': compiler.name,
         'version': str(compiler.version),
         'cc': str(compiler.path),
     }
+    if len(compiler.path.suffixes):
+        extension = compiler.path.suffixes[-1]
+    else:
+        extension = ''
     pos = compiler.path.stem.rfind(compiler.name)
     if pos >= 0:
         prefix = None if pos == 0 else compiler.path.stem[:pos]
@@ -445,13 +481,15 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         data['env'] = compiler.env
 
     def get_compiler_tool(tool, toolname=None):
+        if isinstance(tool, tuple):
+            tool, toolname = tool
         if not toolname:
             toolname = f'{base_name}-{tool}'
         if prefix:
             toolname = f'{prefix}{toolname}'
         if suffix:
             toolname = f'{toolname}{suffix}'
-        tool_path = base_path / toolname
+        tool_path = (base_path / toolname).with_suffix(extension)
         if tool_path.exists():
             logger.debug(f'found {tool} tool: {tool_path}')
             data[tool] = str(tool_path)
@@ -460,14 +498,17 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     if compiler.name == 'gcc':
         get_compiler_tool('cxx', 'g++')
         get_compiler_tool('as')
+        get_compiler_tool('dbg', 'gdb')
     elif compiler.name == 'clang':
         get_compiler_tool('cxx', 'clang++')
+        get_compiler_tool('dbg', 'lldb')
     elif compiler.name == 'msvc':
         data['link'] = str(compiler.tools['link'])
         data['lib'] = str(compiler.tools['lib'])
 
-    for tool in _required_tools:
-        get_compiler_tool(tool)
+    if compiler.compiler_id.is_unix:
+        for tool in unix_tools:
+            get_compiler_tool(tool)
 
     name = str(compiler.compiler_id)
     if prefix:
@@ -488,7 +529,7 @@ def get_dan_path():
 
 
 def get_toolchain_path():
-    return get_dan_path() / 'toolchains.yaml'
+    return get_dan_path() / 'toolchains.dat'
 
 
 def load_env_toolchain(script: Path = None, name: str = None):
@@ -520,29 +561,30 @@ def load_env_toolchain(script: Path = None, name: str = None):
 def save_toolchain(name, toolchain):
     toolchains_path = get_toolchain_path()
     logger = logging.getLogger('toolchain')
-    logger.setLevel(logging.INFO)
     if toolchains_path.exists():
-        with open(toolchains_path, 'r+') as f:
+        with open(toolchains_path, 'rb+') as f:
             logger.info(f'updating toolchains file {toolchains_path}')
-            data = yaml.load(f.read(), Loader=yaml.FullLoader)
+            data = pickle.load(f)
             toolchains = data['toolchains']
             toolchains[name] = toolchain
             f.seek(0)
             f.truncate()
-            f.write(yaml.dump(data))
+            pickle.dump(data, f)
 
 
-def create_toolchains():
-    import yaml
+def create_toolchains(paths = None):
+    if paths is None:
+        default_paths = True
+    else:
+        default_paths = False
     from dan.core.find import find_executable
     toolchains_path = get_toolchain_path()
     logger = logging.getLogger('toolchain')
-    logger.setLevel(logging.INFO)
     data = None
     if toolchains_path.exists():
-        with open(toolchains_path, 'r') as f:
+        with open(toolchains_path, 'rb') as f:
             logger.info(f'updating toolchains file {toolchains_path}')
-            data = yaml.load(f.read(), Loader=yaml.FullLoader)
+            data = pickle.load(f)
             if data:
                 toolchains = data['toolchains']
                 tools = data['tools']
@@ -551,9 +593,15 @@ def create_toolchains():
         toolchains = dict()
         tools = dict()
 
-    compilers = get_compilers(logger)
+    compilers = get_compilers(logger, paths)
+    if len(compilers) == 0:
+        logger.warning('no toolchain found')
+        return data
     for cc in compilers:
         k, v = create_toolchain(cc, logger)
+        arch_k = f'{k}-{v["arch"]}'
+        if arch_k in toolchains.keys():
+            k = arch_k
         if not k in toolchains.keys():
             logger.info(f'new toolchain \'{k}\' found')
         elif toolchains[k] != v:
@@ -562,8 +610,9 @@ def create_toolchains():
                 old_arch = toolchains[k]['arch']
                 logger.info(f'renaming \'{k}\' -> \'{k}-{old_arch}\'')
                 toolchains[f'{k}-{old_arch}'] = toolchains.pop(k)
-                logger.info(f'new toolchain \'{k}-{v["arch"]}\' found')
-                toolchains[f'{k}-{v["arch"]}'] = v
+                logger.info(f'new toolchain \'{arch_k}\' found')
+                toolchains[f'{arch_k}'] = v
+                continue
             else:
                 logger.info(f'updating toolchain \'{k}\'')
         else:
@@ -571,22 +620,57 @@ def create_toolchains():
             continue
         toolchains[k] = v
     for tool in _required_tools:
-        tools[tool] = str(find_executable(tool))
+        if isinstance(tool, tuple):
+            tool, toolname = tool
+        else:
+            toolname = tool
+        tools[tool] = str(find_executable(toolname, paths, default_paths))
     data['tools'] = tools
     data['toolchains'] = toolchains
     if not 'default' in data:
-        data['default'] = list(toolchains.keys())[0]
-    with open(toolchains_path, 'w') as f:
-        f.write(yaml.dump(data))
+        from dan.core.osinfo import OSInfo
+        osi = OSInfo()
+        default_toolchain = None
+        for name, toolchain in toolchains.items():
+            if toolchain['system'] == osi.name and toolchain['arch'] == osi.arch:
+                default_toolchain = name
+                break
+        if default_toolchain is None:
+            default_toolchain = list(toolchains.keys())[0]
+        logger.debug('selected default toolchain: %s', default_toolchain)
+        data['default'] = default_toolchain
+
+    json_toolchain_path = toolchains_path.with_suffix('.json')
+    with open(json_toolchain_path, 'w') as jf, open(toolchains_path, 'wb') as pf:
+        pickle.dump(data, pf)
+        json.dump(data, jf, indent=4)
     return data
 
 
-def get_toolchains():
-    import yaml
+def get_toolchains(create = True):
     toolchains_path = get_toolchain_path()
     if not toolchains_path.exists():
+        if not create:
+            return {'toolchains': dict()}
         return create_toolchains()
+    
+    json_toolchain_path = toolchains_path.with_suffix('.json')
 
-    with open(toolchains_path) as f:
-        data = yaml.load(f, yaml.FullLoader)
-        return data if data else create_toolchains()
+    with open(toolchains_path, 'rb') as f:
+        data = pickle.load(f)
+    
+    # pickle/json synchronization
+    if not json_toolchain_path.exists() or json_toolchain_path.older_than(toolchains_path):
+        logger = logging.getLogger('toolchain')
+        logger.info(f'Updating {json_toolchain_path.name}')
+        with open(json_toolchain_path, 'w') as f:
+            json.dump(data, f, indent=4)
+            toolchains_path.touch()
+    elif json_toolchain_path.exists() and json_toolchain_path.younger_than(toolchains_path):
+        logger = logging.getLogger('toolchain')
+        logger.info(f'Updating {toolchains_path.name} ({json_toolchain_path.name} changed)')
+        with open(json_toolchain_path, 'r') as jf, open(toolchains_path, 'wb') as pf:
+            data = json.load(jf)
+            pickle.dump(data, pf)
+
+    return data

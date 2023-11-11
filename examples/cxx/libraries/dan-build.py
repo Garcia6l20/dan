@@ -1,7 +1,7 @@
 from dan import self, generator
 from dan.cxx import Library, Executable, LibraryType, target_toolchain
 
-target_toolchain.cpp_std = 17
+cpp_std = 17
 
 sources = ['lib.cpp']
 includes = [self.source_path, self.build_path]

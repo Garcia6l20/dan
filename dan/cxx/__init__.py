@@ -3,20 +3,29 @@ from dan.core.cache import Cache
 
 from dan.core.errors import InvalidConfiguration
 from dan.core.settings import Settings
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.toolchain import Toolchain, BuildType, CppStd
 from dan.cxx.detect import get_toolchains
 
 target_toolchain: Toolchain = None
+"""The target toolchain.
+"""
+
 host_toolchain: Toolchain = None
+"""The host toolchain.
+"""
 
 class __LazyContext(sys.__class__):
+    """Base class for the cxx module.
+
+    It overloads some context dependent properties exposed by this module, eg.: target and host toolchains.
+    """
     @property
-    def target_toolchain(__):
+    def target_toolchain(__) -> Toolchain:
         from dan.core.include import context
         return context.get('cxx_target_toolchain')
 
     @property
-    def host_toolchain(__):
+    def host_toolchain(__) -> Toolchain:
         from dan.core.include import context
         return context.get('cxx_host_toolchain')
     
@@ -49,7 +58,7 @@ def init_toolchains(name: str = None, settings: Settings = None):
         case _:
             raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
     target_settings = settings.target
-    cache = Cache.get('dan.cache').data
+    cache = Cache.get('dan').data
     if not 'toolchains' in cache:
         cache['toolchains'] = {
             'host': dict(),
@@ -60,32 +69,14 @@ def init_toolchains(name: str = None, settings: Settings = None):
     if target_toolchain.is_host:
         host_toolchain = target_toolchain
     else:
-        import logging
-        logging.warning(f'Cross compilation is currently not tested !')
+        from dan import logging
+        logging.getLogger('cxx').warning('Cross compilation is currently not tested !')
         host_toolchain = None
 
     from dan.core.include import context
     context.set('cxx_target_toolchain', target_toolchain)
     context.set('cxx_host_toolchain', host_toolchain)
 
-def __pick_arg(*names, env=None, default=None):
-    import sys
-    import os
-    if env:
-        value = os.getenv(env, None)
-        if value:
-            return value
-    for name in names:
-        try:
-            return sys.argv[sys.argv.index(name) + 1]
-        except ValueError:
-            continue
-    return default
-
-#def __init_toolchains():
-#    init_toolchains(__pick_arg('-t', '--toolchain', env='DAN_TOOLCHAIN'))
-
-#__init_toolchains()
 
 from .targets import Executable, Library, LibraryType, Module
 from .targets import CXXObjectsTarget as Objects

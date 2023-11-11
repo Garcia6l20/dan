@@ -1,4 +1,5 @@
 from functools import cached_property
+import functools
 from pathlib import Path
 import sys
 
@@ -14,14 +15,17 @@ class MakeFile(sys.__class__):
                source_path: Path,
                build_path: Path,
                requirements: 'MakeFile' = None,
-               parent: 'MakeFile' = None) -> None:
+               parent: 'MakeFile' = None,
+               is_requirement = False) -> None:
         self.name = name
         self.description = None
         self.version = None
         self.source_path = source_path
         self.build_path = build_path
         self.__requirements = requirements
+        self.__pkgs_path = None
         self.parent = parent
+        self.__is_requirement = is_requirement
         self.__cache: Cache = None
         self.children: list[MakeFile] = list()
         if self.name != 'dan-requires' and self.parent:
@@ -30,6 +34,9 @@ class MakeFile(sys.__class__):
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
 
+        from dan.core.include import context
+        self.context = context
+
     @property
     def fullname(self):
         return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
@@ -37,16 +44,44 @@ class MakeFile(sys.__class__):
     @property
     def cache(self) -> Cache:
         if not self.__cache:
-            self.__cache = Cache(
-                self.build_path / f'{self.name}.cache.json', cache_name=self.fullname)
+            self.__cache = Cache.instance(
+                self.build_path / f'{self.name}.cache', cache_name=self.fullname, binary=True)
         return self.__cache
+    
+    @property
+    def parents(self):
+        parent = self.parent
+        while parent is not None:
+            yield parent
+            parent = parent.parent
 
+    @property
+    def is_requirement(self):
+        if self.__is_requirement:
+            return True
+        for parent in self.parents:
+            if parent.__is_requirement:
+                return True
+        return False
+
+    __target_fullnames = list()
+    __test_fullnames = list()
     def register(self, cls: type[Target | Test]):
         """Register Target/Test class"""
+        t = cls()
         if issubclass(cls, Target):
-            self.__targets.add(cls())
+            # if t.fullname in MakeFile.__target_fullnames:
+            #     raise RuntimeError(f'duplicate target name: {t.fullname}')
+            MakeFile.__target_fullnames.append(t.fullname)
+            self.__targets.add(t)
+            self.__find.cache_clear()
+            for parent in self.parents:
+                parent.__find.cache_clear()
         if issubclass(cls, Test):
-            self.__tests.add(cls())
+            # if t.fullname in MakeFile.__test_fullnames:
+            #     raise RuntimeError(f'duplicate test name: {t.fullname}')
+            MakeFile.__test_fullnames.append(t.fullname)
+            self.__tests.add(t)
         return cls
 
     def wraps(self, cls: type[Target]):
@@ -54,11 +89,28 @@ class MakeFile(sys.__class__):
             assert issubclass(
                 new_cls, cls), 'Target wrapper must inherit from original target'
             for t in self.__targets:
-                if isinstance(t, cls):
+                if type(t) == cls:
                     self.__targets.remove(t)
-                    return cls
+                    return new_cls
             assert False, 'Original target has not been registered'
         return decorator
+
+
+    @functools.cache
+    def __find(self, name_or_class) -> Target:
+        if isinstance(name_or_class, type):
+            def check(t: Target):
+                return type(t) == name_or_class
+        else:
+            def check(t: Target):
+                return name_or_class in t.provides
+        for t in self.targets:
+            if check(t):
+                return t
+        for c in self.children:
+            t = c.__find(name_or_class)
+            if t:
+                return t
 
     def find(self, name_or_class) -> Target:
         """Find a target.
@@ -69,20 +121,13 @@ class MakeFile(sys.__class__):
         Returns:
             Target: The found target or None.
         """
-        if isinstance(name_or_class, type):
-            def check(t: Target):
-                return type(t) == name_or_class
-        else:
-            def check(t: Target):
-                return t.name == name_or_class
-        for t in self.targets:
-            if check(t):
-                return t
-        for c in self.children:
-            t = c.find(name_or_class)
-            if t:
-                return t
-    
+        t = self.__find(name_or_class)
+        if t is not None:
+            return t
+        
+        if self.parent:
+            return self.parent.find(name_or_class)
+
     def __getitem__(self, name_or_class) -> Target:
         return self.find(name_or_class)
 
@@ -97,10 +142,17 @@ class MakeFile(sys.__class__):
 
     @property
     def pkgs_path(self):
-        if self.requirements:
-            return self.requirements.parent.build_path / 'pkgs'
+        if self.__pkgs_path is None:
+            if self.requirements:
+                return self.requirements.parent.build_path / 'pkgs'
+            else:
+                return self.build_path / 'pkgs'
         else:
-            return self.build_path / 'pkgs'
+            return self.__pkgs_path
+        
+    @pkgs_path.setter
+    def pkgs_path(self, value):
+        self.__pkgs_path = value
 
     @requirements.setter
     def requirements(self, value: 'MakeFile'):
@@ -162,3 +214,9 @@ class MakeFile(sys.__class__):
         while m.parent is not None:
             m = m.parent
         return m
+    
+    def get_attribute(self, name, recursive = False):
+        value = getattr(self, name, None)
+        if value is None and recursive and self.parent is not None:
+            return self.parent.get_attribute(name, recursive=recursive)
+        return value

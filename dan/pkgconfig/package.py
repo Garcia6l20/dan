@@ -5,31 +5,74 @@ from dan.core.pathlib import Path
 import re
 import importlib.util
 
+from dan.core.cache import Cache
 from dan.core.find import find_file, find_files, library_paths_lookup
+from dan.core.pm import re_match
 from dan.core.requirements import RequiredPackage, parse_requirement
 from dan.core.runners import cmdline2list
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.utils import unique
 from dan.core.version import Version, VersionSpec
 from dan.cxx.targets import CXXTarget, Library
+from dan.cxx.toolchain import LibraryList
+
+import typing as t
+import os
 
 
 class MissingPackage(RuntimeError):
     def __init__(self, name) -> None:
         super().__init__(f'package {name} not found')
 
+_pkg_config_paths = None
+def _get_pkg_config_paths():
+    global _pkg_config_paths
+    if _pkg_config_paths is None:
+        paths = os.getenv('PKG_CONFIG_PATH', None)
+        if paths is None:
+            _pkg_config_paths = list()
+        else:
+            _pkg_config_paths = [Path(p) for p in paths.split(os.pathsep)]
+    return _pkg_config_paths
 
-def find_pkg_config(name, paths=list()) -> Path:
-    return find_file(fr'.*{name}\.pc$', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+def find_pkg_config(name, paths: str|Path|list[str|Path] = list()) -> Path:
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    return find_file(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
 
-def find_pkg_configs(name, paths=list()) -> Path:
-    return find_files(fr'.*{name}\.pc$', ['$PKG_CONFIG_PATH', *paths, *library_paths_lookup])
+
+def find_pkg_configs(name, paths: str|Path|list[str|Path] = list()) -> t.Generator[Path, None, None]:
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
 
 
 def has_package(name,  paths=list()):
     return find_pkg_config(name,  paths) is not None
 
-
+def parse_package_requires(reqs):
+    result = []
+    reqs = [r for r in re.split(r'[\s,]', reqs) if len(r.strip()) > 0]
+    tmp = []
+    it = iter(reqs)
+    ii = next(it, None)
+    while ii is not None:
+        if any(op in ii for op in ('=', '>', '<')):
+            tmp.append(ii)
+            ii = next(it)
+            tmp.append(ii)
+            result.append(parse_requirement(' '.join(tmp)))
+            tmp = []
+        else:
+            if len(tmp):
+                result.append(parse_requirement(' '.join(tmp)))
+                tmp = [ii]
+            else:
+                tmp.append(ii)
+        ii = next(it, None)
+    if len(tmp):
+        result.append(parse_requirement(' '.join(tmp)))
+    return result
 
 class Data:
     def __init__(self, path) -> None:
@@ -44,8 +87,8 @@ class Data:
                     k = m.group(1).lower()
                     v = m.group(2)
                     self._items[k] = v
-        self.__requires = None
-        self.__version = None
+        self._requires = None
+        self._version = None
 
     __split_expr = re.compile(r'(.+?)[:=](.+)')
 
@@ -64,39 +107,40 @@ class Data:
                     break
         return value
     
+    def __getstate__(self):
+        return {
+            'path': self._path,
+            'items': self._items,
+            'requires': self._requires,
+            'version': self._version,
+        }
+    
+    def __setstate__(self, data):
+        self._path = data['path']
+        self._items = data['items']
+        self._requires = data['requires']
+        self._version = data['version']
+
     @property
     def path(self) -> Path:
         return self._path
     
     @property
     def requires(self) -> list[RequiredPackage]:
-        if self.__requires is None:
-            self.__requires = list()
+        if self._requires is None:
+            self._requires = list()
             reqs = self.get('requires')
             if reqs is not None:
-                reqs = reqs.strip()
-                # conan generates invalid requires clause
-                # it should be 'comma separated values but it is not'
-                #  eg.: 'boost-headers boost-_cmake'
-                if any([c in reqs for c in ',=']):
-                    # the right way
-                    for req in reqs.split(','):
-                        req = parse_requirement(req)
-                        self.__requires.append(req)
-                else:
-                    # conan's way
-                    for req in reqs.split(' '):
-                        req = parse_requirement(req)
-                        self.__requires.append(req)
-        return self.__requires
+                self._requires = parse_package_requires(reqs)
+        return self._requires
     
     @property
     def version(self) -> Version:
-        if self.__version is None:
+        if self._version is None:
             v = self.get('version')
             if v:
-                self.__version = Version(v)
-        return self.__version
+                self._version = Version(v)
+        return self._version
 
 
 class Package(CXXTarget, internal=True):
@@ -104,7 +148,7 @@ class Package(CXXTarget, internal=True):
 
     default = False
 
-    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, data: Data = None, **kwargs) -> None:
+    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, dan_plugin=None, search_plugin=True, data: Data = None, **kwargs) -> None:
         if data is not None:
             self.config_path = data.path
             self.data = data
@@ -114,26 +158,61 @@ class Package(CXXTarget, internal=True):
         self.search_paths = search_paths
         if not self.config_path:
             raise MissingPackage(name)
-        self.search_paths.insert(0, self.config_path.parent)
+        if not self.config_path.parent in self.search_paths:
+            self.search_paths.insert(0, self.config_path.parent)
+        self.pn = name
         self.all[name] = self
 
-        super().__init__(name, **kwargs)
+        super().__init__(f'{name}-pkgconfig', **kwargs)
 
-        dan_plugin = self.config_path.parent.parent / \
-            'dan' / f'{self.name}.py'
-        if dan_plugin.exists():
-            spec = importlib.util.spec_from_file_location(
-                f'{self.name}_plugin', dan_plugin)
-            module = importlib.util.module_from_spec(spec)
-            setattr(module, 'self', self)
-            spec.loader.exec_module(module)
+        if dan_plugin:
+            self.__dan_plugin = dan_plugin
+        elif search_plugin:
+            self.__dan_plugin = find_file(rf'{name}\.py', [self.config_path.parent.parent])
+        else:
+            self.__dan_plugin = None
+        self.__load_plugin()
         self.__cflags = None
         self.__libs = None
+        self.__lib_paths = None
         if not data:
             self.data = Data(self.config_path)
 
 
         self.version = self.data.version
+    
+    def __load_plugin(self):
+        if self.__dan_plugin is not None:
+            spec = importlib.util.spec_from_file_location(
+                f'{self.name}_plugin', self.__dan_plugin)
+            module = importlib.util.module_from_spec(spec)
+            setattr(module, 'self', self)
+            spec.loader.exec_module(module)
+
+
+    def __getstate__(self):
+        return {
+            'pn': self.pn,
+            'search_paths': self.search_paths,
+            'dan_plugin': self.__dan_plugin,
+            'config_path': self.config_path,
+            'data': self.data,
+            '__cflags': self.__cflags,
+            '__libs': self.__libs,
+            '__lib_paths': self.__lib_paths,
+        }
+    
+    def __setstate__(self, data):
+        from dan.core.include import context
+        makefile = context.root
+        self.__init__(data['pn'], data['search_paths'], data['config_path'],
+                      data=data['data'],
+                      dan_plugin=data['dan_plugin'],
+                      search_plugin=False,
+                      makefile=makefile)
+        self.__cflags = data['__cflags']
+        self.__libs = data['__libs']
+        self.__lib_paths = data['__lib_paths']
 
     @property
     def modification_time(self):
@@ -153,6 +232,8 @@ class Package(CXXTarget, internal=True):
                         dep = self.all[req.name]
                     else:
                         dep = find_package(req.name, req.version_spec, search_paths=self.search_paths, makefile=self.makefile)
+                    if dep is None:
+                        raise RuntimeError(f'Unresolved requirement: {req}')
                     group.create_task(dep.initialize())
                     deps.add(dep)
         self.includes.public.append(self.data.get('includedir'))
@@ -161,11 +242,10 @@ class Package(CXXTarget, internal=True):
     @property
     def cxx_flags(self):
         if self.__cflags is None:
-            from dan.cxx import target_toolchain
             cflags = self.data.get('cflags')
             if cflags is not None:
                 cflags = cmdline2list(cflags)
-                cflags = target_toolchain.from_unix_flags(cflags)
+                cflags = self.toolchain.from_unix_flags(cflags)
             else:
                 cflags = list()
             for dep in self.cxx_dependencies:
@@ -175,21 +255,42 @@ class Package(CXXTarget, internal=True):
 
     @property
     def package_dependencies(self):
-        return [pkg for pkg in self.dependencies if isinstance(pkg, Package)]
+        return [pkg for pkg in self.dependencies.all if isinstance(pkg, Package)]
 
+    def __init_libs(self):
+        self.__libs = LibraryList()
+        self.__lib_paths = set()
+        libs = self.data.get('libs')
+        if libs is not None:
+            libs = cmdline2list(libs)
+            libs = self.toolchain.from_unix_flags(libs)
+            for l in libs:
+                match re_match(l):
+                    case r'-l(.+)' as m:
+                        self.__libs.add(m[0])
+                    case r'-L(.+)' as m:
+                        self.__lib_paths.add(m[0])
+                    case r'/LIBPATH:(.+)' as m:
+                        self.__lib_paths.add(m[0])
+                    case r'-Wl,-rpath,(.+)' as m:
+                        self.__lib_paths.add(m[0])
+                    case _:
+                        self.__libs.add(l)
+        for pkg in self.package_dependencies:
+            self.__lib_paths.update(pkg.lib_paths)
+            self.__libs.extend(pkg.libs)
+        self.__lib_paths = list(sorted(self.__lib_paths))
+
+    @property
+    def lib_paths(self) -> list[str]:
+        if self.__lib_paths is None:
+            self.__init_libs()
+        return self.__lib_paths
+    
     @property
     def libs(self):
         if self.__libs is None:
-            from dan.cxx import target_toolchain
-            tmp = list()
-            libs = self.data.get('libs')
-            if libs is not None:
-                libs = cmdline2list(libs)
-                libs = target_toolchain.from_unix_flags(libs)
-                tmp.extend(libs)
-            for pkg in self.package_dependencies:
-                tmp.extend(pkg.libs)
-            self.__libs = unique(tmp)
+            self.__init_libs()
         return self.__libs
 
     @asyncio.cached
@@ -206,29 +307,82 @@ class Package(CXXTarget, internal=True):
     def modification_time(self):
         return self.config_path.modification_time
 
-    def __getattr__(self, name):        
+    def __getattr__(self, name):
         value = self.data.get(name) if self.data is not None else None
         if value is None:
-            raise AttributeError(name)
+            raise AttributeError(name) #@IgnoreException
         return value
 
 
 _jinja_env: jinja2.Environment = None
 
+_pkgconfig_cache = None
+def get_packages_cache() -> dict[str, Package]:
+    from dan.core.include import context
+    global _pkgconfig_cache
+    if _pkgconfig_cache is None:
+        _pkgconfig_cache = Cache.instance(context.root.build_path / 'pkgconfig.cache', cache_name='pkgconfig', binary=True)
+    return _pkgconfig_cache.data
+
 
 def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
+    
+    pkg = None
+
     if makefile is None:
         from dan.core.include import context
         makefile = context.current
-    search_paths = search_paths or makefile.pkgs_path
+
+    makefile = makefile.root
+
+    cache = get_packages_cache()
+    if name in cache:
+        cached_pkg = cache[name]
+        if spec and not spec.is_compatible(cached_pkg.version):
+            raise RuntimeError(f'incompatible package {name} ({cached_pkg.version} {spec})')
+        return cached_pkg
+
+    search_paths = search_paths or [makefile.pkgs_path]
     for config in find_pkg_configs(name, search_paths):
         if spec is not None:
             data = Data(config)
             if spec.is_compatible(data.version):
-                return Package(name, data=data, makefile=makefile)
-        else:
-            return Package(name, config_path=config, makefile=makefile)
+                pkg = Package(name, data=data, makefile=makefile)
+                break
 
+        else:
+            pkg = Package(name, config_path=config, search_paths=search_paths, makefile=makefile)
+            break
+    
+    if pkg:
+        cache[name] = pkg
+
+    return pkg
+
+__bindirs = None
+def get_cached_bindirs():
+    global __bindirs
+    if __bindirs is None:
+        __bindirs = set()
+        for pkg in get_packages_cache().values():
+            bindir = getattr(pkg, 'bindir', None)
+            if bindir is not None:
+                __bindirs.add(Path(bindir))
+            else:
+                exec_prefix = getattr(pkg, 'exec_prefix', None)
+                if exec_prefix is not None:
+                    bindir = Path(exec_prefix) / 'bin'
+                    if bindir.exists():
+                        __bindirs.add(bindir)
+            if pkg.toolchain.system.is_windows:
+                # on windows dlls needs to be in PATH
+                libdir = getattr(pkg, 'libdir', None)
+                if libdir is not None:
+                    libdir = Path(libdir)
+                    if find_file(r'.+.dll', [libdir]):
+                        __bindirs.add(libdir)
+
+    return __bindirs
 
 def _get_jinja_env():
     global _jinja_env
@@ -239,26 +393,38 @@ def _get_jinja_env():
 
 
 async def create_pkg_config(lib: Library, settings: InstallSettings) -> Path:
-    from dan.cxx import target_toolchain
-    dest = settings.libraries_destination / 'pkgconfig' / f'{lib.name}.pc'
+    dest = settings.data_destination / 'pkgconfig' / f'{lib.name}.pc'
     lib.info(f'creating pkgconfig: {dest}')
 
     requires = list()
-    for req in lib.requires:
-        if req.version_spec:
-            requires.append(f'{req.name} {req.version_spec.op} {req.version_spec.version}')
-        else:
-            requires.append(req.name)
+    for dep in lib.dependencies.public:
+        match dep:
+            case RequiredPackage():
+                if dep.version_spec:
+                    requires.append(f'{dep.name} {dep.version_spec.op} {dep.version_spec.version}')
+                else:
+                    requires.append(dep.name)
+            case Library():
+                requires.append(dep.name)
 
-    libs = target_toolchain.make_link_options(
-        [Path(f'${{libdir}}/{lib.name}')]) if not lib.interface else []
+
+    libs = list()
+    if not lib.interface:
+        libs.extend(lib.toolchain.make_libpath_options(
+            [Path(f'${{libdir}}/{lib.name}')]))
+        libs.extend(lib.toolchain.make_link_options(
+            [Path(f'${{libdir}}/{lib.name}')]))
+    for p in lib.library_paths.public:
+        if p not in libs:
+            libs.append(p)
     libs.extend(lib.link_libraries.public)
     libs.extend(lib.link_options.public)
-    libs = target_toolchain.to_unix_flags(libs)
+    libs = lib.toolchain.to_unix_flags(libs)
 
     cflags = lib.compile_definitions.public
-    cflags.extend(target_toolchain.make_include_options(['${includedir}']))
-    cflags = target_toolchain.to_unix_flags(cflags)
+    cflags.extend(lib.compile_options.public)
+    cflags.extend(lib.toolchain.make_include_options(['${includedir}']))
+    cflags = lib.toolchain.to_unix_flags(cflags)
 
     data = _get_jinja_env()\
         .get_template('pkg.pc.jinja2')\

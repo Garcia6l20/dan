@@ -1,26 +1,33 @@
 import json
 import os
+from dan.core import asyncio
+
 from dan.core.pm import re_match
 from dan.cxx.toolchain import Toolchain
 
 from dan.make import Make
 from dan.cxx.targets import CXXObject
-
+from dan.logging import Logging
+from dan.core.utils import unique
 
 def get_intellisense_mode(toolchain : Toolchain):
     mode = list()
     if toolchain.system is not None:
-        mode.append(toolchain.system)
+        if toolchain.system.startswith('msys'):
+            mode.append('windows')
+        else:
+            mode.append(toolchain.system)
     mode.append(toolchain.type)
     mode.append(toolchain.arch)
     return '-'.join(mode)
 
-class Code:
+class Code(Logging):
     def __init__(self, make: Make) -> None:
         self.make = make
-    
+        super().__init__('code')
+
     def get_test_suites(self, pretty):
-        from dan.core.include import context, MakeFile
+        from dan.core.include import MakeFile
         from dan.core.test import Test, Case
         from dan.cxx import Executable
 
@@ -97,8 +104,12 @@ class Code:
                     'children': children
                 }
 
-        return json.dumps(make_suite_info(context.root), indent=2 if pretty else None)
-        
+        return json.dumps(make_suite_info(self.make.context.root), indent=2 if pretty else None)
+
+    async def _init_target(self, target):
+        with target.skip_missing_dependencies:
+            await target.initialize()
+
     async def _make_source_configuration(self, target: CXXObject):
             # interface:
             #   - includePath: string[]
@@ -109,24 +120,26 @@ class Code:
             #   - compilerPath?: string;
             #   - compilerArgs?: string[];
             #   - windowsSdkVersion?: string;
-            includes = []
-            defines = []
-            await target.initialize()
+            includes = await target.toolchain.get_default_include_paths()
+            defines = [f'{k}={v}' for k, v in (await target.toolchain.get_default_defines()).items()]            
+            await self._init_target(target)
             for flag in target.private_cxx_flags:
                 match re_match(flag):
                     case r'[/-]I:?(.+)' as m:
-                        includes.append(os.path.normcase(m[1]))
+                        includes.append(m[1])
                     case r'[/-]D:?(.+)' as m:
                         defines.append(m[1])
 
-            return {
-                'includePath': includes,
+            config = {
+                'includePath': [os.path.normcase(i) for i in unique(includes)],
                 'defines': defines,
-                'standard': f'c++{target.toolchain.cpp_std}',
                 'compilerPath': os.path.normcase(target.toolchain.cxx),
                 'intelliSenseMode': get_intellisense_mode(target.toolchain),
-                # 'compilerArgs': target.cxx_flags,
+                'compilerArgs': target.cxx_flags,
             }
+            if target.cpp_std is not None:
+                config['standard'] = f'c++{target.cpp_std}'
+            return config
 
     async def get_sources_configuration(self, sources):
         result = list()
@@ -147,9 +160,31 @@ class Code:
         #   - standard?: see above
         #   - windowsSdkVersion?: string
         from dan.cxx import target_toolchain as toolchain
+        from dan.cxx.targets import CXXTarget
+        cpp_std = 11
+        browse_path = set()
+        compiler_args = set()
+        cxx_targets = [t for t in self.make.root.all_targets if isinstance(t, CXXTarget)]
+        async with asyncio.TaskGroup("initializing cxx targets") as g:
+            for target in cxx_targets:
+                g.create_task(self._init_target(target))
+
+        for target in cxx_targets:
+            browse_path.update(target.includes.private_raw)
+            browse_path.update(target.includes.public_raw)
+            compiler_args.update(target.cxx_flags)
+            if target.cpp_std > cpp_std:
+                cpp_std = target.cpp_std
+
+        from dan.pkgconfig.package import get_packages_cache
+        for package in get_packages_cache().values():
+            compiler_args.update(package.cxx_flags)
+
+
         result = {
-            'browsePath': [],
+            'browsePath': [os.path.normcase(p) for p in browse_path],
             'compilerPath': str(toolchain.cxx),
-            'standard': f'c++{toolchain.cpp_std}'
+            'compilerArgs': list(compiler_args),
+            'standard': f'c++{cpp_std}'
         }
         return json.dumps(result)

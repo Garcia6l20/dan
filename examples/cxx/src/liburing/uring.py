@@ -106,7 +106,7 @@ class LibUring(Library):
     async def __initialize__(self):
         uring_root = self.get_dependency(LibUringSources).output
         self.sources = (uring_root / 'src').rglob('*.c')
-        self.includes = uring_root / 'include', self.build_path        
+        self.includes.add(uring_root / 'src' / 'include', self.build_path, public=True)
         return await super().__initialize__()
 
 # test_path = git.output / 'test'

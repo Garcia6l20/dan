@@ -1,5 +1,7 @@
 import json
 import os
+from pathlib import Path
+import re
 from shutil import which
 import subprocess
 from dan.core.runners import sync_run
@@ -19,6 +21,63 @@ def _system_registry_key(key, subkey, query):
             return None
         finally:
             winreg.CloseKey(hkey)
+
+def cygpath(p: str|Path, reverse=False) -> str:
+    if not reverse:
+        if isinstance(p, str):
+            p = Path(p)
+        absolute = p.is_absolute()
+        p = p.as_posix()
+        if absolute:
+            p = '/' + p[0].lower() + p[2:]
+    else:
+        if isinstance(p, Path):
+            p = p.as_posix()
+        if p.startswith('/'):
+            p = p[1].upper() + ':' + p[2:]
+    return p
+
+
+def _enum_keys(hkey):
+    import winreg  # @UnresolvedImport
+    try:
+        index = 0
+        while True:
+            subkey = winreg.EnumKey(hkey, index)
+            yield subkey
+            index += 1
+    except (OSError, WindowsError):  # Raised by OpenKey/Ex if the function fails (py3, py2)
+        pass
+
+def _enum_values(hkey):
+    import winreg  # @UnresolvedImport
+    try:
+        index = 0
+        while True:
+            subkey = winreg.EnumValue(hkey, index)
+            yield subkey
+            index += 1
+    except (OSError, WindowsError):  # Raised by OpenKey/Ex if the function fails (py3, py2)
+        pass
+
+def _key_values(hkey) -> dict:
+    result = dict()
+    for name, value, _tp in _enum_values(hkey):
+        result[name] = value
+    return result
+
+
+# b0109e3f-1479-4d53-8b2d-e4efacbc27c9
+def find_installation_data(match, flags=0):
+    import winreg  # @UnresolvedImport
+    base = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    hkey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, base)
+    for subkey in _enum_keys(hkey):
+        subkey = base + '\\' + subkey
+        skey = winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey)
+        values = _key_values(skey)
+        if re.match(match, values.get('DisplayName', ''), flags):
+            return values
 
 
 def is_win64():

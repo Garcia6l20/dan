@@ -1,33 +1,62 @@
 from asyncio import *
 
 import threading
+import concurrent
+import multiprocessing
 import typing as t
 
 from dan.core.functools import BaseDecorator
 
 
-class cached(BaseDecorator):
+class Cached(BaseDecorator):
 
-    def __init__(self, fn):
+    def __init__(self, fn, unique=False):
         self.__fn = fn
-        self.__cache: dict[int, Future] = dict()
+        self.__unique = unique
+        self.__is_method = fn.__call__.__class__.__name__ == 'method-wrapper'
+        if not self.__is_method and self.__unique:
+            self.__cache = None
+        else:
+            self.__cache: dict[int, Future] = dict()
 
     async def __call__(self, *args, **kwds):
-        key = hash((args, frozenset(kwds)))
-        if key not in self.__cache:
-            self.__cache[key] = Future()
-            try:
-                self.__cache[key].set_result(await self.__fn(*args, **kwds))
-            except Exception as ex:
-                self.__cache[key].set_exception(ex)
-        elif not self.__cache[key].done():
-            await self.__cache[key]
+        if not self.__is_method and self.__unique:
+            if self.__cache is None:
+                self.__cache = Future()
+                try:
+                    self.__cache.set_result(await self.__fn(*args, **kwds))
+                except Exception as ex:
+                    self.__cache.set_exception(ex)
+            elif not self.__cache.done():
+                await self.__cache
+            return self.__cache.result()
+        else:
+            key = id(args[0]) if self.__unique else hash((args, frozenset(kwds)))
+            if key not in self.__cache:
+                self.__cache[key] = Future()
+                try:
+                    self.__cache[key].set_result(await self.__fn(*args, **kwds))
+                except Exception as ex:
+                    self.__cache[key].set_exception(ex)
+            elif not self.__cache[key].done():
+                await self.__cache[key]
 
-        return self.__cache[key].result()
+            return self.__cache[key].result()
 
     def clear_all(self):
-        self.__cache = dict()
+        if self.__unique:
+            self.__cache = dict()
+        else:
+            self.__cache = None
 
+
+def cached(*args, **kwargs):
+    if len(args) == 1 and callable(args[0]):
+        return Cached(args[0])
+    else:
+        def wrapper(fn):
+            return Cached(fn, *args, **kwargs)
+        return wrapper
 
 class _SyncWaitThread(threading.Thread):
     def __init__(self, coro):
@@ -50,6 +79,17 @@ def sync_wait(coro):
     if thread.err:
         raise thread.err
     return thread.result
+
+__async_pool = concurrent.futures.ThreadPoolExecutor(
+    max_workers=multiprocessing.cpu_count(),
+)
+
+
+async def async_wait(fn, *args, **kwargs):
+    loop = get_running_loop()
+    def wrapper():
+        return fn(*args, **kwargs)
+    return await loop.run_in_executor(__async_pool, wrapper)
 
 
 class ExceptionGroup(Exception):
@@ -92,6 +132,7 @@ class TaskGroup:
         self._parent_cancel_requested = False
         self._tasks = set()
         self._errors = []
+        self._results = []
         self._base_error = None
         self._on_completed_fut = None
         self._name = name
@@ -166,7 +207,6 @@ class TaskGroup:
         while self._tasks:
             if self._on_completed_fut is None:
                 self._on_completed_fut = self._loop.create_future()
-
             try:
                 await self._on_completed_fut
             except CancelledError as ex:
@@ -218,7 +258,9 @@ class TaskGroup:
             raise RuntimeError(f"TaskGroup {self!r} is finished")
         if self._aborting:
             raise RuntimeError(f"TaskGroup {self!r} is shutting down")
-        if context is None:
+        if isfuture(coro):
+            task = coro
+        elif context is None:
             task = self._loop.create_task(coro, name=name)
         else:
             task = self._loop.create_task(coro, context=context, name=name)
@@ -253,6 +295,7 @@ class TaskGroup:
 
         exc = task.exception()
         if exc is None:
+            self._results.append(task.result())
             return
 
         self._errors.append(exc)
@@ -292,3 +335,10 @@ class TaskGroup:
             self._abort()
             self._parent_cancel_requested = True
             self._parent_task.cancel()
+    
+    def results(self):
+        if not self._entered:
+            raise RuntimeError(f"TaskGroup {self!r} has not been entered")
+        if self._exiting and self._tasks:
+            raise RuntimeError(f"TaskGroup {self!r} is not finished")
+        return self._results

@@ -1,3 +1,4 @@
+import contextlib
 from functools import cached_property
 import functools
 from dan.core.register import MakefileRegister
@@ -5,7 +6,8 @@ from dan.core.pathlib import Path
 from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
-from dan.core import asyncio, aiofiles, utils
+from dan.core import asyncio, aiofiles, utils, diagnostics as diags
+from dan.core.cache import Cache
 from dan.core.requirements import load_requirements
 from dan.core.settings import InstallMode, InstallSettings, safe_load
 from dan.core.version import Version
@@ -14,65 +16,82 @@ from dan.logging import Logging
 
 class Dependencies:
 
-    def __init__(self, parent: 'Target', deps: Iterable = list()):
+    def __init__(self, parent: 'Target', public: Iterable = None, private: Iterable = None):
         super().__init__()
         self.parent = parent
-        self._content = list()
-        for dep in deps:
-            self.add(dep)
+        self._public = list()
+        self._private = list()
+        if public is not None:
+            self.update(public, public=True)
+        if private is not None:
+            self.update(private, public=False)
 
     @property
     def makefile(self):
         return self.parent.makefile
 
-    def add(self, dependency):
-        if dependency in self._content:
+    def add(self, dependency, public=True):
+        content = self._public if public else self._private
+        if dependency in content:
             return
         from dan.pkgconfig.package import RequiredPackage
         match dependency:
             case Target() | FileDependency():
-                self._content.append(dependency)
+                content.append(dependency)
             case type():
                 assert issubclass(dependency, Target)
-                self._content.append(self.makefile.find(dependency))
+                content.append(self.makefile.find(dependency))
             case str():
                 from dan.pkgconfig.package import Package
                 for pkg in Package.all.values():
                     if pkg.name == dependency:
-                        self.append(pkg)
+                        content.append(pkg)
                         break
                 else:
-                    if Path(self.parent.source_path / dependency).exists():
-                        self._content.append(FileDependency(
+                    if isinstance(self.parent.source_path, Path) and Path(self.parent.source_path / dependency).exists():
+                        content.append(FileDependency(
                             self.parent.source_path / dependency))
                     else:
                         from dan.pkgconfig.package import parse_requirement
-                        self._content.append(parse_requirement(dependency))
+                        content.append(parse_requirement(dependency))
             case Path():
                 dependency = FileDependency(
                     self.parent.source_path / dependency)
-                self._content.append(dependency)
+                content.append(dependency)
             case RequiredPackage():
-                self._content.append(dependency)
+                content.append(dependency)
             case _:
                 raise RuntimeError(
                     f'Unhandled dependency {dependency} ({type(dependency)})')
 
-    def update(self, dependencies):
+    def update(self, dependencies, public=True):
         for dep in dependencies:
-            self.add(dep)
+            self.add(dep, public=public)
 
     def __getattr__(self, attr):
-        for item in self._content:
+        for item in self._public:
             if item.name == attr:
                 return item
+        for item in self._private:
+            if item.name == attr:
+                return item
+    
+    @property
+    def public(self):
+        return self._public.__iter__()
 
-    def __iter__(self):
-        return self._content.__iter__()
+    @property
+    def private(self):
+        return self._private.__iter__()
+
+    @property
+    def all(self):
+        yield from self.private
+        yield from self.public
 
     @property
     def up_to_date(self):
-        for item in self:
+        for item in self.all:
             if not item.up_to_date:
                 return False
         return True
@@ -80,7 +99,7 @@ class Dependencies:
     @property
     def modification_time(self):
         t = 0.0
-        for item in self:
+        for item in self.all:
             mt = item.modification_time
             if mt and mt > t:
                 t = mt
@@ -94,10 +113,13 @@ PathImpl = type(Path())
 
 
 class FileDependency(PathImpl):
-    up_to_date = True
-
+    
     def __init__(self, *args, **kwargs):
         super(PathImpl, self).__init__()
+
+    @property
+    def up_to_date(self):
+        return self.exists()
 
     @property
     def modification_time(self):
@@ -163,13 +185,15 @@ class Options:
         if not 'options' in cache:
             cache['options'] = dict()
         self._cache = cache['options']
-        self.__items: set[Option] = set()
+        self.__items: list[Option] = list()
         self.update(default)
 
     def add(self, name: str, default_value, help=None):
+        if self.get(name) is not None:
+            raise RuntimeError(f'duplicate options detected ({name})')
         opt = Option(self, f'{self.__parent.fullname}.{name}',
                      default_value, help=help)
-        self.__items.add(opt)
+        self.__items.append(opt)
         return opt
 
     def get(self, name: str):
@@ -193,6 +217,14 @@ class Options:
                 self[k] = v
             else:
                 self.add(k, v, help)
+    
+    @property
+    def sha1(self):
+        import hashlib
+        sha1 = hashlib.sha1()
+        for o in self.__items:
+            sha1.update(o.fullname.encode() + str(o.value).encode())
+        return sha1.hexdigest()
 
     def items(self):
         for o in self.__items:
@@ -211,18 +243,75 @@ class Options:
     def __iter__(self):
         return iter(self.__items)
 
+class Installer:
+    def __init__(self, settings: InstallSettings, mode: InstallMode, logger: Logging) -> None:
+        self.settings = settings
+        self.mode = mode
+        self.installed_files = list()
+        self._logger = logger
+    
+    async def _install(self, src: Path|str, dest: Path, subdir: Path = None):
+        if subdir is not None:
+            dest /= subdir
+        if isinstance(src, Path):
+            dest /= src.name
+            if dest.exists() and dest.younger_than(src):
+                self._logger.info('%s is up-to-date', dest)
+                self.installed_files.append(dest)
+                return
+            self._logger.debug('installing: %s', dest)
+            await aiofiles.copy(src, dest)
+        else:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            self._logger.debug('installing: %s', dest)
+            async with aiofiles.open(dest, 'w') as f:
+                await f.write(src)
+        self.installed_files.append(dest)
+
+    @property
+    def dev(self):
+        return self.mode == InstallMode.dev
+    
+    async def install_bin(self, src, subdir = None):
+        await self._install(src, self.settings.runtime_destination, subdir)
+
+    async def install_shared_library(self, src, subdir = None):
+        await self._install(src, self.settings.libraries_destination, subdir)
+
+    async def install_static_library(self, src, subdir = None):
+        if not self.dev:
+            return
+        await self._install(src, self.settings.libraries_destination, subdir)
+
+    async def install_header(self, src, subdir = None):
+        if not self.dev:
+            return
+        await self._install(src, self.settings.includes_destination, subdir)
+
+    async def install_data(self, src, subdir = None, dev=False):
+        if dev and not self.dev:
+            return
+        await self._install(src, self.settings.data_destination, subdir)
+
 
 class Target(Logging, MakefileRegister, internal=True):
     name: str = None
     fullname: str = None
-    description: str = None,
+    description: str = None
     default: bool = True
     installed: bool = False
     output: Path = None
-    options: dict[str, Any] = dict()
+    options: dict[str, Any]|Options = dict()
+    provides: Iterable[str] = None
 
-    dependencies: set[TargetDependencyLike] = set()
-    preload_dependencies: set[TargetDependencyLike] = set()
+    dependencies: Dependencies = set()
+    public_dependencies: set[TargetDependencyLike] = set()
+    private_dependencies: set[TargetDependencyLike] = set()
+
+    preload_dependencies: Dependencies = set()
+
+    inherits_version = True
+    subdirectory: str = None
 
     def __init__(self,
                  name: str = None,
@@ -233,12 +322,18 @@ class Target(Logging, MakefileRegister, internal=True):
         
         self.parent = parent
         self.__cache: dict = None
+        self.__source_path : Path = None
 
         if name is not None:
             self.name = name
 
         if self.name is None:
             self.name = self.__class__.__name__
+        
+        if self.provides is None:
+            self.provides = [self.name]
+        else:
+            self.provides = set([self.name, *self.provides])
 
         if default is not None:
             self.default = default
@@ -263,19 +358,31 @@ class Target(Logging, MakefileRegister, internal=True):
             self._version = version
 
         if not hasattr(self, '_version'):
-            self._version = self.makefile.version
+            if self.inherits_version:
+                self._version = self.makefile.version
+            else:
+                self._version = None
 
         if self.description is None:
             self.description = self.makefile.description
 
         self.other_generated_files: set[Path] = set()
-        self.dependencies = Dependencies(self, self.dependencies)
+
+        self.dependencies = Dependencies(self, [*self.dependencies, *self.public_dependencies], self.private_dependencies)
         self.preload_dependencies = Dependencies(
-            self, self.preload_dependencies)
+            self, None, self.preload_dependencies)
 
         super().__init__(self.fullname)
 
         self._output: Path = None
+        self._build_path = None
+        
+        if inspect.isclass(self.source_path) and issubclass(self.source_path, Target):
+            # delayed resolution
+            def _get_source_path(TargetClass, self):
+                return self.get_dependency(TargetClass).output
+            self.preload_dependencies.add(self.source_path, public=False)
+            type(self).source_path = property(functools.partial(_get_source_path, self.source_path))
 
         if type(self).output != Target.output:
             # hack class-defined output
@@ -283,12 +390,17 @@ class Target(Logging, MakefileRegister, internal=True):
             output = self.output
             type(self).output = utils.classproperty(lambda: self.build_path / output)
 
-    
+        self.diagnostics = diags.DiagnosticCollection()
+
     @property
     def output(self):
         if self._output is None:
             return None
         return self.build_path / self._output
+
+    @property
+    def routput(self):
+        return self._output
     
     @property
     def version(self):
@@ -306,26 +418,45 @@ class Target(Logging, MakefileRegister, internal=True):
     @output.setter
     def output(self, path):
         path = Path(path)
-        if path.is_absolute() and self.build_path in path.parents:
+        if not path.is_absolute() and self.build_path in path.parents:
             raise RuntimeError(f'output must not be an absolute path within build directory')
-        self._output = path
+        elif path.is_absolute() and self.build_path in path.parents:
+            self._output = path.relative_to(self.build_path)
+        else:
+            self._output = path
 
     @property
     def is_requirement(self) -> bool:
-        return self.makefile.name.endswith('requirements')
+        return self.makefile.is_requirement
 
     @property
     def source_path(self) -> Path:
-        return self.makefile.source_path
+        if self.__source_path is None:
+            return self.makefile.source_path
+        else:
+            return self.__source_path
+    
+    @source_path.setter
+    def source_path(self, value):
+        self.__source_path = value
 
     @property
     def build_path(self) -> Path:
-        return self.makefile.build_path
+        if self._build_path is not None:
+            return self._build_path
+        
+        build_path = self.makefile.build_path
+
+        if self.subdirectory is not None:
+            build_path /= self.subdirectory
+
+        return build_path
+        
     
     @property
     def requires(self):
         from dan.pkgconfig.package import RequiredPackage
-        return [dep for dep in self.dependencies if isinstance(dep, RequiredPackage)]
+        return [dep for dep in self.dependencies.all if isinstance(dep, RequiredPackage)]
 
     @cached_property
     def fullname(self) -> str:
@@ -339,18 +470,41 @@ class Target(Logging, MakefileRegister, internal=True):
                 self.makefile.cache.data[name] = dict()
             self.__cache = self.makefile.cache.data[name]
         return self.__cache
+    
+    _install_missing_dependencies = True
 
-    async def __load_unresolved_dependencies(self):
+    def _recursive_dependencies(self, types = None, seen = None):
+        if seen is None:
+            seen = set()
+        for dep in self.dependencies.all:
+            if dep in seen:
+                continue
+            seen.add(dep)
+            if types is None or isinstance(dep, types):
+                yield dep
+                if isinstance(dep, Target):
+                    yield from dep._recursive_dependencies(types, seen)
+
+    @property
+    @contextlib.contextmanager
+    def skip_missing_dependencies(self):
+        self._install_missing_dependencies = False
+        yield
+        self._install_missing_dependencies = True
+
+    async def __load_unresolved_dependencies(self, install=None):
+        if install is None:
+            install = self._install_missing_dependencies
         if len(self.requires) > 0:
-            self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self))
+            self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self, install=install))
 
     @asyncio.cached
     async def preload(self):
-        self.debug('preloading...')
+        self.trace('preloading...')
 
         async with asyncio.TaskGroup(f'building {self.name}\'s preload dependencies') as group:
             group.create_task(self.__load_unresolved_dependencies())
-            for dep in self.preload_dependencies:
+            for dep in self.preload_dependencies.all:
                 group.create_task(dep.build())
 
         async with asyncio.TaskGroup(f'preloading {self.name}\'s target dependencies') as group:
@@ -360,12 +514,18 @@ class Target(Logging, MakefileRegister, internal=True):
         res = self.__preload__()
         if inspect.iscoroutine(res):
             res = await res
+        self.trace('preloaded')
         return res
+
+    @asyncio.cached
+    async def load_dependencies(self):
+        async with asyncio.TaskGroup(f'loading {self.name}\'s dependencies') as group:
+            group.create_task(self.__load_unresolved_dependencies(install=False))
 
     @asyncio.cached
     async def initialize(self):
         await self.preload()
-        self.debug('initializing...')
+        self.trace('initializing...')
 
         if isinstance(self.version, Option):
             self.version = self.version.value
@@ -377,19 +537,25 @@ class Target(Logging, MakefileRegister, internal=True):
         res = self.__initialize__()
         if inspect.iscoroutine(res):
             res = await res
+            
+        self.trace('initialized')
         return res
 
     @property
     def modification_time(self):
-        return self.output.stat().st_mtime if self.output.exists() else 0.0
+        output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output  
+        return output.stat().st_mtime if output.exists() else 0.0
 
-    @property
+    @cached_property
     def up_to_date(self):
-        if self.output and not self.output.exists():
+        output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
+        if output and not output.exists():
             return False
         elif not self.dependencies.up_to_date:
             return False
         elif self.dependencies.modification_time > self.modification_time:
+            return False
+        elif 'options_sha1' in self.cache and self.cache['options_sha1'] != self.options.sha1:
             return False
         return True
 
@@ -409,36 +575,43 @@ class Target(Logging, MakefileRegister, internal=True):
             await result
 
         if self.up_to_date:
-            self.info('up to date !')
+            self.trace('up to date !')
             return
-        elif self.output.exists():
-            self.info('outdated !')
+        elif self.output is not None and self.output.exists():
+            self.debug('outdated !')
 
         with utils.chdir(self.build_path):
-            self.info('building...')
+            self.debug('building...')
+            if diags.enabled:
+                self.diagnostics.clear()
             result = self.__build__()
             if inspect.iscoroutine(result):
-                return await result
+                result = await result
+            if self.output is None:
+                (self.build_path / f'{self.name}.stamp').touch()
+            self.cache['options_sha1'] = self.options.sha1
+            self.trace('built')
             return result
 
     @property
     def target_dependencies(self):
-        return [t for t in {*self.dependencies, *self.preload_dependencies} if isinstance(t, Target)]
+        return [t for t in {*self.dependencies.all, *self.preload_dependencies.all} if isinstance(t, Target)]
 
     @property
     def file_dependencies(self):
-        return [t for t in self.dependencies if isinstance(t, FileDependency)]
+        return [t for t in self.dependencies.all if isinstance(t, FileDependency)]
 
     @asyncio.cached
     async def clean(self):
         await self.initialize()
         async with asyncio.TaskGroup(f'cleaning {self.name} outputs') as group:
-            if self.output and self.output.exists():
-                self.info('cleaning...')
-                if self.output.is_dir():
-                    group.create_task(aiofiles.rmtree(self.output))
+            output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
+            if output and output.exists():
+                self.info('debug...')
+                if output.is_dir():
+                    group.create_task(aiofiles.rmtree(output, force=True))
                 else:
-                    group.create_task(aiofiles.os.remove(self.output))
+                    group.create_task(aiofiles.os.remove(output))
             for f in self.other_generated_files:
                 if f.exists():
                     group.create_task(aiofiles.os.remove(f))
@@ -446,24 +619,16 @@ class Target(Logging, MakefileRegister, internal=True):
             if inspect.iscoroutine(res):
                 group.create_task(res)
 
-    @asyncio.cached
+    @asyncio.cached(unique = True)
     async def install(self, settings: InstallSettings, mode: InstallMode):
         await self.build()
-        installed_files = list()
-        if mode == InstallMode.dev:
-            if len(self.utils) > 0:
-                lines = list()
-                for fn in self.utils:
-                    tmp = inspect.getsourcelines(fn)[0]
-                    tmp[0] = f'\n\n@self.utility\n'
-                    lines.extend(tmp)
-                filepath = settings.libraries_destination / \
-                    'dan' / f'{self.name}.py'
-                filepath.parent.mkdir(exist_ok=True, parents=True)
-                async with aiofiles.open(filepath, 'w') as f:
-                    await f.writelines(lines)
-                    installed_files.append(filepath)
-        return installed_files
+
+        self.debug('installing %s to %s', self.name, settings.destination)
+
+        installer = Installer(settings, mode, self)
+        await self.__install__(installer)
+        return installer.installed_files
+
 
     def get_dependency(self, dep: str | type, recursive=True) -> TargetDependencyLike:
         """Search for dependency"""
@@ -471,10 +636,10 @@ class Target(Logging, MakefileRegister, internal=True):
             def check(d): return d.name == dep
         else:
             def check(d): return isinstance(d, dep)
-        for dependency in self.dependencies:
+        for dependency in self.dependencies.all:
             if check(dependency):
                 return dependency
-        for dependency in self.preload_dependencies:
+        for dependency in self.preload_dependencies.all:
             if check(dependency):
                 return dependency
         if recursive:
@@ -496,8 +661,15 @@ class Target(Logging, MakefileRegister, internal=True):
     async def __build__(self):
         ...
 
-    async def __install__(self):
-        ...
+    async def __install__(self, installer: Installer):
+        if installer.dev:
+            if len(self.utils) > 0:
+                body = str()
+                for fn in self.utils:
+                    tmp = inspect.getsourcelines(fn)[0]
+                    tmp[0] = f'\n\n@self.utility\n'
+                    body += '\n'.join(tmp)
+                await installer.install_data(body, f'dan/{self.name}.py')
 
     async def __clean__(self):
         ...

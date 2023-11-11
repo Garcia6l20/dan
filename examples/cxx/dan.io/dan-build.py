@@ -5,17 +5,20 @@ from dan.testing import Test, Case
 
 catch2, = requires('catch2 = 3')
 
+cpp_std = 17
+
 @catch2.discover_tests
 class UseCatch2(Executable):
+    name = 'catch2-example'
     sources = 'test_catch2.cpp',
     dependencies = [
-        catch2,
+        'catch2:catch2-with-main',
         'spdlog >= 1.11',
     ]
 
 
 class TestSpdlog(Test, Executable):
-    name = 'test-spdlog'
+    name = 'spdlog-example'
     sources = 'test_spdlog.cpp',
     private_includes= '.',
     dependencies = (
@@ -25,7 +28,7 @@ class TestSpdlog(Test, Executable):
 
 
 class TestMbedTLS(Test, Executable):
-    name = 'test-mbedtls'
+    name = 'mbedtls-example'
     sources = 'test_mbedtls.cpp',
     dependencies = (
         'mbedtls:mbedcrypto = 3',
@@ -44,7 +47,7 @@ class TestMbedTLS(Test, Executable):
     ]
 
 class TestBoost(Test, Executable):
-    name = 'test-boost'
+    name = 'boost-example'
     sources= 'test_boost.cpp',
     dependencies= 'boost:boost-headers >= 1.82',
     cases = [

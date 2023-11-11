@@ -1,12 +1,12 @@
 import dataclasses
 from enum import Enum
 import types as typs
-import typing as t
 from click import *
 
 import inspect
 import asyncio
 
+import dan.core.typing as t
 from dan import logging
 
 class AsyncContext(Context):
@@ -49,6 +49,8 @@ class SettingsParamType(ParamType):
                     type = field.type
                     if isinstance(type, typs.GenericAlias):
                         type = t.get_origin(type)
+                    elif t.is_optional(type):
+                        type = t.get_args(type)[0]
                     if dataclasses.is_dataclass(type):
                         subfields = dataclasses.fields(type)
                         subparts = parts[1:]
@@ -76,3 +78,59 @@ class SettingsParamType(ParamType):
                         completions.append(CompletionItem(f'{prefix}{field.name}', type='nospace'))
         gen_comps(fields=self.fields, parts=incomplete.split('.'))
         return completions
+
+class OptionsParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from click.shell_completion import CompletionItem
+        from dan.make import Make
+        from dan.core.asyncio import sync_wait
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True)
+        sync_wait(make.initialize())
+        
+        comps = []
+        for opt in make.all_options:
+            if opt.fullname.startswith(incomplete):
+                comps.append(CompletionItem(opt.fullname, type='nospace'))
+        
+        return comps
+
+
+class TargetParamType(ParamType):
+    def __init__(self, target_types=None) -> None:
+        from dan.core.target import Target
+        if target_types is None:
+            self.target_types = (Target)
+        else:
+            self.target_types = tuple(target_types)
+        super().__init__()
+
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from click.shell_completion import CompletionItem
+        from dan.make import Make
+        from dan.core.asyncio import sync_wait
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True)
+        sync_wait(make.initialize())
+
+        
+        comps = []
+        for target in make.root.all_targets:
+            if isinstance(target, self.target_types) and target.fullname.startswith(incomplete):
+                comps.append(CompletionItem(target.fullname, type='nospace'))
+        
+        return comps
+
+
+class ToolchainParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from dan.cxx.detect import get_toolchains
+        from click.shell_completion import CompletionItem
+        toolchains = get_toolchains(create=False)["toolchains"]
+        
+        comps = []
+        for name in toolchains.keys():
+            if name.startswith(incomplete):
+                comps.append(CompletionItem(name))
+
+        return comps

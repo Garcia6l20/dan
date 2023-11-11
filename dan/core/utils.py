@@ -4,8 +4,9 @@ import os
 
 
 class chdir:
-    def __init__(self, path: Path, create=True):
+    def __init__(self, path: Path, create=True, strict=False):
         self.path = path
+        self.strict = strict
         if create:
             self.path.mkdir(parents=True, exist_ok=True)
         self.prev = None
@@ -16,7 +17,11 @@ class chdir:
         return None
 
     def __exit__(self, *args):
-        os.chdir(self.prev)
+        try:
+            os.chdir(self.prev)
+        except OSError:
+            if self.strict:
+                raise
 
 
 def unique(*seqs):

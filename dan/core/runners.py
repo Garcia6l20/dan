@@ -2,6 +2,7 @@
 import io
 import logging
 import os
+from pathlib import Path
 import subprocess
 import sys
 
@@ -22,14 +23,59 @@ _encoding = 'cp1252' if os.name == 'nt' else 'utf-8'
 
 
 async def log_stream(stream, *files):
-    while not stream.at_eof():
-        data = await stream.readline()
-        line = data.decode(_encoding)
-        for file in files:
-            if file in [sys.stdout, sys.stderr]:
-                tqdm.tqdm.write(line, end='', file=file)
-            else:
-                file.write(line)
+    with stream as lines:
+        async for line in lines:
+            for file in files:
+                if file in [sys.stdout, sys.stderr]:
+                    tqdm.tqdm.write(line, end='', file=file)
+                else:
+                    file.write(line)
+
+
+class AsyncStreamProducer:
+    
+    class Iterator:
+        def __init__(self) -> None:
+            self.q = asyncio.Queue()
+
+        async def __aiter__(self):
+            while True:
+                try:
+                    line = await self.q.get()
+                except asyncio.CancelledError:
+                    return
+                if line is None:
+                    self.q.task_done()
+                    return
+                yield line
+                self.q.task_done()
+
+    def __init__(self, stream) -> None:
+        self.stream = stream
+        self.__iterators: list[AsyncStreamProducer.Iterator] = list()
+
+    async def __notify(self, data):
+        asyncio.gather(*[it.q.put(data) for it in self.__iterators])
+        asyncio.gather(*[it.q.join() for it in self.__iterators])
+    
+    async def consume(self):
+        while not self.stream.at_eof():
+            data = await self.stream.readline()
+            if len(data) == 0:
+                continue
+            line = data.decode(_encoding)
+            await self.__notify(line)
+
+        await self.__notify(None)
+    
+    def __enter__(self):
+        it = self.Iterator()
+        self.__iterators.append(it)
+        return it
+
+    def __exit__(self, *exc):
+        pass
+
 
 _jobs_sem: asyncio.Semaphore = None
 
@@ -107,25 +153,40 @@ def cmdline2list(s: str):
 
     return result
 
-async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None):
+def list2cmdline(command: list|str):
+    if isinstance(command, list):
+        cmd = list()
+        for part in command:
+            if isinstance(part, Path):
+                cmd.append(part.as_posix())
+            else:
+                cmd.append(part)
+        return subprocess.list2cmdline(cmd)
+    return command
+
+
+async def async_run(command, log=True, logger: logging.Logger = None, no_raise=False, env=None, cwd=None, out_capture=None, err_capture=None, all_capture=None, input: str = None) -> tuple[str, str, int]:
     if _jobs_sem is not None:
         await _jobs_sem.acquire()
     try:
-        if not isinstance(command, str):
-            command = subprocess.list2cmdline(command)
-        if env:
+        command = list2cmdline(command)
+        if env is not None:
             e = dict(os.environ)
             for k, v in env.items():
                 e[k] = v
             env = e
-        if logger:
-            logger.debug(f'executing: {command}')
+        if input is not None:
+            stdin = asyncio.subprocess.PIPE
+        else:
+            stdin = None
+        if logger is not None:
+            logger.debug('executing: %s', command)
         proc = await asyncio.subprocess.create_subprocess_shell(command,
                                                                 stdout=asyncio.subprocess.PIPE,
                                                                 stderr=asyncio.subprocess.PIPE,
+                                                                stdin=stdin,
                                                                 env=env,
                                                                 cwd=cwd)
-
         out = io.StringIO()
         err = io.StringIO()
         outs = [out]
@@ -134,9 +195,34 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
             outs.append(sys.stdout)
             errs.append(sys.stderr)
 
+        out_iter = AsyncStreamProducer(proc.stdout)
+        err_iter = AsyncStreamProducer(proc.stderr)
+
+        futures = [
+            log_stream(out_iter, *outs),
+            log_stream(err_iter, *errs),
+        ]
+
+        if all_capture is not None:
+            out_capture = err_capture = all_capture
+
+        if out_capture is not None:
+            futures.append(out_capture(out_iter))
+
+        if err_capture is not None:
+            futures.append(out_capture(err_iter))
+
+        futures.extend([
+            out_iter.consume(),
+            err_iter.consume(),
+        ])
+        
+        if input is not None:
+            proc.stdin.write(input.encode())
+            proc.stdin.write_eof()
+    
         await asyncio.gather(
-            log_stream(proc.stdout, *outs),
-            log_stream(proc.stderr, *errs),
+            *futures,
             proc.wait())
         # make sure return code is available
         await proc.communicate()
@@ -154,14 +240,18 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
 
 
 def sync_run(command, pipe=True, logger: logging.Logger = None, no_raise=False, shell=True, env=None, cwd=None):
-    if not isinstance(command, str):
-        command = subprocess.list2cmdline(command)
+    command = list2cmdline(command)
     if pipe:
         stdout = subprocess.PIPE
     else:
         stdout = None
     if logger:
         logger.debug(f'executing: {command}')
+    if env:
+        e = dict(os.environ)
+        for k, v in env.items():
+            e[k] = v
+        env = e
     proc = subprocess.Popen(command,
                             stdout=stdout,
                             stderr=stdout,

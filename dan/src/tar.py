@@ -1,51 +1,75 @@
 import os
-from click import Path
-import tqdm
-from dan.core import aiofiles, asyncio
+import shutil
+import tempfile
+from pathlib import Path
+from dan.core.pathlib import Path
 from dan.core.target import Target
-import aiohttp
+from dan.core import aiofiles, asyncio
+from dan.core.runners import async_run
+from dan.src.base import SourcesProvider
 import tarfile
 import zipfile
 
+from dan.utils.net import fetch_file
 
-async def fetch_file(url, dest: Path):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                message = resp.read()
-                raise RuntimeError(f'unable to fetch {url}: {message.decode()}')
-            size = int(resp.headers.get('content-length', 0))
-
-            with tqdm.tqdm(
-                desc=f'downloading {dest.name}', total=size // 1024, leave=False, unit='Ko'
-            ) as progressbar:
-                async with aiofiles.open(dest, mode='wb') as f:
-                    async for chunk in resp.content.iter_chunked(1024):
-                        await f.write(chunk)
-                        progressbar.update(len(chunk) // 1024)
-
-
-class TarSources(Target, internal=True):
+class TarSources(SourcesProvider, internal=True):
 
     url: str
+    archive_name: str = None
+    extract_filter = None
+    patches = None
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.output: Path = 'sources'
+        self.output = str(self.name)
+
+    def __extract__(self, archive_path: Path, dest: Path):
+        if archive_path.suffix == '.zip':
+            with zipfile.ZipFile(archive_path) as f:
+                root = os.path.commonprefix(f.namelist())
+                f.extractall(dest)
+        else:
+            mode = 'r:*'
+            if len(archive_path.suffixes) and archive_path.suffixes[-1] == '.xz':
+                mode = 'r:xz'
+            with tarfile.open(archive_path, mode) as f:
+                root = None
+                def _filter(member: tarfile.TarInfo):
+                    nonlocal root
+                    if root is None:
+                        root = member.name
+                    else:
+                        root = os.path.commonprefix([root, member.name])
+                    if self.extract_filter is None:
+                        return member
+                    else:
+                        return self.extract_filter(member, dest / member.name)
+                members = []
+                for m in f:
+                    m = _filter(m)
+                    if m:
+                        members.append(m)
+                self.debug('extracting %d members', len(members))
+                f.extractall(dest, members)
+        return root
 
     async def __build__(self):
-        self.info(f'downloading {self.url}')
-        archive_name = self.url.split("/")[-1]
-        await fetch_file(self.url, self.build_path / archive_name)
-        self.info(f'extracting {archive_name}')
-        if archive_name.endswith('.zip'):
-            with zipfile.ZipFile(self.build_path / archive_name) as f:
-                root = os.path.commonprefix(f.namelist())
-                f.extractall(self.output.parent)
+        archive_name = self.archive_name or self.url.split("/")[-1]
+        archive_path = self.build_path / archive_name
+        if archive_path.exists():
+            self.debug('%s already available (download skipped)', archive_path)
         else:
-            with tarfile.open(self.build_path / archive_name) as f:
-                root = os.path.commonprefix(f.getnames())
-                f.extractall(self.output.parent)
-        async with asyncio.TaskGroup() as g:
-            g.create_task(aiofiles.os.rename(self.output.parent / root, self.output))
-            g.create_task(aiofiles.os.remove(self.build_path / archive_name))
+            self.info(f'downloading {self.url}')
+            await fetch_file(self.url, self.build_path / archive_name)
+        with tempfile.TemporaryDirectory(prefix=f'{self.name}-') as tmp_dest:
+            extract_dest = Path(tmp_dest) / 'a'
+            self.info(f'extracting {archive_name}')
+            root = await asyncio.get_event_loop().run_in_executor(None, self.__extract__, archive_path, extract_dest)
+            await asyncio.get_event_loop().run_in_executor(None, shutil.move, extract_dest / root, self.output)
+            
+            if self.patches is not None:
+                for patch in self.patches:
+                    self.info('applying %s', patch)
+                    await async_run(['bash', '-c', 'cd', self.output , '&&', 'patch', '-p0', '<', self.source_path / patch], logger=self, cwd=self.output)
+
+            await aiofiles.os.remove(archive_path)
