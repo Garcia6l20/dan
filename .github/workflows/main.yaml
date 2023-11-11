@@ -27,16 +27,18 @@ jobs:
           shell: bash
           with_conan: false
           targets: |
-            dan.io
+            dan.io.spdlog-example     \
+            dan.io.mbedtls-example    \
+            dan.io.catch2-example
 
         - name: Windows MSVC
           os: windows-latest
           shell: bash
           with_conan: false
           targets: |
-            libraries.use-simple-lib \
-            dan.io.test-mbedtls      \
-            dan.io.UseCatch2
+            libraries.use-simple-lib  \
+            dan.io.mbedtls-example    \
+            dan.io.catch2-example
 
         - name: Windows MINGW64
           os: windows-latest
@@ -45,8 +47,9 @@ jobs:
           scan_paths: -p D:\\msys64\\mingw64\\bin
           with_conan: false
           targets: |
-            libraries.use-simple-lib \
-            dan-examples.cxx.dan.io.test-spdlog
+            libraries.use-simple-lib  \
+            dan.io.mbedtls-example    \
+            dan.io.catch2-example
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.os }}
