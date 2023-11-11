@@ -170,16 +170,6 @@ class Package(Target, internal=True):
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
 
-        self.package_makefile, self.target = self.repo.find(self.name, self.package)
-        if self.target is None:
-            raise RuntimeError(f'cannot find {self.name} in {self.repo.name}')
-        if self.package is None:
-            self.package = self.package_makefile.name
-
-        if self.package in self.__all:
-            raise RuntimeError(f'duplicate package: {self.package}')
-
-        self.__all[self.package] = self
 
     def find(self, name):
         for t in self.package_makefile.all_installed:
@@ -187,7 +177,7 @@ class Package(Target, internal=True):
                 return t
 
     @classmethod
-    def instance(cls, name, version, *args, package=None, **kwargs):
+    async def instance(cls, name, version, *args, package=None, **kwargs):
 
         for _, pkg in cls.__all.items():
             if pkg.name == package:
@@ -201,11 +191,24 @@ class Package(Target, internal=True):
                         raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
                     return pkg, False
 
-        return Package(name, version, package, *args, **kwargs), True
+        pkg = Package(name, version, package, *args, **kwargs)
+        await pkg.initialize()
+        return pkg, True
 
     
     async def __initialize__(self):
 
+        self.package_makefile, self.target = self.repo.find(self.name, self.package)
+        if self.target is None:
+            raise RuntimeError(f'cannot find {self.name} in {self.repo.name}')
+        if self.package is None:
+            self.package = self.package_makefile.name
+
+        if self.package in self.__all:
+            raise RuntimeError(f'duplicate package: {self.package}')
+
+        self.__all[self.package] = self
+        
         match self.version:
             case str():
                 _name, spec = VersionSpec.parse(self.version)
