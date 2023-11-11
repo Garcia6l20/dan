@@ -147,6 +147,9 @@ class PackageBuild(Target, internal=True):
                 async with asyncio.TaskGroup(f'cleanup {self.name}') as group:
                     group.create_task(aiofiles.rmtree(build_path, force=True))
 
+class ReusePackage(BaseException):
+    def __init__(self, pkg):
+        self.pkg = pkg
 
 class Package(Target, internal=True):
     
@@ -191,9 +194,13 @@ class Package(Target, internal=True):
                         raise RuntimeError(f'incompatible package version: {pkg.version} {version}')
                     return pkg, False
 
-        pkg = Package(name, version, package, *args, **kwargs)
-        await pkg.initialize()
-        return pkg, True
+        try:
+            pkg = Package(name, version, package, *args, **kwargs)
+            await pkg.initialize()
+            return pkg, True
+        except ReusePackage as reuse:
+            # concurrent package initialization
+            return reuse.pkg, False
 
     
     async def __initialize__(self):
@@ -204,11 +211,6 @@ class Package(Target, internal=True):
         if self.package is None:
             self.package = self.package_makefile.name
 
-        if self.package in self.__all:
-            raise RuntimeError(f'duplicate package: {self.package}')
-
-        self.__all[self.package] = self
-        
         match self.version:
             case str():
                 _name, spec = VersionSpec.parse(self.version)
@@ -226,6 +228,17 @@ class Package(Target, internal=True):
                 self.spec = VersionSpec(self.version, '=')
             case None:
                 self.spec = None
+
+        if self.package in self.__all:
+            other = self.__all[self.package]
+            await other.initialize()
+            if not self.spec.is_compatible(other.version):
+                raise RuntimeError(f'duplicate package with incompatible version detected: {self.package} ({self.version} vs {other.version})')
+            if self.version != other.version:
+                self.warning(f'using {other.version} instead of {self.version}')
+            raise ReusePackage(other)
+
+        self.__all[self.package] = self
 
         self.pkg_build = PackageBuild(self.package,
                                       self.version,
