@@ -160,12 +160,14 @@ class MSVCToolchain(Toolchain):
     def cxxmodules_flags(self) -> list[str]:
         return list()
 
-    def make_compile_commands(self, sourcefile: Path, output: Path, options: list[str]) -> CommandArgsList:
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: list[str], build_type=None) -> CommandArgsList:
+        if build_type is None:
+            build_type = self.build_type
         deps = output.parent / sourcefile.with_suffix(".json").name
         args = [self.cc, *unique(self.common_flags, self.default_cflags, self.default_cxxflags, options),
                 '/sourceDependencies', deps,
                 f'/Fo{str(output)}', '/c', str(sourcefile)]
-        if self.build_type.is_debug_mode:
+        if build_type.is_debug_mode:
             args.append(f'/Fd{str(output.with_suffix(".pdb"))}')
         return [args]
 
