@@ -175,6 +175,7 @@ class Package(CXXTarget, internal=True):
         self.__cflags = None
         self.__libs = None
         self.__lib_paths = None
+        self.__bin_paths = None
         if not data:
             self.data = Data(self.config_path)
 
@@ -200,9 +201,10 @@ class Package(CXXTarget, internal=True):
             '__cflags': self.__cflags,
             '__libs': self.__libs,
             '__lib_paths': self.__lib_paths,
+            '__bin_paths': self.__bin_paths,
         }
     
-    def __setstate__(self, data):
+    def __setstate__(self, data: dict):
         from dan.core.include import context
         makefile = context.root
         self.__init__(data['pn'], data['search_paths'], data['config_path'],
@@ -213,6 +215,7 @@ class Package(CXXTarget, internal=True):
         self.__cflags = data['__cflags']
         self.__libs = data['__libs']
         self.__lib_paths = data['__lib_paths']
+        self.__bin_paths = data.get('__bin_paths', None)
 
     @property
     def modification_time(self):
@@ -260,6 +263,7 @@ class Package(CXXTarget, internal=True):
     def __init_libs(self):
         self.__libs = LibraryList()
         self.__lib_paths = set()
+        self.__bin_paths = set()
         libs = self.data.get('libs')
         if libs is not None:
             libs = cmdline2list(libs)
@@ -276,10 +280,35 @@ class Package(CXXTarget, internal=True):
                         self.__lib_paths.add(m[0])
                     case _:
                         self.__libs.add(l)
+
+        bindir = self.data.get('bindir')
+        if bindir is not None:
+            self.__bin_paths.add(Path(bindir).as_posix())
+        else:
+            exec_prefix = self.data.get('exec_prefix')
+            if exec_prefix is not None:
+                bindir = Path(exec_prefix) / 'bin'
+                if bindir.exists():
+                    self.__bin_paths.add(bindir.as_posix())
+        if self.toolchain.system.is_windows:
+            # on windows dlls needs to be in PATH
+            libdir = self.data.get('libdir')
+            if libdir is not None:
+                libdir = Path(libdir)
+                for dll in find_files(r'.+.dll', [libdir]):
+                    self.__bin_paths.add(dll.parent.as_posix())
+
         for pkg in self.package_dependencies:
             self.__lib_paths.update(pkg.lib_paths)
             self.__libs.extend(pkg.libs)
-        self.__lib_paths = list(sorted(self.__lib_paths))
+            self.__bin_paths.update(pkg.bin_paths)
+        self.__lib_paths = list(sorted(self.__lib_paths))        
+
+    @property
+    def bin_paths(self) -> list[str]:
+        if self.__bin_paths is None:
+            self.__init_libs()
+        return self.__bin_paths
 
     @property
     def lib_paths(self) -> list[str]:
@@ -365,22 +394,7 @@ def get_cached_bindirs():
     if __bindirs is None:
         __bindirs = set()
         for pkg in get_packages_cache().values():
-            bindir = getattr(pkg, 'bindir', None)
-            if bindir is not None:
-                __bindirs.add(Path(bindir))
-            else:
-                exec_prefix = getattr(pkg, 'exec_prefix', None)
-                if exec_prefix is not None:
-                    bindir = Path(exec_prefix) / 'bin'
-                    if bindir.exists():
-                        __bindirs.add(bindir)
-            if pkg.toolchain.system.is_windows:
-                # on windows dlls needs to be in PATH
-                libdir = getattr(pkg, 'libdir', None)
-                if libdir is not None:
-                    libdir = Path(libdir)
-                    if find_file(r'.+.dll', [libdir]):
-                        __bindirs.add(libdir)
+            __bindirs.update(pkg.bin_paths)
 
     return __bindirs
 
