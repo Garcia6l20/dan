@@ -1,3 +1,4 @@
+import collections
 import contextlib
 from functools import cached_property
 import functools
@@ -65,8 +66,17 @@ class Dependencies:
                     f'Unhandled dependency {dependency} ({type(dependency)})')
 
     def update(self, dependencies, public=True):
-        for dep in dependencies:
-            self.add(dep, public=public)
+        match dependencies:
+            case Dependencies():
+                for dep in dependencies.public:
+                    self.add(dep, public=True)
+                for dep in dependencies.private:
+                    self.add(dep, public=False)
+            case collections.abc.Iterable():
+                for dep in dependencies:
+                    self.add(dep, public=public)
+            case _:
+                raise RuntimeError('unhandled')
 
     def __getattr__(self, attr):
         for item in self._public:
@@ -368,7 +378,9 @@ class Target(Logging, MakefileRegister, internal=True):
 
         self.other_generated_files: set[Path] = set()
 
-        self.dependencies = Dependencies(self, [*self.dependencies, *self.public_dependencies], self.private_dependencies)
+        deps = self.dependencies
+        self.dependencies = Dependencies(self, self.public_dependencies, self.private_dependencies)
+        self.dependencies.update(deps)
         self.preload_dependencies = Dependencies(
             self, None, self.preload_dependencies)
 
