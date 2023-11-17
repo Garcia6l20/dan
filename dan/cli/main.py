@@ -120,7 +120,7 @@ async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], 
     async with ctx(no_init=True, **kwds) as make:
         if toolchain is None and make.config.toolchain is None:
             from dan.cxx.detect import get_toolchains
-            tp = click.Choice(get_toolchains(create=False)["toolchains"].keys())
+            tp = click.Choice([*get_toolchains(create=False)["toolchains"].keys(), 'default'])
             toolchain = click.prompt('Toolchain', type=tp, default='default')
 
         await make.configure(source_path, toolchain)
