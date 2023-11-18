@@ -7,6 +7,9 @@ from dan.core.target import Target
 from dan.pkgconfig.package import find_package
 
 
+import functools
+
+
 class _UIObject(Target, internal=True):
 
     def __init__(self, ui_file: Path, parent, *args, **kwargs) -> None:
@@ -77,46 +80,28 @@ class _MocObject(CXXObject, internal=True):
         self.source.parent.mkdir(parents=True, exist_ok=True)
         await async_run([p.moc, '-o', self.source,  self.header_file], logger=p, log=False, cwd=self.build_path, env=self.toolchain.env)
         await super().__build__()
-
+    
 class _Wrapper:
+
+    @functools.cached_property
+    def search_paths(self):
+        qt_core = self.get_dependency(f'Qt{self.qt_major}Core').target
+        return [qt_core.host_bins if hasattr(qt_core, 'host_bins') else qt_core.bindir, qt_core.prefix] 
+
+    @Target.root_cached_property('qt.moc_executable', Path.as_posix, Path)
+    def moc(self):
+        return find_executable('moc', paths=self.search_paths, default_paths=False)
+     
+    @Target.root_cached_property('qt.rcc_executable', Path.as_posix, Path)
+    def rcc(self):
+        return find_executable('rcc', paths=self.search_paths, default_paths=False)
+    
+    @Target.root_cached_property('qt.uic_executable', Path.as_posix, Path)
+    def uic(self):
+        return find_executable('uic', paths=self.search_paths, default_paths=False)
     
     async def __initialize__(self):
-        qt_core =  find_package(f'Qt{self.qt_major}Core', makefile=self.makefile)
-        await qt_core.initialize()
-        
-        _search_paths = None
-        def get_search_path():
-            nonlocal _search_paths
-            if _search_paths is None:
-                _search_paths = [qt_core.host_bins if hasattr(qt_core, 'host_bins') else qt_core.bindir, qt_core.prefix]
-            return _search_paths
-        
-        self.moc = self.makefile.cache.get('moc_executable')
-        if not self.moc:
-            self.moc = find_executable(
-                'moc', paths=get_search_path(), default_paths=False)
-            self.makefile.cache.moc_executable = str(self.moc)
-
-        self.rcc = self.makefile.cache.get('rcc_executable')
-        if not self.rcc:
-            self.rcc = find_executable(
-                'rcc', paths=get_search_path(), default_paths=False)
-            self.makefile.cache.rcc_executable = str(self.rcc)
-            
-        self.uic = self.makefile.cache.get('uic_executable')
-        if not self.uic:
-            self.uic = find_executable(
-                'uic', paths=get_search_path(), default_paths=False)
-            self.makefile.cache.uic_executable = str(self.uic)
-
-        self.dependencies.add(qt_core)
-
         self.includes.private.append(self.build_path)
-
-        for module in self.qt_modules:
-            pkg = find_package(f'Qt{self.qt_major}{module}', makefile=self.makefile)
-            await pkg.initialize()
-            self.dependencies.add(pkg)
 
         extra_include_paths = set()
         for ui_file in self.qt_ui_files:
@@ -182,11 +167,18 @@ def wrap(modules: list[str] = None, ui_files: list[str] = None, resource_files: 
         ui_files = []
     if resource_files is None:
         resource_files = []
+    modules = set(modules)
+    modules.add('Core') # mandatory
     def decorator(cls):
         from dan.core.include import context
         @context.current.wraps(cls)
         class QtWapped(_Wrapper, cls):
             __name__ = f'{cls.__name__}QtWrapped'
+            
+            def __init__(self, *args, **kwargs) -> None:
+                super().__init__(*args, **kwargs)
+                self.dependencies.update([f'Qt{major}{module}' for module in self.qt_modules], public=True)
+
             qt_modules = modules
             qt_ui_files = ui_files
             qt_resource_files = resource_files
@@ -194,4 +186,3 @@ def wrap(modules: list[str] = None, ui_files: list[str] = None, resource_files: 
             qt_build_moc = build_moc
         return QtWapped
     return decorator
-
