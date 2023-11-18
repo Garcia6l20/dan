@@ -21,7 +21,7 @@ from dan.core.makefile import MakeFile
 from dan.core.pathlib import Path
 from dan.core.include import MakeFileError, include_makefile, Context
 from dan.core import aiofiles, asyncio
-from dan.core.requirements import load_requirements
+from dan.core.requirements import RequiredPackage, load_requirements
 from dan.core.settings import InstallMode, InstallSettings, Settings
 from dan.core.test import Test
 from dan.core.utils import unique
@@ -412,9 +412,19 @@ class Make(logging.Logging):
 
         if targets is None:
             targets = self.targets
+        
+        all_targets = set(targets)
+        for t in targets:
+            for d in t.dependencies.all:
+                match d:
+                    case RequiredPackage():
+                        if d.target:
+                            all_targets.add(d.target)
+                    case Target():
+                        all_targets.add(d)
 
         with self.context, \
-             self.progress('building', targets, self._build_target, self.no_progress) as tasks:
+             self.progress('building', all_targets, self._build_target, self.no_progress) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
