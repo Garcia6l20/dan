@@ -1,6 +1,7 @@
 import tqdm
 from logging import *
 from termcolor import colored
+import sys
 
 # default level
 getLogger().setLevel(INFO)
@@ -76,6 +77,7 @@ _no_color_formatter = ColoredFormatter(use_color=False)
 class TqdmHandler(Handler):
     def emit(self, record):
         tqdm.tqdm.write(self.format(record))
+        sys.stdout.flush()
 
 
 def setup_logger(logger: Logger):
