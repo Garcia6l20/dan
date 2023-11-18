@@ -323,6 +323,84 @@ class Target(Logging, MakefileRegister, internal=True):
     inherits_version = True
     subdirectory: str = None
 
+    __cache_nop_codec = lambda x: x
+
+    @staticmethod
+    def root_cached(name, encode=None, decode=None, get_fn=None):
+        """Create new property for cached variable (root scope)"""
+        encode = encode or __cache_nop_codec
+        decode = decode or __cache_nop_codec
+        def get(obj):
+            result = obj.makefile.root.cache.data.get(name)
+            if result is not None:
+                return decode(result)
+            elif get_fn is not None:
+                result = get_fn(obj)
+                if result is not None:
+                    obj.makefile.root.cache.data[name] = encode(result)
+                return result
+
+        def set(obj, value):
+            obj.makefile.root.cache.data[name] = encode(value)
+        return property(get, set)
+
+    @staticmethod
+    def root_cached_property(name, encode=None, decode=None):
+        """Create new property for cached variable (root scope)"""
+        def wrapper(get_fn):
+            return Target.root_cached(name, encode, decode, get_fn)
+        return wrapper
+    
+    @staticmethod
+    def makefile_cached(name, encode=None, decode=None, get_fn=None):
+        """Create new property for cached variable (makefile scope)"""
+        encode = encode or __cache_nop_codec
+        decode = decode or __cache_nop_codec
+        def get(obj):
+            result = obj.makefile.cache.data.get(name)
+            if result is not None:
+                return decode(result)
+            elif get_fn is not None:
+                result = get_fn(obj)
+                if result is not None:
+                    obj.makefile.cache.data[name] = encode(result)
+                return result
+        def set(obj, value):
+            obj.makefile.cache.data[name] = encode(value)
+        return property(get, set)
+
+    @staticmethod
+    def makefile_cached_property(name, encode=None, decode=None):
+        """Create new property for cached variable (makefile scope)"""
+        def wrapper(get_fn):
+            return Target.makefile_cached(name, encode, decode, get_fn)
+        return wrapper
+    
+    @staticmethod
+    def target_cached(name, encode=None, decode=None, get_fn=None):
+        """Create new property for cached variable (target scope)"""
+        encode = encode or __cache_nop_codec
+        decode = decode or __cache_nop_codec
+        def get(obj):
+            result = obj.cache.get(name)
+            if result is not None:
+                return decode(result)
+            elif get_fn is not None:
+                result = get_fn(obj)
+                if result is not None:
+                    obj.cache.data[name] = encode(result)
+                return result
+        def set(obj, value):
+            obj.cache[name] = encode(value)
+        return property(get, set)
+        
+    @staticmethod
+    def target_cached_property(name, encode=None, decode=None):
+        """Create new property for cached variable (target scope)"""
+        def wrapper(get_fn):
+            return Target.target_cached(name, encode, decode, get_fn)
+        return wrapper
+
     def __init__(self,
                  name: str = None,
                  parent: 'Target' = None,
@@ -341,9 +419,9 @@ class Target(Logging, MakefileRegister, internal=True):
             self.name = self.__class__.__name__
         
         if self.provides is None:
-            self.provides = [self.name]
+            self.provides = {self.name}
         else:
-            self.provides = set([self.name, *self.provides])
+            self.provides = set(self.provides)
 
         if default is not None:
             self.default = default
