@@ -25,6 +25,7 @@ class PackageBuild(Target, internal=True):
         self._build_path = None
         self.toolchain = self.context.get('cxx_target_toolchain')
         self.lock: aiofiles.FileLock = None
+        self.__up_to_date = True
 
     
     @property
@@ -77,16 +78,13 @@ class PackageBuild(Target, internal=True):
         
         # update package build-path
         makefile.build_path = self.build_path / 'build'
-
-
-        # set our output to the last installed package
-        # TODO handle multiple outputs, then set our outputs to all installed packages
-        pkg_name = makefile.all_installed[-1].name     
-        self.output = Path(self.install_settings.libraries_prefix) / 'pkgconfig' / f'{pkg_name}.pc'
         
-        for pkg in find_files(rf'.+{pkg_name}.+\.pc$', [self.install_settings.libraries_destination, self.install_settings.data_destination], re.IGNORECASE):
-            self.output = pkg
-            break
+        for target in self.package_makefile.all_installed:
+            for provided in target.provides:
+                pkg_file = find_file(rf'(lib)?{provided}.pc', [self.install_settings.libraries_destination, self.install_settings.data_destination], re.IGNORECASE)
+                if pkg_file is None:
+                    self.__up_to_date = False
+                    break
 
         for target in self.package_makefile.all_installed:
             for source_target in target.preload_dependencies.all:
@@ -96,6 +94,10 @@ class PackageBuild(Target, internal=True):
                         source_target.output /= target.subdirectory
 
         return await super().__initialize__()
+    
+    @property
+    def up_to_date(self):
+        return self.__up_to_date
     
     @property
     def build_path(self) -> Path:
@@ -293,7 +295,7 @@ class Package(Target, internal=True):
                 group.create_task(self._import_cmake_pkg(pkg))
 
         if self.output.exists():
-            from dan.pkgconfig.package import Data, find_package
+            from dan.pkgconfig.package import Data
             data = Data(self.output)
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 toolchain = self.context.get('cxx_target_toolchain')
