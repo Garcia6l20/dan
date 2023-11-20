@@ -36,7 +36,6 @@ def requires(*requirements) -> list[Target]:
 class Context(Logging):
     def __init__(self) -> None:
         self.__root: MakeFile = None
-        self.__all_makefiles: set[MakeFile] = set()
         self.imported_makefiles: dict[Path, MakeFile] = dict()
         self.__ctx_stack: list[Context] = []
         self.__makefile_stack: list[MakeFile] = []
@@ -53,7 +52,7 @@ class Context(Logging):
 
     @property
     def all_makefiles(self) -> set[MakeFile]:
-        return self.__all_makefiles
+        return self.imported_makefiles.values()
 
 
     def get(self, name, default=None):
