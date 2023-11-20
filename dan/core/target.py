@@ -199,17 +199,19 @@ class Options:
         self.update(default)
 
     def add(self, name: str, default_value, help=None):
-        if self.get(name) is not None:
+        if self.get(name, False) is not None:
             raise RuntimeError(f'duplicate options detected ({name})')
         opt = Option(self, f'{self.__parent.fullname}.{name}',
                      default_value, help=help)
         self.__items.append(opt)
         return opt
 
-    def get(self, name: str):
+    def get(self, name: str, parent_lookup = True):
         for o in self.__items:
             if name in {o.name, o.fullname}:
                 return o
+        if parent_lookup:
+            return self.__parent.parent.options.get(name)
 
     def update(self, options: dict):
         for k, v in options.items():
