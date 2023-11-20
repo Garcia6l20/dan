@@ -330,8 +330,8 @@ class Target(Logging, MakefileRegister, internal=True):
     @staticmethod
     def root_cached(name, encode=None, decode=None, get_fn=None):
         """Create new property for cached variable (root scope)"""
-        encode = encode or __cache_nop_codec
-        decode = decode or __cache_nop_codec
+        encode = encode or Target.__cache_nop_codec
+        decode = decode or Target.__cache_nop_codec
         def get(obj):
             result = obj.makefile.root.cache.data.get(name)
             if result is not None:
@@ -356,8 +356,8 @@ class Target(Logging, MakefileRegister, internal=True):
     @staticmethod
     def makefile_cached(name, encode=None, decode=None, get_fn=None):
         """Create new property for cached variable (makefile scope)"""
-        encode = encode or __cache_nop_codec
-        decode = decode or __cache_nop_codec
+        encode = encode or Target.__cache_nop_codec
+        decode = decode or Target.__cache_nop_codec
         def get(obj):
             result = obj.makefile.cache.data.get(name)
             if result is not None:
@@ -381,8 +381,8 @@ class Target(Logging, MakefileRegister, internal=True):
     @staticmethod
     def target_cached(name, encode=None, decode=None, get_fn=None):
         """Create new property for cached variable (target scope)"""
-        encode = encode or __cache_nop_codec
-        decode = decode or __cache_nop_codec
+        encode = encode or Target.__cache_nop_codec
+        decode = decode or Target.__cache_nop_codec
         def get(obj):
             result = obj.cache.get(name)
             if result is not None:
@@ -783,3 +783,12 @@ class Target(Logging, MakefileRegister, internal=True):
             fn = functools.partial(fn, inst)
         setattr(cls, name, fn)
         return fn
+
+    async def run(self, command, cwd=None, env=None, **kwargs):
+        from dan.core.runners import async_run
+        kwargs['logger'] = self
+        if cwd is None:
+            cwd = self.build_path
+        if env is None:
+            env = getattr(self, 'env', None)
+        return await async_run(command, cwd=cwd, env=env, **kwargs)
