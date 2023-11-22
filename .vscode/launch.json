@@ -209,7 +209,7 @@
             }
         },
         {
-            "name": "cxx/smc",
+            "name": "cxx/src",
             "type": "python",
             "request": "launch",
             "module": "dan",
@@ -218,14 +218,14 @@
                 "${input:makefileCommand}",
                 "-v"
             ],
-            "cwd": "${workspaceFolder}/examples/cxx/smc",
+            "cwd": "${workspaceFolder}/examples/cxx/src",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
                 "DAN_BUILD_PATH": "./build"
             }
         },
         {
-            "name": "cxx/smc/catch2",
+            "name": "cxx/src/catch2",
             "type": "python",
             "request": "launch",
             "module": "dan",
@@ -234,14 +234,14 @@
                 "${input:makefileCommand}",
                 "-v"
             ],
-            "cwd": "${workspaceFolder}/examples/cxx/smc/catch2",
+            "cwd": "${workspaceFolder}/examples/cxx/src/catch2",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
                 "DAN_BUILD_PATH": "./build"
             }
         },
         {
-            "name": "cxx/smc/spdlog",
+            "name": "cxx/src/spdlog",
             "type": "python",
             "request": "launch",
             "module": "dan",
@@ -250,7 +250,7 @@
                 "${input:makefileCommand}",
                 "-v"
             ],
-            "cwd": "${workspaceFolder}/examples/cxx/smc/spdlog",
+            "cwd": "${workspaceFolder}/examples/cxx/src/spdlog",
             "env": {
                 "PYTHONPATH": "${workspaceFolder}",
                 "DAN_BUILD_PATH": "./build"

@@ -16,7 +16,7 @@ class Catch2Source(GitSources):
 
 class Catch2(CMakeProject):
     name = 'catch2'
-    provides = ['catch2-with-main']
+    provides = ['catch2', 'catch2-with-main']
     preload_dependencies = [Catch2Source]
     cmake_options_prefix = 'CATCH'    
 

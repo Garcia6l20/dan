@@ -210,7 +210,7 @@ class Options:
         for o in self.__items:
             if name in {o.name, o.fullname}:
                 return o
-        if parent_lookup:
+        if parent_lookup and self.__parent.parent is not None:
             return self.__parent.parent.options.get(name)
 
     def update(self, options: dict):
