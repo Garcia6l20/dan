@@ -41,7 +41,10 @@ class Dependencies:
                 content.append(dependency)
             case type():
                 assert issubclass(dependency, Target)
-                content.append(self.makefile.find(dependency))
+                dep = self.makefile.find(dependency)
+                if dep is None:
+                    raise RuntimeError(f'cannot find dependency class: {dependency.__name__}')
+                content.append(dep)
             case str():
                 from dan.pkgconfig.package import Package
                 for pkg in Package.all.values():

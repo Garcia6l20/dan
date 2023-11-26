@@ -105,7 +105,7 @@ class MakeFile(sys.__class__, Logging):
         else:
             def check(t: Target):
                 return name_or_class in t.provides
-        for t in self.targets:
+        for t in self.__targets:
             if check(t):
                 return t
         for c in self.children:
@@ -161,13 +161,14 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def targets(self) -> set[Target]:
-        return self.__targets
+        return {t for t in self.__targets if self.is_requirement == t.is_requirement}
 
     @property
     def all_targets(self) -> set[Target]:
         targets = self.targets
         for c in self.children:
-            targets.update(c.all_targets)
+            if self.is_requirement == c.is_requirement:
+                targets.update(c.all_targets)
         return targets
 
     @property
@@ -203,11 +204,11 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def default(self):
-        return [target for target in self.targets if target.default == True if not target.is_requirement]
+        return [target for target in self.targets if target.default == True]
 
     @property
     def all_default(self):
-        return [target for target in self.all_targets if target.default == True if not target.is_requirement]
+        return [target for target in self.all_targets if target.default == True]
     
     @cached_property
     def root(self):
