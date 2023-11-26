@@ -54,6 +54,9 @@ class RequiredPackage(Logging):
         self.target : 'Target' = None
         self.pn = name
         self.package, self.name, self.repository = parse_package(name)
+        # fullfill Logging requirements
+        setattr(self, 'fullname', str(self))
+        setattr(self, '_logger', None)
         self.__skipped = list()
 
     def __getstate__(self) -> object:
