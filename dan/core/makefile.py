@@ -203,11 +203,11 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def default(self):
-        return [target for target in self.targets if target.default == True]
+        return [target for target in self.targets if target.default == True if not target.is_requirement]
 
     @property
     def all_default(self):
-        return [target for target in self.all_targets if target.default == True]
+        return [target for target in self.all_targets if target.default == True if not target.is_requirement]
     
     @cached_property
     def root(self):
