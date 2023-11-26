@@ -464,8 +464,6 @@ class Target(Logging, MakefileRegister, internal=True):
         self.preload_dependencies = Dependencies(
             self, None, self.preload_dependencies)
 
-        super().__init__(self.fullname)
-
         self._output: Path = None
         self._build_path = None
         
@@ -722,7 +720,7 @@ class Target(Logging, MakefileRegister, internal=True):
         return installer.installed_files
 
 
-    def get_dependency(self, dep: str | type, recursive=True) -> TargetDependencyLike:
+    def __get_dependency(self, dep: str | type, recursive=True) -> TargetDependencyLike:
         """Search for dependency"""
         if isinstance(dep, str):
             def check(d): return d.name == dep
@@ -737,9 +735,21 @@ class Target(Logging, MakefileRegister, internal=True):
         if recursive:
             # not found... look for dependencies' dependencies
             for target in self.target_dependencies:
-                dependency = target.get_dependency(dep)
+                dependency = target.__get_dependency(dep)
                 if dependency is not None:
                     return dependency
+
+    def get_dependency(self, dep: str | type, recursive=True) -> TargetDependencyLike:
+        dependency = self.__get_dependency(dep, recursive)
+        from dan.core.requirements import RequiredPackage
+        match dependency:
+            case RequiredPackage():
+                if dependency.target is not None:
+                    return dependency.target
+                else:
+                    return dependency
+            case _:
+                return dependency
 
     async def __preload__(self):
         ...
