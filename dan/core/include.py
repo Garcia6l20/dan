@@ -40,7 +40,6 @@ class Context(Logging):
         self.__ctx_stack: list[Context] = []
         self.__makefile_stack: list[MakeFile] = []
         self.__attributes = dict()
-        super().__init__('context')
 
     @property
     def root(self):

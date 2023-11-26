@@ -6,9 +6,10 @@ import sys
 from dan.core.cache import Cache
 from dan.core.target import Options, Target
 from dan.core.test import Test
+from dan.logging import Logging
 
 
-class MakeFile(sys.__class__):
+class MakeFile(sys.__class__, Logging):
 
     def _setup(self,
                name: str,

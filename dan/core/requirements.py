@@ -51,7 +51,6 @@ class RequiredPackage(Logging):
             self.version_spec = args[1]
         else:
             name, self.version_spec = VersionSpec.parse(args[0])
-        super().__init__(name)
         self.target : 'Target' = None
         self.pn = name
         self.package, self.name, self.repository = parse_package(name)

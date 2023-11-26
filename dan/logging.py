@@ -110,17 +110,35 @@ setLoggerClass(ColoredLogger)
 
 
 class Logging:
-    def __init__(self, name: str = None) -> None:
-        if name is None:
-            name = self.__class__.__name__
-        if name.startswith('root.'):
-            name = name.removeprefix('root.')
-        self._logger = getLogger(name)
-        self.trace = self._logger.trace
-        self.debug = self._logger.debug
-        self.info = self._logger.info
-        self.warning = self._logger.warning
-        self.error = self._logger.error
+
+    def get_logger(self, name = None):
+        logger = getattr(self, '_logger', None)
+        if logger is None:
+            if name is None:
+                name = getattr(self, 'fullname', self.__class__.__name__)
+            if name.startswith('root.'):
+                name = name.removeprefix('root.')
+            logger = getLogger(name)
+            setattr(self, '_logger', logger)
+        return logger
+    
+    def trace(self, msg, *args, **kwargs):
+        self.get_logger().trace(msg, *args, **kwargs)
+
+    def debug(self, msg, *args, **kwargs):
+        self.get_logger().debug(msg, *args, **kwargs)
+
+    def info(self, msg, *args, **kwargs):
+        self.get_logger().info(msg, *args, **kwargs)
+        
+    def warning(self, msg, *args, **kwargs):
+        self.get_logger().warning(msg, *args, **kwargs)
+    
+    def error(self, msg, *args, **kwargs):
+        self.get_logger().error(msg, *args, **kwargs)
+
+    def critical(self, msg, *args, **kwargs):
+        self.get_logger().critical(msg, *args, **kwargs)
 
 
 def _get_makefile_logger():

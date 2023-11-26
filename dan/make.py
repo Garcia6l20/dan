@@ -148,8 +148,6 @@ class Make(logging.Logging):
 
         logging.getLogger().setLevel(log_level)
 
-        super().__init__('make')
-
         if diags:
             diag.enabled = True
 

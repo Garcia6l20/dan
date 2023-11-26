@@ -99,7 +99,7 @@ class Toolchain(Logging):
         self.version = Version(data['version'])
         self.settings = settings
         self.cache = dict() if cache is None else cache
-        Logging.__init__(self, f'{self.type}-{self.version}')
+        self.get_logger(f'{self.type}-{self.version}')
         self.env = None
         self.rpath = None
         self._build_type = BuildType.debug
