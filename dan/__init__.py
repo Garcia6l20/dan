@@ -3,6 +3,7 @@ import dan.logging
 import dan.core.include
 from dan.core.include import include, requires
 from dan.core.generator import generator
+from dan.core.target import Target
 from dan.pkgconfig.package import find_package
 
 
