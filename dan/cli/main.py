@@ -1,3 +1,4 @@
+import inspect
 import os
 import sys
 import contextlib
@@ -34,10 +35,6 @@ _common_opts = [
     click.option('--no-progress', is_flag=True,
                  help='Disable progress bars', envvar='DAN_NOPROGRESS'),
 ]
-_base_help_ = '''
-  PATH          Either build or source directory.
-  [TARGETS...]  Targets to process.
-'''
 
 
 def add_options(options):
@@ -89,7 +86,7 @@ def show_diags(ctx: CommandsContext):
         if diags:
             click.echo(f'DIAGNOSTICS: {diags.to_json()}')
 
-@click.group()
+@click.group(no_args_is_help=True)
 @click.version_option(package_name='dan-build')
 @click.option('--quiet', '-q', is_flag=True,
               help='Dont print informations (errors only)')
@@ -102,6 +99,36 @@ def cli(ctx: click.AsyncContext, **kwds):
     ctx.obj = CommandsContext(**kwds)
     ctx.call_on_close(show_diags)
 
+@cli.command('cli', context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True,
+))
+@common_opts
+@click.option('--help', is_flag=True)
+@pass_context
+@click.pass_context
+async def user_cli_command(click_ctx, ctx, help, *args, **kwargs):
+    async with ctx(no_init=False, **kwargs) as make:
+        if not click_ctx.args:
+            click.echo(user_cli.get_help(click_ctx))
+            return 1
+        args = click_ctx.args
+        if help:
+            args.append('--help')
+        name, command, args = user_cli.resolve_command(click_ctx, click_ctx.args)
+        setattr(click_ctx, 'obj', make)
+        cmd_ctx = command.make_context(name, args, parent=click_ctx)
+        ret = cmd_ctx.invoke(command)
+        if inspect.isawaitable(ret):
+            return await ret
+        else:
+            return ret
+user_cli_command.add_help_option = False
+
+@click.group()
+def user_cli():
+    pass
+user_cli.context_class = click.AsyncContext
 
 @cli.command()
 @click.option('--verbose', '-v', is_flag=True,
