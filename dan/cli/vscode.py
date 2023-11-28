@@ -22,9 +22,9 @@ def get_intellisense_mode(toolchain : Toolchain):
     return '-'.join(mode)
 
 class Code(Logging):
+    fullname = 'code'
     def __init__(self, make: Make) -> None:
         self.make = make
-        super().__init__('code')
 
     def get_test_suites(self, pretty):
         from dan.core.include import MakeFile
