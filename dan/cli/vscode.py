@@ -173,7 +173,7 @@ class Code(Logging):
             browse_path.update(target.includes.private_raw)
             browse_path.update(target.includes.public_raw)
             compiler_args.update(target.cxx_flags)
-            if target.cpp_std > cpp_std:
+            if target.cpp_std is not None and target.cpp_std > cpp_std:
                 cpp_std = target.cpp_std
 
         from dan.pkgconfig.package import get_packages_cache
