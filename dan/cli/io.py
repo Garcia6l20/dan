@@ -1,3 +1,4 @@
+from dan import logging
 
 import asyncio
 import fnmatch
