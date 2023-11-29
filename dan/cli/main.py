@@ -29,7 +29,7 @@ _common_opts = [
     click.option('--quiet', '-q', is_flag=True,
                  help='Dont print informations (errors only).', envvar='DAN_QUIET'),
     click.option('--verbose', '-v', count=True,
-                 help='Pring debug informations.', envvar='DAN_VERBOSE'),
+                 help='Verbosity level.', envvar='DAN_VERBOSE'),
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
     click.option('--no-progress', is_flag=True,
@@ -90,8 +90,8 @@ def show_diags(ctx: CommandsContext):
 @click.version_option(package_name='dan-build')
 @click.option('--quiet', '-q', is_flag=True,
               help='Dont print informations (errors only)')
-@click.option('--verbose', '-v', is_flag=True,
-              help='Pring debug informations')
+@click.option('--verbose', '-v', count=True,
+              help='Verbosity level')
 @click.option('--jobs', '-j',
               help='Maximum jobs', default=None, type=int)
 @click.pass_context
@@ -127,8 +127,8 @@ def user_cli():
 user_cli.context_class = click.AsyncContext
 
 @cli.command()
-@click.option('--verbose', '-v', is_flag=True,
-              help='Pring debug informations')
+@click.option('--verbose', '-v', count=True,
+              help='Verbosity level')
 @click.option('--toolchain', '-t', help='The toolchain to use',
               type=click.ToolchainParamType(), envvar='DAN_TOOLCHAIN')
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
@@ -210,15 +210,15 @@ async def package(ctx: CommandsContext, pkg_type, mode: str, **kwargs):
 
 
 @cli.command()
-@click.option('--verbose', '-v', is_flag=True,
-              help='Pring debug informations')
+@click.option('--verbose', '-v', count=True,
+              help='Verbosity level')
 @click.option('--yes', '-y', is_flag=True, help='Proceed without asking')
 @click.option('--root', '-r', help='Root path to search for installation manifest', type=click.Path(exists=True, file_okay=False))
 @click.argument('NAME')
-def uninstall(verbose: bool, yes: bool, root: str, name: str):
+def uninstall(verbose: int, yes: bool, root: str, name: str):
     """Uninstall previous installation"""
     if verbose == 0:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.INFO)
     elif verbose == 1:
         logging.getLogger().setLevel(logging.DEBUG)
     else:

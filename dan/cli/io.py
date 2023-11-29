@@ -23,7 +23,10 @@ async def get_make(toolchain='default', quiet=True):
         source_path = get_source_path()
         os.chdir(source_path)
         (source_path / 'dan-build.py').touch()
-        make = Make(source_path / 'build', quiet=quiet)
+        kwds = dict()
+        if quiet:
+            kwds['verbose'] = -1
+        make = Make(source_path / 'build', **kwds)
         make.config.source_path = str(source_path)
         make.config.build_path = str(source_path / 'build')
         make.config.toolchain = toolchain
@@ -61,8 +64,14 @@ async def make_context(toolchain='default', quiet=True):
 
 
 @click.group()
-def cli():
-    pass
+@click.option('--verbose', '-v', count=True)
+def cli(verbose):
+    if verbose == 0:
+        logging.getLogger().setLevel(logging.ERROR)
+    elif verbose == 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.TRACE)
 
 @cli.command()
 @click.option('--setting', '-s', 'settings', type=click.SettingsParamType(RepositoriesSettings), multiple=True)
