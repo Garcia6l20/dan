@@ -100,6 +100,9 @@ class RequiredPackage(Logging):
             return f'RequiredPackage[{self.name} {self.version_spec}]'
         return f'RequiredPackage[{self.name}]'
     
+    def __repr__(self) -> str:
+        return f'{self} at {hex(id(self))}'
+    
 
 def parse_requirement(req: str) -> RequiredPackage:
     req = req.strip()

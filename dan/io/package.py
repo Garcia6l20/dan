@@ -234,9 +234,9 @@ class Package(Target, internal=True):
         if self.package in self.__all:
             other = self.__all[self.package]
             await other.initialize()
-            if not self.spec.is_compatible(other.version):
+            if self.spec is not None and not self.spec.is_compatible(other.version):
                 raise RuntimeError(f'duplicate package with incompatible version detected: {self.package} ({self.version} vs {other.version})')
-            if self.version != other.version:
+            if self.version is not None and self.version != other.version:
                 self.warning(f'using {other.version} instead of {self.version}')
             raise ReusePackage(other)
 

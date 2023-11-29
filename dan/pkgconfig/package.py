@@ -341,9 +341,10 @@ class Package(CXXTarget, internal=True):
         if value is None:
             raise AttributeError(name) #@IgnoreException
         return value
+    
+    def __repr__(self):
+        return f'Package[{self.name}] at {hex(id(self))}'
 
-
-_jinja_env: jinja2.Environment = None
 
 _pkgconfig_cache = None
 def get_packages_cache() -> dict[str, Package]:
@@ -398,6 +399,7 @@ def get_cached_bindirs():
 
     return __bindirs
 
+_jinja_env: jinja2.Environment = None
 def _get_jinja_env():
     global _jinja_env
     if _jinja_env is None:

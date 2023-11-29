@@ -118,11 +118,7 @@ async def user_cli_command(click_ctx, ctx, help, *args, **kwargs):
         name, command, args = user_cli.resolve_command(click_ctx, click_ctx.args)
         setattr(click_ctx, 'obj', make)
         cmd_ctx = command.make_context(name, args, parent=click_ctx)
-        ret = cmd_ctx.invoke(command)
-        if inspect.isawaitable(ret):
-            return await ret
-        else:
-            return ret
+        return asyncio.may_await(cmd_ctx.invoke(command))
 user_cli_command.add_help_option = False
 
 @click.group()

@@ -4,6 +4,7 @@ distro
 pyyaml
 aiofiles
 aiohttp
+async-property
 termcolor
 tqdm
 dataclasses-json

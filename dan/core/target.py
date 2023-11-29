@@ -8,7 +8,6 @@ from typing import Any, Callable, Iterable, Union, TypeAlias
 import inspect
 
 from dan.core import asyncio, aiofiles, utils, diagnostics as diags
-from dan.core.cache import Cache
 from dan.core.requirements import load_requirements
 from dan.core.settings import InstallMode, InstallSettings, safe_load
 from dan.core.version import Version
@@ -604,11 +603,7 @@ class Target(Logging, MakefileRegister, internal=True):
             for dep in self.target_dependencies:
                 group.create_task(dep.preload())
 
-        res = self.__preload__()
-        if inspect.iscoroutine(res):
-            res = await res
-        self.trace('preloaded')
-        return res
+        return await asyncio.may_await(self.__preload__())
 
     @asyncio.cached
     async def load_dependencies(self):
@@ -627,12 +622,7 @@ class Target(Logging, MakefileRegister, internal=True):
             for dep in self.target_dependencies:
                 group.create_task(dep.initialize())
 
-        res = self.__initialize__()
-        if inspect.iscoroutine(res):
-            res = await res
-            
-        self.trace('initialized')
-        return res
+        return await asyncio.may_await(self.__initialize__())
 
     @property
     def modification_time(self):
@@ -663,9 +653,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
         await self._build_dependencies()
 
-        result = self.__prebuild__()
-        if inspect.iscoroutine(result):
-            await result
+        result = await asyncio.may_await(self.__prebuild__())
 
         if self.up_to_date:
             self.trace('up to date !')
@@ -677,9 +665,8 @@ class Target(Logging, MakefileRegister, internal=True):
             self.debug('building...')
             if diags.enabled:
                 self.diagnostics.clear()
-            result = self.__build__()
-            if inspect.iscoroutine(result):
-                result = await result
+                
+            result = await asyncio.may_await(self.__build__())
             if self.output is None:
                 (self.build_path / f'{self.name}.stamp').touch()
             self.cache['options_sha1'] = self.options.sha1
@@ -708,9 +695,7 @@ class Target(Logging, MakefileRegister, internal=True):
             for f in self.other_generated_files:
                 if f.exists():
                     group.create_task(aiofiles.os.remove(f))
-            res = self.__clean__()
-            if inspect.iscoroutine(res):
-                group.create_task(res)
+            group.create_task(asyncio.may_await(self.__clean__()))
 
     @asyncio.cached(unique = True)
     async def install(self, settings: InstallSettings, mode: InstallMode):

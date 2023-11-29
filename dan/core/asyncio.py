@@ -1,12 +1,25 @@
 from asyncio import *
+from async_property import *
 
 import threading
 import concurrent
 import multiprocessing
 import typing as t
+import inspect
 
 from dan.core.functools import BaseDecorator
 
+
+async def may_await(obj):
+    '''Awaits given object if it is an awaitable
+    
+    If obj is an awaitable it's await-result is returned.
+    If obj is not an awaitable it is returned directly.
+    '''
+    if inspect.isawaitable(obj):
+        return await obj
+    else:
+        return obj
 
 class Cached(BaseDecorator):
 

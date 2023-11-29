@@ -1,6 +1,7 @@
 import aiofiles
 from dan.core.pathlib import Path
 from dan.core.target import Target, TargetDependencyLike
+from dan.core import asyncio
 from typing import Callable
 import inspect
 
@@ -24,14 +25,12 @@ class generator:
                 import jinja2
                 arg_spec = inspect.getfullargspec(fn)
                 if 'self' in arg_spec.args:
-                    data = fn(self)
+                    data = await asyncio.may_await(fn(self))
                 elif not arg_spec.args:
-                    data = fn()
+                    data = await asyncio.may_await(fn())
                 else:
                     raise RuntimeError(
                         "Only 'self' is allowed as Generator argument")
-                if inspect.isawaitable(data):
-                    data = await data
                 self.output.parent.mkdir(parents=True, exist_ok=True)
                 env = jinja2.Environment(
                     loader=jinja2.FileSystemLoader(self.source_path))
