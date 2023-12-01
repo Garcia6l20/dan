@@ -29,6 +29,7 @@ from dan.cxx import init_toolchains
 from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
+from dan.core.progress import progress as gprogress, ProgressMode, set_progress_mode
 
 
 def flatten(list_of_lists):
@@ -128,7 +129,7 @@ class Make(logging.Logging):
     _config_name = 'dan.config.json'
     _cache_name = 'dan.cache'
 
-    def __init__(self, build_path: str, targets: list[str] = None, verbose: int = 0, for_install: bool = False, jobs: int = None, no_progress=False, diags=False):
+    def __init__(self, build_path: str, targets: list[str] = None, verbose: int = 0, for_install: bool = False, jobs: int = None, progress_mode: ProgressMode = None, diags=False):
 
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
@@ -151,7 +152,9 @@ class Make(logging.Logging):
         if diags:
             diag.enabled = True
 
-        self.no_progress = no_progress
+        if progress_mode is not None:
+            set_progress_mode(progress_mode)
+
         self.for_install = for_install
         
         self.build_path = Path(build_path)
@@ -359,15 +362,16 @@ class Make(logging.Logging):
 
     class progress:
 
-        def __init__(self, desc, targets, task_builder, disable) -> None:
+        def __init__(self, desc, targets, task_builder) -> None:
             self.desc = desc
             self.targets = list(targets) # NOTE: need to take a copy of the list
             self.builder = task_builder
             import shutil
             term_cols = shutil.get_terminal_size().columns
             self.max_desc_width = int(term_cols * 0.25)
-            self.pbar = tqdm.tqdm(total=len(targets),
-                                  desc='building', disable=disable)
+            self.pbar = gprogress(total=len(targets),
+                                  desc='building',
+                                  root=True)
             self.pbar.unit = ' targets'
 
         def __enter__(self):
@@ -422,7 +426,7 @@ class Make(logging.Logging):
                         all_targets.add(d)
 
         with self.context, \
-             self.progress('building', all_targets, self._build_target, self.no_progress) as tasks:
+             self.progress('building', all_targets, self._build_target) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
@@ -453,7 +457,7 @@ class Make(logging.Logging):
             targets = self.targets
 
         with self.context, \
-             self.progress('installing deps', targets, self._install_target_deps, self.no_progress) as tasks:
+             self.progress('installing deps', targets, self._install_target_deps) as tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
             errors = list()
             for result in results:
@@ -488,7 +492,7 @@ class Make(logging.Logging):
         await self.build(targets)
 
         with self.context, \
-             self.progress('installing', targets, functools.partial(self._install_target, mode=mode), self.no_progress) as tasks:
+             self.progress('installing', targets, functools.partial(self._install_target, mode=mode)) as tasks:
             installed_files = await asyncio.gather(*tasks)
             installed_files = unique(flatten(installed_files))
             manifest_path = self.settings.install.data_destination / \
@@ -574,7 +578,7 @@ class Make(logging.Logging):
             return 255
 
         with self.context:
-            with self.progress('testing', tests, self._test_target, self.no_progress) as tasks:
+            with self.progress('testing', tests, self._test_target) as tasks:
                 results = await asyncio.gather(*tasks)
                 if all(results):
                     self.info('Success !')

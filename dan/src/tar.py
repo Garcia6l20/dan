@@ -60,7 +60,7 @@ class TarSources(SourcesProvider, internal=True):
             self.debug('%s already available (download skipped)', archive_path)
         else:
             self.info(f'downloading {self.url}')
-            await fetch_file(self.url, self.build_path / archive_name)
+            await fetch_file(self.url, self.build_path / archive_name, self.name)
         with tempfile.TemporaryDirectory(prefix=f'{self.name}-') as tmp_dest:
             extract_dest = Path(tmp_dest) / 'a'
             self.info(f'extracting {archive_name}')

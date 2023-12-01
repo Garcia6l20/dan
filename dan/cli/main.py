@@ -1,4 +1,3 @@
-import inspect
 import os
 import sys
 import contextlib
@@ -7,6 +6,8 @@ from dan import logging
 
 from dan.core.find import find_file
 from dan.core.pathlib import Path
+from dan.core.progress import ProgressMode, set_progress_mode
+
 from dan.cli import click
 
 from dan.core import diagnostics, asyncio
@@ -63,6 +64,8 @@ class CommandsContext:
     @contextlib.asynccontextmanager
     async def __call__(self, *args, **kwargs):
         no_init = kwargs.pop('no_init', False)
+        if kwargs.pop('no_progress', False):
+            kwargs['progress_mode'] = ProgressMode.NONE
         self.update(*args, **kwargs)
         quiet = self._make_kwds.pop('quiet', None)
         if quiet:
@@ -426,7 +429,7 @@ async def shell(ctx: CommandsContext, **kwds):
 @cli.group()
 def code():
     """VS-Code specific commands"""
-    pass
+    set_progress_mode(ProgressMode.IDENTIFIED)
 
 
 @code.command()
