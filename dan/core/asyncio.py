@@ -1,4 +1,5 @@
 from asyncio import *
+import contextlib
 from async_property import *
 
 import threading
@@ -143,7 +144,7 @@ class TaskGroup:
         self._loop = None
         self._parent_task = None
         self._parent_cancel_requested = False
-        self._tasks = set()
+        self._tasks: set[Task] = set()
         self._errors = []
         self._results = []
         self._base_error = None
@@ -355,3 +356,13 @@ class TaskGroup:
         if self._exiting and self._tasks:
             raise RuntimeError(f"TaskGroup {self!r} is not finished")
         return self._results
+
+
+@contextlib.asynccontextmanager
+async def async_lock(lock):
+    loop = get_event_loop()
+    await loop.run_in_executor(__async_pool, lock.acquire)
+    try:
+        yield  # the lock is held
+    finally:
+        lock.release()
