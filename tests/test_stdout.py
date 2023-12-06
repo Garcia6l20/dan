@@ -18,31 +18,31 @@ async def main():
         if ii % 2 == 0:
             await stream.status("up even")
 
-    await asyncio.sleep(1)
+    await asyncio.sleep(0.5)
 
     for ii, stream in enumerate(streams):
         if ii % 2 != 0:
             await stream.status("up odd")
 
-    await asyncio.sleep(1)
+    await asyncio.sleep(0.5)
 
     await manager.write('regular output\n')
 
-    for ii, stream in enumerate(streams):
-        if ii % 2 == 0:
-            async with stream.progress("doing stuff with total", total=10) as bar:
-                for n in range(10):
-                    await bar(status=f"item {n}")
-                    await asyncio.sleep(0.125)
-            timeout = None
-        else:
-            async with stream.progress("doing stuff without total") as bar:
-                for n in range(10):
-                    await bar()
-                    await asyncio.sleep(0.125)
-            timeout = 1
+    async def do_stuff(stream: TermStream, **kwargs):
+        async with stream.progress("doing stuff", **kwargs) as bar,\
+                stream.toast() as toast:
+            for n in range(100):
+                await toast(f'item {n}')
+                await bar()
+                await asyncio.sleep(0.025)
+        await stream.status("done", timeout=1)
 
-        await stream.status("done", timeout=timeout)
+    async with asyncio.TaskGroup() as g:
+        for ii, stream in enumerate(streams):
+            if ii % 2 == 0:
+                g.create_task(do_stuff(stream, total=100))
+            else:
+                g.create_task(do_stuff(stream))
 
     await asyncio.sleep(1.1)
 
