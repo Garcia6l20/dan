@@ -1,9 +1,11 @@
+import atexit
 import math
 import time
 import threading
 import typing as t
 import sys
 import shutil
+import weakref
 
 from termcolor import colored
 
@@ -237,11 +239,10 @@ class Toast:
 
 class TermStream:
     def __init__(
-        self, name: str, manager: "TermManager", theme: TermStreamColorTheme = None
+        self, name: str, theme: TermStreamColorTheme = None
     ) -> None:
-        self._mngr = manager
         self.name = name
-        self._lock = asyncio.ThreadRLock()
+        self._lock = asyncio.ThreadLock()
         self._visible = False
         self._dirty = False
         self._icon = "◦"
@@ -251,6 +252,9 @@ class TermStream:
         self.theme = theme or default_theme
         self._cached_str: str = None
         self._cached_height: int = 0
+        self._mngr = manager()
+        with self._mngr._lock:
+            self._mngr._streams.add(self)
 
     @property
     def width(self):
@@ -314,17 +318,23 @@ class TermStream:
         return self._cached_str, self._cached_height
 
 
-class TermManager:
+class _TermManager:
     def __init__(self, max_update_time=1) -> None:
-        self._streams: list[TermStream] = list()
+        self._streams: weakref.WeakSet[TermStream] = weakref.WeakSet()
         self._fp = sys.stdout
         self._lock = threading.RLock()
         self._wait_timeout = 1 / max_update_time
-        self._thread = threading.Thread(target=self._render)
         self._up_ev = threading.Event()
         self._stop_requested = False
         self._raw_lines = list()
-        self._thread.start()
+        self._thread = None
+
+        global _manager
+        if _manager is not None:
+            raise RuntimeError('Only one _TermManager can be created')
+
+    def __del__(self):
+        self.stop()
 
     @property
     def height(self):
@@ -334,16 +344,20 @@ class TermManager:
     def width(self):
         return shutil.get_terminal_size()[0]
 
-    def stop(self):
-        with self._lock:
-            self._stop_requested = True
-            self._up_ev.set()
-        self._thread.join()
+    def start(self):
+        if self._thread is not None:
+            self.stop()
+        self._thread = threading.Thread(target=self._render, daemon=True)
+        self._thread.start()
 
-    def create(self, name):
-        stream = TermStream(name, self)
-        self._streams.append(stream)
-        return stream
+
+    def stop(self):
+        if self._thread is not None:
+            with self._lock:
+                self._stop_requested = True
+                self._up_ev.set()
+            self._thread.join()
+            self._thread = None
 
     def update(self):
         self._up_ev.set()
@@ -400,3 +414,22 @@ class TermManager:
                             out.write(ts.next(stream._cached_height))
                 # clear rest of the screen
                 out.write(ts.sreen_clear(0))
+
+_manager : _TermManager = None
+
+def manager():
+    global _manager
+    if _manager is None:
+        _manager = _TermManager()
+        _manager.start()
+        atexit.register(_cleanup_manager)
+    return _manager
+
+def _cleanup_manager():
+    global _manager
+    if _manager is not None:
+        _manager.stop()
+        del _manager
+
+def write(s: str):
+    return manager().write(s)

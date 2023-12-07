@@ -387,30 +387,9 @@ class ThreadLock:
     async def __aenter__(self):
         loop = get_event_loop()
         await loop.run_in_executor(_async_pool, self._lk.acquire)
-    
+
     async def __aexit__(self, *exc):
         self._lk.release()
 
-class ThreadRLock:
-    # RLock can be owned only by one thread
-    __pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-
-    def __init__(self) -> None:
-        self._lk = threading.RLock()
-        self._loop = None
-
-    def __enter__(self):
-        self._lk.acquire()
-
-    def __exit__(self, *exc):
-        self._lk.release()
-
-    async def __aenter__(self):
-        self._loop = get_event_loop()
-        await self._loop.run_in_executor(self.__pool, self._lk.acquire)
-    
-    async def __aexit__(self, *exc):
-        await self._loop.run_in_executor(self.__pool, self._lk.release)
-        self._loop = None
 
 spawn = create_task

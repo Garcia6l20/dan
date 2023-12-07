@@ -1,5 +1,5 @@
 from dan.core import asyncio
-from dan.core.terminal import TermStream, TermManager
+from dan.core.terminal import TermStream, write as term_write
 
 
 async def test_status(stream: TermStream, *args, **kwargs):
@@ -7,9 +7,7 @@ async def test_status(stream: TermStream, *args, **kwargs):
     await asyncio.sleep(0.1)
 
 async def main():
-    manager = TermManager()
-
-    streams = [manager.create(f"output {ii}") for ii in range(5)]
+    streams = [TermStream(f"output {ii}") for ii in range(5)]
 
     for ii, stream in enumerate(streams):
         await stream.status("up")
@@ -26,7 +24,7 @@ async def main():
 
     await asyncio.sleep(0.5)
 
-    await manager.write('regular output\n')
+    await term_write('regular output\n')
 
     async def do_stuff(stream: TermStream, **kwargs):
         async with stream.progress("doing stuff", **kwargs) as bar,\
@@ -45,8 +43,6 @@ async def main():
                 g.create_task(do_stuff(stream))
 
     await asyncio.sleep(1.1)
-
-    manager.stop()
 
 
 asyncio.run(main())
