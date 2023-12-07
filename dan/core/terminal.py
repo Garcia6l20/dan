@@ -6,6 +6,7 @@ import typing as t
 import sys
 import shutil
 import weakref
+import logging
 
 from termcolor import colored
 
@@ -187,10 +188,14 @@ class ColorTheme:
     def __call__(self, s: str) -> t.Any:
         return colored(s, self.color, attrs=self.attrs)
 
+class TermLogHandler(logging.Handler):
+    def emit(self, record):
+        asyncio.spawn(write(self.format(record)))
+
 
 class TermStreamColorTheme:
     default_icon = ColorTheme("grey", ["bold"])
-    default_name = ColorTheme("blue", ["bold"])
+    default_name = ColorTheme("cyan", ["bold"])
     default_status = ColorTheme("grey", ["bold"])
     default_extra = ColorTheme("white")
 
@@ -362,9 +367,9 @@ class _TermManager:
     def update(self):
         self._up_ev.set()
 
-    async def write(self, s: str):
+    async def write(self, s: str, end: str = '\n'):
         with self._lock:
-            self._raw_lines.append(s)
+            self._raw_lines.append(s + end)
             self.update()
 
     def _render(self):
@@ -386,10 +391,11 @@ class _TermManager:
                     force = False
 
                     if self._raw_lines:
-                        out.write(ts.prev() + ts.sreen_clear())
+                        out.write(ts.line_clear())
                         out.writelines(self._raw_lines)
                         if self._raw_lines[-1][-1] != "\n":
                             out.write(ts.next())
+                        out.write(ts.sreen_clear(0))
                         self._raw_lines = list()
                         force = True
 
