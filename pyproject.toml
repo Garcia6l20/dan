@@ -25,7 +25,6 @@ dependencies = [
     "aiohttp",
     "async-property>=0.2.2",
     "termcolor",
-    "tqdm",
     'importlib-metadata',
     'dataclasses-json',
     'lockfile',

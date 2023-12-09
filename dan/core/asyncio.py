@@ -84,7 +84,13 @@ class _SyncWaitThread(threading.Thread):
 
     def run(self):
         try:
-            self.result = run(self.coro)
+            loop = new_event_loop()
+            self.result = loop.run_until_complete(self.coro)
+            tasks = all_tasks(loop)
+            if len(tasks):
+                for t in tasks:
+                    t.cancel()
+                loop.run_until_complete(wait(tasks))
         except Exception as err:
             self.err = err
 

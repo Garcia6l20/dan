@@ -27,6 +27,9 @@ class PackageBuild(Target, internal=True):
         self.lock: aiofiles.FileLock = None
         self.__up_to_date = True
 
+    @property
+    def is_requirement(self) -> bool:
+        return True
     
     @property
     def sources_targets(self):
@@ -153,11 +156,11 @@ class ReusePackage(BaseException):
     def __init__(self, pkg):
         self.pkg = pkg
 
-class Package(Target, internal=True):
+class IoPackage(Target, internal=True):
     
     inherits_version = False
 
-    __all: dict[str, 'Package'] = dict()
+    __all: dict[str, 'IoPackage'] = dict()
 
     def __init__(self,
                  name: str = None,
@@ -175,6 +178,9 @@ class Package(Target, internal=True):
         self.repo = get_repo_instance(repository, self.makefile)
         self.preload_dependencies.add(self.repo)
 
+    @property
+    def is_requirement(self) -> bool:
+        return True
 
     def find(self, name):
         for t in self.package_makefile.all_installed:
@@ -197,7 +203,7 @@ class Package(Target, internal=True):
                     return pkg, False
 
         try:
-            pkg = Package(name, version, package, *args, **kwargs)
+            pkg = IoPackage(name, version, package, *args, **kwargs)
             await pkg.initialize()
             return pkg, True
         except ReusePackage as reuse:
@@ -247,7 +253,7 @@ class Package(Target, internal=True):
                                       self.repo,
                                       self.package_makefile,
                                       spec=self.spec,
-                                      makefile=self.makefile)
+                                      parent=self)
         self.dependencies.add(self.pkg_build)
         lib_path = Path('pkgs') / 'lib'
         self.pkgconfig_path = lib_path / 'pkgconfig'

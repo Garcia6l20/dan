@@ -1,4 +1,3 @@
-from dan import self
 from dan.cxx import Executable
 from dan.testing import Test, Case
 import re
@@ -19,6 +18,8 @@ class Simple(Executable):
 class SimpleTest(Test):
     name = 'simple-test'
     executable = Simple
-    cases = [
-        Case('default', expected_output=re.compile(fr'^{self[Simple].options["greater"]} !\s'), strip_output=False)
-    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cases = [
+            Case('default', expected_output=re.compile(fr'^{self.executable.options["greater"]} !\s'), strip_output=False)
+        ]

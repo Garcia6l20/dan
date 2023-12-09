@@ -9,5 +9,4 @@ from dan.core.find import (
     )
 from dan.core.runners import async_run, sync_run
 from dan.core.pm import re_fullmatch, re_match, re_search
-from dan.core.progress import progress
 from dan.cli import user as user_cli

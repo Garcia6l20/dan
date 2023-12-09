@@ -75,6 +75,10 @@ class PackageRepository(Target, internal=True):
         self.pkgs_root = get_packages_path() / self.toolchain.system / \
             self.toolchain.arch / self.toolchain.build_type.name
         self._package_makefile = None
+    
+    @property
+    def is_requirement(self) -> bool:
+        return True
 
     async def __build__(self):
         if not self.output.exists():

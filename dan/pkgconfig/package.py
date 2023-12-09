@@ -143,8 +143,8 @@ class Data:
         return self._version
 
 
-class Package(CXXTarget, internal=True):
-    all: dict[str, 'Package'] = dict()
+class PackageConfig(CXXTarget, internal=True):
+    all: dict[str, 'PackageConfig'] = dict()
 
     default = False
 
@@ -182,6 +182,10 @@ class Package(CXXTarget, internal=True):
 
         self.version = self.data.version
     
+    @property
+    def is_requirement(self) -> bool:
+        return True
+
     def __load_plugin(self):
         if self.__dan_plugin is not None:
             spec = importlib.util.spec_from_file_location(
@@ -258,7 +262,7 @@ class Package(CXXTarget, internal=True):
 
     @property
     def package_dependencies(self):
-        return [pkg for pkg in self.dependencies.all if isinstance(pkg, Package)]
+        return [pkg for pkg in self.dependencies.all if isinstance(pkg, PackageConfig)]
 
     def __init_libs(self):
         self.__libs = LibraryList()
@@ -347,7 +351,7 @@ class Package(CXXTarget, internal=True):
 
 
 _pkgconfig_cache = None
-def get_packages_cache() -> dict[str, Package]:
+def get_packages_cache() -> dict[str, PackageConfig]:
     from dan.core.include import context
     global _pkgconfig_cache
     if _pkgconfig_cache is None:
@@ -377,11 +381,11 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
         if spec is not None:
             data = Data(config)
             if spec.is_compatible(data.version):
-                pkg = Package(name, data=data, makefile=makefile)
+                pkg = PackageConfig(name, data=data, makefile=makefile)
                 break
 
         else:
-            pkg = Package(name, config_path=config, search_paths=search_paths, makefile=makefile)
+            pkg = PackageConfig(name, config_path=config, search_paths=search_paths, makefile=makefile)
             break
     
     if pkg:

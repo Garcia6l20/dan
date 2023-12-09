@@ -6,7 +6,7 @@ from dan import logging
 
 from dan.core.find import find_file
 from dan.core.pathlib import Path
-from dan.core.progress import ProgressMode, set_progress_mode
+from dan.core.terminal import TerminalMode, set_mode as set_terminal_mode, manager as term_manager
 
 from dan.cli import click
 
@@ -65,7 +65,7 @@ class CommandsContext:
     async def __call__(self, *args, **kwargs):
         no_init = kwargs.pop('no_init', False)
         if kwargs.pop('no_progress', False):
-            kwargs['progress_mode'] = ProgressMode.NONE
+            kwargs['terminal_mode'] = TerminalMode.BASIC
         self.update(*args, **kwargs)
         quiet = self._make_kwds.pop('quiet', None)
         if quiet:
@@ -139,7 +139,7 @@ user_cli.context_class = click.AsyncContext
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH')
 @click.option('--source-path', '-S', help='Path where source is located.',
-              type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
+              type=click.Path(resolve_path=True, path_type=Path), required=True, default='.', envvar='DAN_SOURCE_PATH')
 @pass_context
 async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
@@ -402,7 +402,7 @@ async def env(ctx: CommandsContext, **kwds):
     """Show environment."""
     kwds['quiet'] = True
     async with ctx(**kwds) as make:
-        for k, v in make.env.items():
+        for k, v in (await make.env).items():
             click.echo(f'{k}={v}')
 
 
@@ -417,7 +417,7 @@ async def shell(ctx: CommandsContext, **kwds):
     # kwds['quiet'] = True
     async with ctx(**kwds) as make:
         env = dict(os.environ)
-        for k, v in make.env.items():
+        for k, v in (await make.env).items():
             env[k] = v
 
         click.logger.info('entering dan shell...')
@@ -429,8 +429,10 @@ async def shell(ctx: CommandsContext, **kwds):
 @cli.group()
 def code():
     """VS-Code specific commands"""
-    set_progress_mode(ProgressMode.IDENTIFIED)
+    set_terminal_mode(TerminalMode.CODE)
 
+
+# from dan.core.bench import benchmark, report_all
 
 @code.command()
 @common_opts
@@ -438,25 +440,33 @@ def code():
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True})
+    # with benchmark('get-targets') as bench:
+        # bench.begin('make')
     async with ctx(**kwargs) as make:
+            # bench.end()
         out = []
         targets = make.context.root.all_targets
+            # with bench('load-dependencies'):
         async with asyncio.TaskGroup() as g:
             for target in targets:
                 g.create_task(target.load_dependencies())
+            # with bench('gen-output'):
         for target in targets:
-            out.append({
-                'name': target.name,
-                'fullname': target.fullname,
-                'buildPath': str(target.build_path),
-                'srcPath': str(target.source_path),
-                'output': str(target.output),
-                'executable': isinstance(target, Executable),
-                'type': type(target).__name__,
-                'env': target.env if isinstance(target, Executable) else None,
-            })
+            # with bench(f'gen-output-{target.name}'):
+                out.append({
+                    'name': target.name,
+                    'fullname': target.fullname,
+                    'buildPath': str(target.build_path),
+                    'srcPath': str(target.source_path),
+                    'output': str(target.output),
+                    'executable': isinstance(target, Executable),
+                    'type': type(target).__name__,
+                    'env': target.env if isinstance(target, Executable) else None,
+                })
+            # with bench('json-dump'):
         import json
         click.echo(json.dumps(out))
+    # report_all()
 
 @code.command()
 @common_opts
@@ -502,6 +512,7 @@ def get_toolchains(**kwargs):
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwargs):
     """Build targets (vscode version)"""
+    set_terminal_mode(TerminalMode.CODE)
     async with ctx(**kwargs, diags=True) as make:
         if force:
             await make.clean()
@@ -533,10 +544,10 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
 async def process_result(ctx, result, **kwargs):
     await Cache.save_all()
 
-
 def main():
     import sys
     try:
+        loop = asyncio.new_event_loop()
         cli(auto_envvar_prefix='DAN')
     except Exception as err:
         click.logger.error(str(err))
@@ -545,8 +556,12 @@ def main():
         click.logger.debug(' '.join(traceback.format_tb(tb)))
         try:
             # wait asyncio loop to terminate
-            asyncio.get_running_loop().run_until_complete()
+            loop.run_until_complete()
         except Exception:
             pass
         asyncio.run(Cache.save_all())
         return -1
+    finally:
+        term = term_manager()
+        term.stop()
+        term._thread.get_loop().run_until_complete(term._thread)

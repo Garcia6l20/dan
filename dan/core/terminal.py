@@ -7,10 +7,27 @@ import sys
 import shutil
 import weakref
 import logging
+import enum
+from contextlib import nullcontext
+from dan.core import asyncio
 
 from termcolor import colored
 
 from dan.core import asyncio
+
+
+class TerminalMode(enum.Enum):
+    BASIC = 1
+    STICKY = 2
+    CODE = 3
+
+
+mode = TerminalMode.STICKY
+
+
+def set_mode(new_mode: TerminalMode):
+    global mode
+    mode = new_mode
 
 
 class TermSequence:
@@ -21,6 +38,10 @@ class TermSequence:
 
     ESC = "\x1b"
     SEQ_START = ESC + "["
+
+    @staticmethod
+    def current_pos():
+        return "\x1b[6n"
 
     @staticmethod
     def home():
@@ -41,6 +62,16 @@ class TermSequence:
     def down(n=1):
         """Moves cursor down"""
         return f"\x1b[{n}B"
+    
+    @staticmethod
+    def scroll_up(n=1):
+        """Scroll viewport up"""
+        return f"\x1b[{n}S"
+
+    @staticmethod
+    def scroll_down(n=1):
+        """Scroll viewport up"""
+        return f"\x1b[{n}T"
 
     @staticmethod
     def next(n=1):
@@ -111,7 +142,9 @@ class TermSequence:
 class _OutputStreamProgress:
     UTF = " " + "".join(map(chr, range(0x258F, 0x2587, -1)))
 
-    def __init__(self, stream: "TermStream", status: str, total=None) -> None:
+    def __init__(
+        self, stream: "TermStream", status: str, total=None, auto_update=True
+    ) -> None:
         self._s = stream
         self._status = status
         self.total = total
@@ -119,27 +152,38 @@ class _OutputStreamProgress:
         self._saved_status = None
         self._saved_extra = None
         self._elapsed_s = 0.0
-        self._lock = asyncio.ThreadLock()
+        self._auto_update = auto_update
+        self._auto_update_task = None
 
-    async def __aenter__(self):
+    async def __auto_update(self):
+        while True:
+            await asyncio.sleep(0.25)
+            self.__call__(0)
+
+    def __enter__(self):
         self._t_start = time.time()
         self._saved_status = self._s._status
         self._saved_extra = self._s._extra
         self._s._status = self._status
         self._s._extra = self
         self._s.visible = True
+        if self._auto_update:
+            self._auto_update_task = asyncio.create_task(self.__auto_update())
         return self
 
-    async def __aexit__(self, *args):
+    def __exit__(self, *args):
+        if self._auto_update_task is not None:
+            self._auto_update_task.cancel()
+            self._auto_update_task = None
         self._s._status = self._saved_status
         self._s._extra = self._saved_extra
+        self._s.update()
 
-    async def __call__(self, n=1, status=None):
-        with self._lock:
-            self._elapsed_s = time.time() - self._t_start
-            self.n += n
-            if status is not None:
-                self._s._status = self._status = status
+    def __call__(self, n=1, status=None):
+        self._elapsed_s = time.time() - self._t_start
+        self.n += n
+        if status is not None:
+            self._s._status = self._status = status
         self._s.update()
 
     def __make_bar(self, frac, width):
@@ -166,18 +210,43 @@ class _OutputStreamProgress:
         return bar
 
     def __str__(self) -> str:
-        with self._lock:
-            if self.total is not None:
-                frac = self.n / self.total
-                rbar = f"{int(100 * frac):3d}%"
-            else:
-                frac = None
-                rbar = "   ∞"
-            width = self._s.width
-            bar = self.__make_bar(frac, self._s._mngr.width // 5)
-            padding = width - (len(bar) + len(rbar) + 5)
-            padding = padding * " "
-            return f"{padding}|{bar}| {rbar}"
+        if self.total:
+            frac = self.n / self.total
+            rbar = f"{int(100 * frac):3d}%"
+            eta = (1 - frac) * self._elapsed_s
+            rbar += f" - eta: {int(eta)}s"
+        else:
+            frac = None
+            rbar = "   ∞"
+        bar = self.__make_bar(frac, self._s._mngr.width // 5)
+        return f" |{bar}| {rbar}"
+
+
+class _TaskGroup(asyncio.TaskGroup, _OutputStreamProgress):
+    def __init__(self, stream: "TermStream", name: str, **kwargs):
+        _OutputStreamProgress.__init__(self, stream, status=name, **kwargs)
+        asyncio.TaskGroup.__init__(self, name)
+
+    def __notify_bar_task_done(self, task):
+        self._elapsed_s = time.time() - self._t_start
+        self.n += 1
+        self._s.update()
+
+    async def __aexit__(self, et, exc, tb):
+        total = len(self._tasks)
+        if total:
+            self.total = total
+            for task in self._tasks:
+                task.add_done_callback(self.__notify_bar_task_done)
+            self._s.update()
+        _OutputStreamProgress.__enter__(self)
+        result = await asyncio.TaskGroup.__aexit__(self, et, exc, tb)
+        _OutputStreamProgress.__exit__(self, et, exc, tb)
+        # async def delayed_exit():
+        #     await asyncio.sleep(0.5)
+        #     _OutputStreamProgress.__exit__(self, et, exc, tb)
+        # asyncio.spawn(delayed_exit())
+        return result
 
 
 class ColorTheme:
@@ -188,9 +257,10 @@ class ColorTheme:
     def __call__(self, s: str) -> t.Any:
         return colored(s, self.color, attrs=self.attrs)
 
+
 class TermLogHandler(logging.Handler):
     def emit(self, record):
-        asyncio.spawn(write(self.format(record)))
+        write(self.format(record))
 
 
 class TermStreamColorTheme:
@@ -215,128 +285,148 @@ class TermStreamColorTheme:
 default_theme = TermStreamColorTheme()
 
 
-class Toast:
-    def __init__(self, stream: "TermStream") -> None:
-        self._s = stream
-        self._msg = None
-
-    async def display(self, msg: str):
-        async with self._s._lock:
-            self._msg = msg
-        self._s.update()
-
-    async def delete(self):
-        async with self._s._lock:
-            self._s._toasts.remove(self)
-        self._s.update()
-
-    def __call__(self, msg: str):
-        return self.display(msg)
-
-    async def __aenter__(self):
-        async with self._s._lock:
-            self._s._toasts.append(self)
-        return self
-
-    async def __aexit__(self, *excs):
-        await self.delete()
-
-
 class TermStream:
+    DEFAULT_ICON = "➔"
+    CHILD_ICON = "➥"
+
     def __init__(
-        self, name: str, theme: TermStreamColorTheme = None
+        self, name: str, theme: TermStreamColorTheme = None, parent: "TermStream" = None
     ) -> None:
         self.name = name
-        self._lock = asyncio.ThreadLock()
         self._visible = False
         self._dirty = False
-        self._icon = "◦"
+        self._icon = self.DEFAULT_ICON
         self._status: str = ""
         self._extra: str = ""
-        self._toasts: list[Toast] = list()
         self.theme = theme or default_theme
-        self._cached_str: str = None
-        self._cached_height: int = 0
+        self._cached_out: list[str] = list()
         self._mngr = manager()
-        with self._mngr._lock:
-            self._mngr._streams.add(self)
+        self._hide_task: asyncio.Task = None
+        self._offset = 0
+        self._parent = parent
+        self._children: list[weakref.ReferenceType[TermStream]] = list()
+        self._weak_self = weakref.ref(self)
+        if self._parent is not None:
+            self._offset = self._parent._offset + 2
+            self._parent._children.append(self._weak_self)
+            self._icon = self.CHILD_ICON
+        else:
+            self._mngr._streams.append(self._weak_self)
+
+    def __del__(self):
+        if self._parent:
+            self._parent._children.remove(self._weak_self)
+            self._parent.update()
+        else:
+            self._mngr._streams.remove(self._weak_self)
+            self._mngr.update()
+
+    def sub(self, name, theme: TermStreamColorTheme = None):
+        return TermStream(name, theme, parent=self)
 
     @property
-    def width(self):
+    def prefix_width(self):
         return self._mngr.width - (
-            len(self._icon) + 1 + len(self.name) + 2 + len(self._status)
+            len(self._icon) + 1 + len(self.name) + 2 + self._offset
         )
 
     @property
     def visible(self):
-        with self._lock:
-            return self._visible
+        return self._visible
 
     @visible.setter
     def visible(self, value):
-        with self._lock:
-            self._visible = value
-            self._dirty = True
+        self._visible = value
+        self._dirty = True
 
     def hide(self):
         self.visible = False
+        self.update()
+
+    def hide_children(self):
+        for ref in self._children:
+            ref().hide()
         self.update()
 
     async def __hide_after(self, delay):
         await asyncio.sleep(delay)
         self.hide()
 
-    async def status(self, msg: str, icon: str = None, timeout=None):
-        async with self._lock:
-            self._status = msg
-            if icon is not None:
-                self._icon = icon
-            self._visible = True
-        self.update()
+    def __hide_task_done(self, t: asyncio.Task):
+        if t.cancelled():
+            self.hide()
+
+    def status(self, msg: str, icon: str = None, timeout=None):
+        self._status = msg
+        if icon is not None:
+            self._icon = icon
+        self._visible = True
+        if self._hide_task is not None:
+            self._hide_task.remove_done_callback(self.__hide_task_done)
+            self._hide_task.cancel()
+            self._hide_task = None
         if timeout is not None:
-            asyncio.create_task(self.__hide_after(timeout))
+            self._hide_task = asyncio.create_task(self.__hide_after(timeout))
+            self._hide_task.add_done_callback(self.__hide_task_done)
+        self.update()
 
     def update(self):
-        with self._lock:
-            self._dirty = True
-        self._mngr.update()
+        self._dirty = True
+        if self._parent is not None:
+            self._parent.update()
+        else:
+            self._mngr.update()
 
     def _refresh_state(self):
         return self._dirty, self._visible
 
-    def progress(self, desc, total=None):
-        return _OutputStreamProgress(self, desc, total=total)
+    def progress(self, desc, total=None, **kwargs):
+        return _OutputStreamProgress(self, desc, total=total, **kwargs)
 
-    def toast(self):
-        return Toast(self)
+    def task_group(self, name):
+        return _TaskGroup(self, name)
 
     ts = TermSequence
 
-    def _get_output(self, now) -> str:
+    def _get_output(self, now) -> list[str]:
         if self._dirty:
-            self._cached_height = 1
-            self._cached_str = f"{self.theme.icon(self._icon)} {self.theme.name(self.name)}: {self.theme.status(self._status)}{self.theme.extra(self._extra)}"
-            for toast in self._toasts:
-                self._cached_str += f"{self.ts.next_clear()}    ➥  {toast._msg}"
-                self._cached_height += 1
+            prefix = f"{' ' * self._offset}{self.theme.icon(self._icon)}  {self.theme.name(self.name)}: "
+            extra = str(self._extra)
+            status = self._status
+            max_status_len = self.prefix_width - (len(extra)) - 1
+            if len(status) > max_status_len:
+                status = status[:max_status_len - 4] + ' ...'
+            if len(extra):
+                padding = self.prefix_width - len(status) - len(extra) - 1
+                padding = padding * " "
+                suffix = f"{padding}{self.theme.extra(extra)}"
+            else:
+                suffix = ''
+            self._cached_out = [
+                f"{prefix}{status}{suffix}\n"
+            ]
+            for ref in self._children:
+                child = ref()
+                if child.visible:
+                    self._cached_out.extend(child._get_output(now))
             self._dirty = False
-        return self._cached_str, self._cached_height
+        return self._cached_out
 
 
 class _TermManager:
-    def __init__(self, max_update_time=1) -> None:
-        self._streams: weakref.WeakSet[TermStream] = weakref.WeakSet()
+    def __init__(self, min_update_freq=1, max_update_freq=12) -> None:
+        self._streams: list[weakref.ReferenceType[TermStream]] = list()
         self._fp = sys.stdout
-        self._lock = threading.RLock()
-        self._wait_timeout = 1 / max_update_time
-        self._up_ev = threading.Event()
+        self._min_delay = 1 / min_update_freq
+        self._max_delay = 1 / max_update_freq
+        self._up_ev = asyncio.Event()
         self._stop_requested = False
         self._raw_lines = list()
         self._thread = None
 
         global _manager
         if _manager is not None:
-            raise RuntimeError('Only one _TermManager can be created')
+            raise RuntimeError("Only one _TermManager can be created")
 
     def __del__(self):
         self.stop()
@@ -352,76 +442,122 @@ class _TermManager:
     def start(self):
         if self._thread is not None:
             self.stop()
-        self._thread = threading.Thread(target=self._render, daemon=True)
-        self._thread.start()
-
+        self._thread = asyncio.create_task(self._render(), name="terminal-rendering")
 
     def stop(self):
         if self._thread is not None:
-            with self._lock:
-                self._stop_requested = True
-                self._up_ev.set()
-            self._thread.join()
-            self._thread = None
+            self._stop_requested = True
+            self._up_ev.set()
 
     def update(self):
         self._up_ev.set()
 
-    async def write(self, s: str, end: str = '\n'):
-        with self._lock:
-            self._raw_lines.append(s + end)
+    def write(self, s: str, end: str = "\n"):
+        self._raw_lines.append(s + end)
+        self.update()
+
+    ts = TermSequence
+
+    def _flush(self, prev_line_count):
+        out = self._fp
+        self._up_ev.clear()
+        stop = self._stop_requested
+        now = time.time()
+        output_lines = []
+        if prev_line_count:
+            output_lines.append(self.ts.prev(prev_line_count))
+        prev_line_count = 1
+        force = len(self._raw_lines)
+        max_height = self.height - 2
+
+        status_lines = ['―' * (self.width) + '\n']
+        if mode != TerminalMode.CODE:
+            for ref in self._streams:
+                stream = ref()
+                if stream is None:
+                    continue
+                is_dirty, is_visible = stream._refresh_state()
+                if is_dirty or force:
+                    prev_height = len(stream._cached_out)
+                    status_lines.append(self.ts.line_clear())
+                    data = stream._get_output(now)
+                    height = len(data)
+                    if prev_line_count + height > max_height:
+                        break
+
+                    if is_visible:
+                        if prev_height != height:
+                            force = True  # force re-render next streams
+                        status_lines.extend(data)
+                        prev_line_count += height
+                    elif prev_height != 1:
+                        force = True
+                elif is_visible:
+                    # just jump over
+                    height = len(stream._cached_out)
+                    if prev_line_count + height > max_height:
+                        break
+
+                    prev_line_count += height
+                    status_lines.append(self.ts.next(height))
+
+        if self._raw_lines:
+            lines = []
+            line_count = 0
+            for ls in self._raw_lines:
+                nls = [l.rstrip() + '\n' for l in ls.splitlines()]
+                line_count += len(nls)
+                for l in nls:
+                    line_count += len(l) // self.width
+                lines.extend(nls)
+            if mode != TerminalMode.CODE:
+                output_lines.append(self.ts.sreen_clear(0))
+                if line_count + prev_line_count > max_height:
+                    output_lines.append(self.ts.scroll_up(prev_line_count) + self.ts.prev(prev_line_count))
+            output_lines.extend(lines)
+
+            self._raw_lines = list()
+        
+        if mode != TerminalMode.CODE:
+            # clear rest of the screen
+            status_lines.append(self.ts.sreen_clear(0))
+
+        out.writelines([*output_lines, *status_lines])
+
+        return stop, prev_line_count
+
+    async def _render(self):
+        out = self._fp
+        if mode != TerminalMode.CODE:
+            out.write(self.ts.home() + self.ts.sreen_clear())
+        prev_line_count = 0
+        stop = False
+        last_update = 0
+
+        async def auto_refresh():
+            await asyncio.sleep(self._min_delay)
             self.update()
 
-    def _render(self):
-        ts = TermSequence
-        out = self._fp
-        out.write(ts.home() + ts.sreen_clear())
-        stop = False
-        prev_line_count = 0
-        with ts.hidden_cursor():
+        auto_refresh_task = asyncio.create_task(auto_refresh())
+        with self.ts.hidden_cursor() if mode != TerminalMode.CODE else nullcontext():
+        # with nullcontext():
             while not stop:
-                self._up_ev.wait()
-                with self._lock:
-                    self._up_ev.clear()
-                    now = time.time()
-                    stop = self._stop_requested
-                    if prev_line_count:
-                        out.write(ts.prev(prev_line_count))
-                    prev_line_count = 0
-                    force = False
+                await self._up_ev.wait()
+                now = time.time()
+                delay = now - last_update
+                if delay < self._max_delay and not self._stop_requested:
+                    await asyncio.sleep(self._max_delay - delay)
+                stop, prev_line_count = self._flush(prev_line_count)
+                last_update = time.time()
 
-                    if self._raw_lines:
-                        out.write(ts.line_clear())
-                        out.writelines(self._raw_lines)
-                        if self._raw_lines[-1][-1] != "\n":
-                            out.write(ts.next())
-                        out.write(ts.sreen_clear(0))
-                        self._raw_lines = list()
-                        force = True
+            self._flush(prev_line_count)
+            auto_refresh_task.cancel()
 
-                for stream in self._streams:
-                    with stream._lock:
-                        is_dirty, is_visible = stream._refresh_state()
-                        if is_dirty or force:
-                            prev_height = stream._cached_height
-                            out.write(ts.line_clear())
-                            data, height = stream._get_output(now)
-                            if is_visible:
-                                if prev_height != height:
-                                    force = True  # force re-render next streams
-                                out.write(ts.line_clear())
-                                out.write(data + ts.next())
-                                prev_line_count += height
-                            elif prev_height != 1:
-                                force = True
-                        elif is_visible:
-                            # just jump over
-                            prev_line_count += stream._cached_height
-                            out.write(ts.next(stream._cached_height))
-                # clear rest of the screen
-                out.write(ts.sreen_clear(0))
+        self._thread = None
 
-_manager : _TermManager = None
+
+_manager: _TermManager = None
+
 
 def manager():
     global _manager
@@ -431,11 +567,13 @@ def manager():
         atexit.register(_cleanup_manager)
     return _manager
 
+
 def _cleanup_manager():
     global _manager
     if _manager is not None:
         _manager.stop()
         del _manager
 
-def write(s: str):
-    return manager().write(s)
+
+def write(s: str, end="\n"):
+    return manager().write(s, end)

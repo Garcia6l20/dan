@@ -1,6 +1,6 @@
 import unittest
 
-from dan.core.version import Version
+from dan.core.version import Version, VersionSpec
 import random
 
 
@@ -53,3 +53,8 @@ class VersionTests(unittest.TestCase):
         random.shuffle(unsorted_versions)
         sorted_versions = sorted(unsorted_versions)
         self.assertEqual(expected_versions, sorted_versions)
+
+    def test_found_bugs(self):
+        self.assertTrue(Version(1) >= '1.11')
+        self.assertTrue(VersionSpec(Version(1), '>=').is_compatible(Version(1, 11)))
+        self.assertTrue(VersionSpec(Version(1, 11), '>=').is_compatible(Version(1)))

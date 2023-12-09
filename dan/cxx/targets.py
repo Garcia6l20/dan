@@ -400,7 +400,7 @@ class CXXObjectsTarget(CXXTarget, internal=True):
 
     async def __build__(self):
         # compile objects
-        async with asyncio.TaskGroup(f'building {self.name}\'s objects') as group:
+        async with self.task_group(f'building {self.name}\'s objects') as group:
             for dep in self.objs:
                 group.create_task(dep.build())
 
