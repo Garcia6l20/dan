@@ -422,6 +422,10 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.name is None:
             self.name = self.__class__.__name__
+            stream_name = self.name
+        else:
+            stream_name = f'{self.__class__.__name__}[{self.name}]'
+
         
         if self.provides is None:
             self.provides = {self.name}
@@ -434,9 +438,9 @@ class Target(Logging, MakefileRegister, internal=True):
         if parent is not None:
             self.makefile = parent.makefile
             self.fullname = f'{parent.fullname}.{self.name}'
-            self.__ts = parent.__ts.sub(f'{self.__class__.__name__}[{self.name}]')
+            self._stream = parent._stream.sub(stream_name)
         else:
-            self.__ts = TermStream(f'{self.__class__.__name__}[{self.name}]')
+            self._stream = TermStream(stream_name)
 
         if makefile:
             self.makefile = makefile
@@ -590,18 +594,18 @@ class Target(Logging, MakefileRegister, internal=True):
     
     @property
     def status(self):
-        return self.__ts.status
+        return self._stream.status
 
     @property
     def task_group(self):
-        return self.__ts.task_group
+        return self._stream.task_group
     
     @property
     def progress(self):
-        return self.__ts.progress
+        return self._stream.progress
     
     def hide_output(self):
-        self.__ts.hide()
+        self._stream.hide()
 
     async def __load_unresolved_dependencies(self, install=None):
         if install is None:
@@ -697,7 +701,7 @@ class Target(Logging, MakefileRegister, internal=True):
                 self.cache['options_sha1'] = self.options.sha1
                 self.trace('built')
                 self.status('built', icon='✔')
-                self.__ts.hide_children()
+                self._stream.hide_children()
                 if self.is_requirement:
                     self.hide_output()
                 return result

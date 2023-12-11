@@ -92,6 +92,12 @@ def setup_logger(logger: Logger):
 TRACE = DEBUG - 5
 addLevelName(TRACE, "TRACE")
 
+STATUS = INFO - 1
+addLevelName(STATUS, "STATUS")
+
+PROGRESS = INFO + 1
+addLevelName(PROGRESS, "PROGRESS")
+
 
 class ColoredLogger(Logger):
     def __init__(self, name):

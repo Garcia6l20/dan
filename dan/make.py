@@ -171,13 +171,13 @@ class Make(logging.Logging):
 
         logging.getLogger().setLevel(log_level)
 
+        if terminal_mode is not None:
+            set_terminal_mode(terminal_mode)
+
         self.term = TermStream('make')
 
         if diags:
             diag.enabled = True
-
-        if terminal_mode is not None:
-            set_terminal_mode(terminal_mode)
 
         self.for_install = for_install
 

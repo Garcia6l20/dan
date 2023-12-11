@@ -172,9 +172,7 @@ def wrap(modules: list[str] = None, ui_files: list[str] = None, resource_files: 
     def decorator(cls):
         from dan.core.include import context
         @context.current.wraps(cls)
-        class QtWapped(_Wrapper, cls):
-            __name__ = f'{cls.__name__}QtWrapped'
-            
+        class QtWapped(_Wrapper, cls):            
             def __init__(self, *args, **kwargs) -> None:
                 super().__init__(*args, **kwargs)
                 self.dependencies.update([f'Qt{major}{module}' for module in self.qt_modules], public=True)

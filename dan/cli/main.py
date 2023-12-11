@@ -33,8 +33,8 @@ _common_opts = [
                  help='Verbosity level.', envvar='DAN_VERBOSE'),
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
-    click.option('--no-progress', is_flag=True,
-                 help='Disable progress bars', envvar='DAN_NOPROGRESS'),
+    click.option('--no-status', is_flag=True,
+                 help='Disable status', envvar='DAN_STATUS'),
 ]
 
 
@@ -64,8 +64,10 @@ class CommandsContext:
     @contextlib.asynccontextmanager
     async def __call__(self, *args, **kwargs):
         no_init = kwargs.pop('no_init', False)
-        if kwargs.pop('no_progress', False):
+        if kwargs.pop('no_status', False):
             kwargs['terminal_mode'] = TerminalMode.BASIC
+        elif kwargs.pop('code', False):
+            kwargs['terminal_mode'] = TerminalMode.CODE
         self.update(*args, **kwargs)
         quiet = self._make_kwds.pop('quiet', None)
         if quiet:
@@ -143,7 +145,7 @@ user_cli.context_class = click.AsyncContext
 @pass_context
 async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
-    async with ctx(no_init=True, **kwds) as make:
+    async with ctx(no_init=True, no_status=True, **kwds) as make:
         if toolchain is None and make.config.toolchain is None:
             from dan.cxx.detect import get_toolchains
             tp = click.Choice([*get_toolchains(create=False)["toolchains"].keys(), 'default'])
@@ -429,7 +431,6 @@ async def shell(ctx: CommandsContext, **kwds):
 @cli.group()
 def code():
     """VS-Code specific commands"""
-    set_terminal_mode(TerminalMode.CODE)
 
 
 # from dan.core.bench import benchmark, report_all
@@ -439,7 +440,7 @@ def code():
 @click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     # with benchmark('get-targets') as bench:
         # bench.begin('make')
     async with ctx(**kwargs) as make:
@@ -473,7 +474,7 @@ async def get_targets(ctx: CommandsContext, **kwargs):
 @click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         import json
         out = list()
@@ -491,7 +492,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 @click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(code.get_test_suites(pretty))
@@ -512,8 +513,7 @@ def get_toolchains(**kwargs):
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwargs):
     """Build targets (vscode version)"""
-    set_terminal_mode(TerminalMode.CODE)
-    async with ctx(**kwargs, diags=True) as make:
+    async with ctx(**kwargs, diags=True, code=True) as make:
         if force:
             await make.clean()
         await make.build()
@@ -524,7 +524,7 @@ async def build(ctx: CommandsContext, force=False, **kwargs):
 @click.argument('SOURCES', nargs=-1, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_sources_configuration(sources))
@@ -534,7 +534,7 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
 @minimal_options
 @pass_context
 async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_workspace_browse_configuration())
@@ -564,4 +564,5 @@ def main():
     finally:
         term = term_manager()
         term.stop()
-        term._thread.get_loop().run_until_complete(term._thread)
+        if term._thread:
+            term._thread.get_loop().run_until_complete(term._thread)

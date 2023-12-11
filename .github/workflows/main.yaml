@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  DAN_NOPROGRESS: 1
+  DAN_NOSTATUS: 1
 
 jobs:
   build:

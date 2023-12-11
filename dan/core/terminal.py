@@ -1,7 +1,6 @@
 import atexit
 import math
 import time
-import threading
 import typing as t
 import sys
 import shutil
@@ -27,6 +26,9 @@ mode = TerminalMode.STICKY
 
 def set_mode(new_mode: TerminalMode):
     global mode
+    global _manager
+    if _manager is not None:
+        raise RuntimeError("Cannot change terminal mode once initialized")
     mode = new_mode
 
 
@@ -62,7 +64,7 @@ class TermSequence:
     def down(n=1):
         """Moves cursor down"""
         return f"\x1b[{n}B"
-    
+
     @staticmethod
     def scroll_up(n=1):
         """Scroll viewport up"""
@@ -154,6 +156,7 @@ class _OutputStreamProgress:
         self._elapsed_s = 0.0
         self._auto_update = auto_update
         self._auto_update_task = None
+        self._done = False
 
     async def __auto_update(self):
         while True:
@@ -161,6 +164,7 @@ class _OutputStreamProgress:
             self.__call__(0)
 
     def __enter__(self):
+        self._done = False
         self._t_start = time.time()
         self._saved_status = self._s._status
         self._saved_extra = self._s._extra
@@ -172,11 +176,15 @@ class _OutputStreamProgress:
         return self
 
     def __exit__(self, *args):
+        self._done = True
         if self._auto_update_task is not None:
             self._auto_update_task.cancel()
             self._auto_update_task = None
-        self._s._status = self._saved_status
-        self._s._extra = self._saved_extra
+        def reset():
+            self._s._status = self._saved_status
+            self._s._extra = self._saved_extra
+            self._s.update()
+        self._s._mngr._flush_callbacks.append(reset)
         self._s.update()
 
     def __call__(self, n=1, status=None):
@@ -209,7 +217,12 @@ class _OutputStreamProgress:
                 )
         return bar
 
-    def __str__(self) -> str:
+    def __str_code(self) -> str:
+        if self._done:
+            return 'done/done'
+        return f'{self.n}/{self.total}'
+
+    def __str_default(self) -> str:
         if self.total:
             frac = self.n / self.total
             rbar = f"{int(100 * frac):3d}%"
@@ -220,6 +233,13 @@ class _OutputStreamProgress:
             rbar = "   ∞"
         bar = self.__make_bar(frac, self._s._mngr.width // 5)
         return f" |{bar}| {rbar}"
+
+    def __str__(self) -> str:
+        match mode:
+            case TerminalMode.CODE:
+                return self.__str_code()
+            case _:
+                return self.__str_default()
 
 
 class _TaskGroup(asyncio.TaskGroup, _OutputStreamProgress):
@@ -313,6 +333,14 @@ class TermStream:
         else:
             self._mngr._streams.append(self._weak_self)
 
+        match mode:
+            case TerminalMode.CODE:
+                self._get_output = self._get_output_code
+                from dan.logging import _no_color_formatter
+                self._formatter = _no_color_formatter
+            case _:
+                self._get_output = self._get_output_default
+
     def __del__(self):
         if self._parent:
             self._parent._children.remove(self._weak_self)
@@ -388,23 +416,37 @@ class TermStream:
 
     ts = TermSequence
 
-    def _get_output(self, now) -> list[str]:
+    def _get_output_code(self, now) -> list[str]:
+        if self._dirty:
+            from dan.logging import STATUS, PROGRESS
+            if isinstance(self._extra, _OutputStreamProgress):
+                record = logging.LogRecord(self.name, PROGRESS, '', 0, f'{self._status} - {self._extra}', None, None)
+            else:
+                record = logging.LogRecord(self.name, STATUS, '', 0, f'{self._status}', None, None)
+
+            self._cached_out = [self._formatter.format(record) + '\n']
+            for ref in self._children:
+                child = ref()
+                if child.visible:
+                    self._cached_out.extend(child._get_output(now))
+            self._dirty = False
+        return self._cached_out
+
+    def _get_output_default(self, now) -> list[str]:
         if self._dirty:
             prefix = f"{' ' * self._offset}{self.theme.icon(self._icon)}  {self.theme.name(self.name)}: "
             extra = str(self._extra)
             status = self._status
             max_status_len = self.prefix_width - (len(extra)) - 1
             if len(status) > max_status_len:
-                status = status[:max_status_len - 4] + ' ...'
+                status = status[: max_status_len - 4] + " ..."
             if len(extra):
                 padding = self.prefix_width - len(status) - len(extra) - 1
                 padding = padding * " "
                 suffix = f"{padding}{self.theme.extra(extra)}"
             else:
-                suffix = ''
-            self._cached_out = [
-                f"{prefix}{status}{suffix}\n"
-            ]
+                suffix = ""
+            self._cached_out = [f"{prefix}{status}{suffix}\n"]
             for ref in self._children:
                 child = ref()
                 if child.visible:
@@ -423,10 +465,17 @@ class _TermManager:
         self._stop_requested = False
         self._raw_lines = list()
         self._thread = None
+        self._flush_callbacks = list()
 
         global _manager
         if _manager is not None:
             raise RuntimeError("Only one _TermManager can be created")
+
+        match mode:
+            case TerminalMode.CODE:
+                self._flush = self._flush_code
+            case _:
+                self._flush = self._flush_sticky
 
     def __del__(self):
         self.stop()
@@ -442,7 +491,11 @@ class _TermManager:
     def start(self):
         if self._thread is not None:
             self.stop()
-        self._thread = asyncio.create_task(self._render(), name="terminal-rendering")
+        try:
+            loop = asyncio.get_running_loop()
+            self._thread = asyncio.create_task(self._render(), name="terminal-rendering")
+        except RuntimeError:
+            pass
 
     def stop(self):
         if self._thread is not None:
@@ -458,20 +511,22 @@ class _TermManager:
 
     ts = TermSequence
 
-    def _flush(self, prev_line_count):
+    def _flush_sticky(self, prev_line_count):
         out = self._fp
         self._up_ev.clear()
         stop = self._stop_requested
         now = time.time()
         output_lines = []
         if prev_line_count:
-            output_lines.append(self.ts.prev(prev_line_count))
-        prev_line_count = 1
+            output_lines.append(self.ts.prev(prev_line_count + 1))
+        prev_line_count = 0
         force = len(self._raw_lines)
         max_height = self.height - 2
 
-        status_lines = ['―' * (self.width) + '\n']
-        if mode != TerminalMode.CODE:
+        if mode != TerminalMode.STICKY:
+            status_lines = []
+        else:
+            status_lines = ["―" * (self.width) + "\n"]
             for ref in self._streams:
                 stream = ref()
                 if stream is None:
@@ -505,30 +560,53 @@ class _TermManager:
             lines = []
             line_count = 0
             for ls in self._raw_lines:
-                nls = [l.rstrip() + '\n' for l in ls.splitlines()]
+                nls = [l.rstrip() + "\n" for l in ls.splitlines()]
                 line_count += len(nls)
                 for l in nls:
                     line_count += len(l) // self.width
                 lines.extend(nls)
-            if mode != TerminalMode.CODE:
+            if mode == TerminalMode.STICKY:
                 output_lines.append(self.ts.sreen_clear(0))
                 if line_count + prev_line_count > max_height:
-                    output_lines.append(self.ts.scroll_up(prev_line_count) + self.ts.prev(prev_line_count))
+                    output_lines.append(
+                        self.ts.scroll_up(prev_line_count)
+                        + self.ts.prev(prev_line_count)
+                    )
             output_lines.extend(lines)
 
             self._raw_lines = list()
-        
-        if mode != TerminalMode.CODE:
+
+        if mode == TerminalMode.STICKY:
             # clear rest of the screen
             status_lines.append(self.ts.sreen_clear(0))
 
         out.writelines([*output_lines, *status_lines])
+        out.flush()
 
         return stop, prev_line_count
+    
+    def _flush_code(self, prev_line_count):
+        out = self._fp
+        self._up_ev.clear()
+        stop = self._stop_requested
+        now = time.time()
+        if self._raw_lines:
+            out.writelines(self._raw_lines)
+            self._raw_lines = []
+        for ref in self._streams:
+            stream = ref()
+            if stream is None:
+                continue
+            is_dirty, is_visible = stream._refresh_state()
+            if is_dirty and is_visible:
+                data = stream._get_output(now)
+                out.writelines(data)
+            
+        return stop, 0
 
     async def _render(self):
         out = self._fp
-        if mode != TerminalMode.CODE:
+        if mode == TerminalMode.STICKY:
             out.write(self.ts.home() + self.ts.sreen_clear())
         prev_line_count = 0
         stop = False
@@ -539,8 +617,8 @@ class _TermManager:
             self.update()
 
         auto_refresh_task = asyncio.create_task(auto_refresh())
-        with self.ts.hidden_cursor() if mode != TerminalMode.CODE else nullcontext():
-        # with nullcontext():
+        with self.ts.hidden_cursor() if mode == TerminalMode.STICKY else nullcontext():
+            # with nullcontext():
             while not stop:
                 await self._up_ev.wait()
                 now = time.time()
@@ -549,6 +627,9 @@ class _TermManager:
                     await asyncio.sleep(self._max_delay - delay)
                 stop, prev_line_count = self._flush(prev_line_count)
                 last_update = time.time()
+                for callback in self._flush_callbacks:
+                    callback()
+                self._flush_callbacks = list()
 
             self._flush(prev_line_count)
             auto_refresh_task.cancel()
