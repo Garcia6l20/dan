@@ -180,11 +180,17 @@ class _OutputStreamProgress:
         if self._auto_update_task is not None:
             self._auto_update_task.cancel()
             self._auto_update_task = None
-        def reset():
+        
+        if mode == TerminalMode.CODE:
+            # we want done/done to be printed
+            def reset():
+                self._s._status = self._saved_status
+                self._s._extra = self._saved_extra
+                self._s.update()
+            self._s._mngr._flush_callbacks.append(reset)
+        else:
             self._s._status = self._saved_status
             self._s._extra = self._saved_extra
-            self._s.update()
-        self._s._mngr._flush_callbacks.append(reset)
         self._s.update()
 
     def __call__(self, n=1, status=None):
@@ -400,6 +406,8 @@ class TermStream:
 
     def update(self):
         self._dirty = True
+        if not self._status:
+            self._visible = False
         if self._parent is not None:
             self._parent.update()
         else:
@@ -436,7 +444,7 @@ class TermStream:
         if self._dirty:
             prefix = f"{' ' * self._offset}{self.theme.icon(self._icon)}  {self.theme.name(self.name)}: "
             extra = str(self._extra)
-            status = self._status
+            status = self._status.replace('\n', ' ') # TODO handle multiline status
             max_status_len = self.prefix_width - (len(extra)) - 1
             if len(status) > max_status_len:
                 status = status[: max_status_len - 4] + " ..."
@@ -459,6 +467,7 @@ class _TermManager:
     def __init__(self, min_update_freq=1, max_update_freq=12) -> None:
         self._streams: list[weakref.ReferenceType[TermStream]] = list()
         self._fp = sys.stdout
+        # self._fp.reconfigure(write_through=False)
         self._min_delay = 1 / min_update_freq
         self._max_delay = 1 / max_update_freq
         self._up_ev = asyncio.Event()
@@ -518,15 +527,13 @@ class _TermManager:
         now = time.time()
         output_lines = []
         if prev_line_count:
-            output_lines.append(self.ts.prev(prev_line_count + 1))
+            output_lines.append(self.ts.prev(prev_line_count))
         prev_line_count = 0
         force = len(self._raw_lines)
         max_height = self.height - 2
 
-        if mode != TerminalMode.STICKY:
-            status_lines = []
-        else:
-            status_lines = ["―" * (self.width) + "\n"]
+        status_lines = []
+        if mode == TerminalMode.STICKY:
             for ref in self._streams:
                 stream = ref()
                 if stream is None:
@@ -556,6 +563,11 @@ class _TermManager:
                     prev_line_count += height
                     status_lines.append(self.ts.next(height))
 
+            # insert separator
+            if prev_line_count:
+                status_lines.insert(0, "―" * (self.width) + "\n")
+                prev_line_count += 1
+
         if self._raw_lines:
             lines = []
             line_count = 0
@@ -580,8 +592,15 @@ class _TermManager:
             # clear rest of the screen
             status_lines.append(self.ts.sreen_clear(0))
 
+        # for line in [*output_lines, *status_lines]:
+        #     out.write(line)
+        #     out.flush()
         out.writelines([*output_lines, *status_lines])
         out.flush()
+        
+        for callback in self._flush_callbacks:
+            callback()
+        self._flush_callbacks = list()
 
         return stop, prev_line_count
     
@@ -601,6 +620,10 @@ class _TermManager:
             if is_dirty and is_visible:
                 data = stream._get_output(now)
                 out.writelines(data)
+        
+        for callback in self._flush_callbacks:
+            callback()
+        self._flush_callbacks = list()
             
         return stop, 0
 
@@ -618,7 +641,7 @@ class _TermManager:
 
         auto_refresh_task = asyncio.create_task(auto_refresh())
         with self.ts.hidden_cursor() if mode == TerminalMode.STICKY else nullcontext():
-            # with nullcontext():
+        # with nullcontext():
             while not stop:
                 await self._up_ev.wait()
                 now = time.time()
@@ -627,12 +650,13 @@ class _TermManager:
                     await asyncio.sleep(self._max_delay - delay)
                 stop, prev_line_count = self._flush(prev_line_count)
                 last_update = time.time()
-                for callback in self._flush_callbacks:
-                    callback()
-                self._flush_callbacks = list()
 
-            self._flush(prev_line_count)
             auto_refresh_task.cancel()
+
+            self._up_ev.set()
+            while self._up_ev.is_set():
+                _, prev_line_count = self._flush(prev_line_count)
+                await asyncio.sleep(0)
 
         self._thread = None
 
