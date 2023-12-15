@@ -343,7 +343,7 @@ class PackageConfig(CXXTarget, internal=True):
     def __getattr__(self, name):
         value = self.data.get(name) if self.data is not None else None
         if value is None:
-            raise AttributeError(name) #@IgnoreException
+            raise AttributeError(name)
         return value
     
     def __repr__(self):

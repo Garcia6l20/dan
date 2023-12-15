@@ -85,7 +85,7 @@ class _Wrapper:
 
     @functools.cached_property
     def search_paths(self):
-        qt_core = self.get_dependency(f'Qt{self.qt_major}Core').target
+        qt_core = self.get_dependency(f'Qt{self.qt_major}Core')
         return [qt_core.host_bins if hasattr(qt_core, 'host_bins') else qt_core.bindir, qt_core.prefix] 
 
     @Target.root_cached_property('qt.moc_executable', Path.as_posix, Path)
