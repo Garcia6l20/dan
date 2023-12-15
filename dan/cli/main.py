@@ -262,7 +262,7 @@ def uninstall(verbose: int, yes: bool, root: str, name: str):
 @pass_context
 def ls(ctx: CommandsContext):
     """Inspect stuff"""
-    pass
+    ctx._make_kwds['terminal_mode'] = TerminalMode.BASIC
 
 @ls.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
@@ -404,7 +404,7 @@ async def env(ctx: CommandsContext, **kwds):
     """Show environment."""
     kwds['quiet'] = True
     async with ctx(**kwds) as make:
-        for k, v in (await make.env).items():
+        for k, v in make.env.items():
             click.echo(f'{k}={v}')
 
 
@@ -419,7 +419,7 @@ async def shell(ctx: CommandsContext, **kwds):
     # kwds['quiet'] = True
     async with ctx(**kwds) as make:
         env = dict(os.environ)
-        for k, v in (await make.env).items():
+        for k, v in make.env.items():
             env[k] = v
 
         click.logger.info('entering dan shell...')
@@ -509,7 +509,7 @@ def get_toolchains(**kwargs):
 @common_opts
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwargs):
     """Build targets (vscode version)"""
