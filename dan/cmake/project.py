@@ -11,7 +11,7 @@ import os
 
 import platform
 
-async def get_ninja():
+async def get_ninja(progress):
     from dan.cxx.detect import get_dan_path
     match platform.system():
         case 'Windows':
@@ -36,7 +36,7 @@ async def get_ninja():
         with tempfile.TemporaryDirectory(prefix=f'dan-ninja-') as tmp_dest:
             tmp_dest = Path(tmp_dest)
             archive_name = f'{name}.zip'
-            await fetch_file(f'https://github.com/ninja-build/ninja/releases/download/v{ninja_version}/{archive_name}', tmp_dest / archive_name)
+            await fetch_file(f'https://github.com/ninja-build/ninja/releases/download/v{ninja_version}/{archive_name}', tmp_dest / archive_name, progress=progress)
             with zipfile.ZipFile(tmp_dest / archive_name) as f:
                 f.extractall(bin_path)
             ninja_path.chmod(ninja_path.stat().st_mode | stat.S_IEXEC)
@@ -102,7 +102,7 @@ class Project(Target, internal=True):
 
         base_opts = []
         if self.cmake_generator.startswith('Ninja'):
-            ninja = await get_ninja()
+            ninja = await get_ninja(self.progress)
             base_opts.extend((f'-G{self.cmake_generator}', f'-DCMAKE_MAKE_PROGRAM={ninja.as_posix()}'))
         else:
             raise RuntimeError('Only Ninja generators are currently supported')
