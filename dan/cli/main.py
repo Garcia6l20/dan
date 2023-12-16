@@ -34,7 +34,7 @@ _common_opts = [
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
     click.option('--no-status', is_flag=True,
-                 help='Disable status', envvar='DAN_STATUS'),
+                 help='Disable status', envvar='DAN_NOSTATUS'),
 ]
 
 
