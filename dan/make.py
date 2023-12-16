@@ -174,7 +174,7 @@ class Make(logging.Logging):
         if terminal_mode is not None:
             set_terminal_mode(terminal_mode)
 
-        self.term = TermStream('make')
+        self.term = TermStream("make")
 
         if diags:
             diag.enabled = True
@@ -344,7 +344,7 @@ class Make(logging.Logging):
         result.update(self._diagnostics)
         return result
 
-    async def targets_of(self, sources: list[Path]) -> dict[Path, Target|None]:
+    async def targets_of(self, sources: list[Path]) -> dict[Path, Target | None]:
         from dan.cxx.targets import CXXObjectsTarget
 
         result = {Path(source): None for source in sources}
@@ -408,46 +408,6 @@ class Make(logging.Logging):
 
         return get_toolchains()
 
-    # class progress:
-    #     def __init__(self, desc, targets, task_builder) -> None:
-    #         self.desc = desc
-    #         self.targets = list(targets)  # NOTE: need to take a copy of the list
-    #         self.builder = task_builder
-    #         import shutil
-
-    #         term_cols = shutil.get_terminal_size().columns
-    #         self.max_desc_width = int(term_cols * 0.25)
-    #         self.pbar = Bar(total=len(targets), desc="building", root=True)
-    #         self.pbar.unit = " targets"
-
-    #     def __enter__(self):
-    #         def update(n=1):
-    #             desc = self.desc + " " + ", ".join([t.name for t in self.targets])
-    #             if len(desc) > self.max_desc_width:
-    #                 desc = desc[: self.max_desc_width] + " ..."
-    #             self.pbar.set_description_str(desc)
-    #             self.pbar.update(n)
-
-    #         update(0)
-
-    #         def on_done(t: Target, *args, **kwargs):
-    #             self.targets.remove(t)
-    #             update()
-
-    #         tasks = list()
-
-    #         for t in self.targets:
-    #             tsk = asyncio.create_task(self.builder(t))
-    #             tsk.add_done_callback(functools.partial(on_done, t))
-    #             tasks.append(tsk)
-
-    #         return tasks
-
-    #     def __exit__(self, *args):
-    #         self.pbar.set_description_str(self.desc + " done")
-    #         self.pbar.refresh()
-    #         return
-
     async def _build_target(self, t: Target):
         try:
             await t.build()
@@ -478,18 +438,18 @@ class Make(logging.Logging):
             targets = self.targets
 
         all_targets = set()
-        async with self.term.task_group('installing dependencies...') as g:
+        async with self.term.task_group("installing dependencies...") as g:
             for t in targets:
                 g.create_task(self.get_all_dependencies(t, all_targets))
 
         all_targets.update(targets)
 
-        self.term.status('building...')
-        async with self.term.task_group('building...') as g:
+        self.term.status("building...")
+        async with self.term.task_group("building...") as g:
             for t in all_targets:
                 g.create_task(self._build_target(t))
-                
-        self.term.status('done', icon='✔')
+
+        self.term.status("done", icon="✔")
 
     async def _install_target_deps(self, t: Target):
         deps_install_path = self.root.pkgs_path
@@ -509,23 +469,9 @@ class Make(logging.Logging):
         if targets is None:
             targets = self.targets
 
-        with self.context, self.progress(
-            "installing deps", targets, self._install_target_deps
-        ) as tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            errors = list()
-            for result in results:
-                if isinstance(result, Exception):
-                    self._logger.error(str(result))
-                    errors.append(result)
-            err_count = len(errors)
-            if err_count == 1:
-                raise errors[0]
-            elif err_count > 1:
-                raise asyncio.ExceptionGroup(
-                    "Multiple errors occured while installing project dependencies",
-                    errors=errors,
-                )
+        async with self.term.task_group("installing dependencies...") as g:
+            for target in targets:
+                g.create_task(self._install_target_deps(target))
 
     async def _install_target(self, t: Target, mode: InstallMode):
         try:
@@ -548,25 +494,25 @@ class Make(logging.Logging):
 
         await self.build(targets)
 
-        with self.context, self.progress(
-            "installing", targets, functools.partial(self._install_target, mode=mode)
-        ) as tasks:
-            installed_files = await asyncio.gather(*tasks)
-            installed_files = unique(flatten(installed_files))
-            manifest_path = (
-                self.settings.install.data_destination
-                / "dan"
-                / f"{self.root.name}-manifest.txt"
-            )
-            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        async with self.term.task_group("installing targets...") as g:
+            for target in targets:
+                g.create_task(self._install_target(target, mode))
 
-            async with aiofiles.open(manifest_path, "w") as f:
-                await f.writelines(
-                    [
-                        os.path.relpath(p, manifest_path.parent) + "\n"
-                        for p in installed_files
-                    ]
-                )
+        installed_files = unique(flatten(g.results()))
+        manifest_path = (
+            self.settings.install.data_destination
+            / "dan"
+            / f"{self.root.name}-manifest.txt"
+        )
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+        async with aiofiles.open(manifest_path, "w") as f:
+            await f.writelines(
+                [
+                    os.path.relpath(p, manifest_path.parent) + "\n"
+                    for p in installed_files
+                ]
+            )
 
     async def package(self, pkg_type: str, mode: InstallMode = InstallMode.user):
         import tempfile
@@ -649,14 +595,16 @@ class Make(logging.Logging):
             return 255
 
         with self.context:
-            with self.progress("testing", tests, self._test_target) as tasks:
-                results = await asyncio.gather(*tasks)
-                if all(results):
-                    self.info("Success !")
-                    return 0
-                else:
-                    self.error("Failed !")
-                    return 255
+            async with self.term.task_group("testing...") as g:
+                for test in tests:
+                    g.create_task(self._test_target(test))
+
+            if all(g.results()):
+                self.info("Success !")
+                return 0
+            else:
+                self.error("Failed !")
+                return 255
 
     async def clean(self):
         await self.initialize()
