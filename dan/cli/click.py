@@ -5,6 +5,7 @@ from click import *
 
 import inspect
 import asyncio
+from dan.core.terminal import TerminalMode
 
 import dan.core.typing as t
 from dan import logging
@@ -85,7 +86,7 @@ class OptionsParamType(ParamType):
         from dan.make import Make
         from dan.core.asyncio import sync_wait
         build_path = ctx.params['build_path']
-        make = Make(build_path, quiet=True)
+        make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC)
         sync_wait(make.initialize())
         
         comps = []
@@ -110,10 +111,9 @@ class TargetParamType(ParamType):
         from dan.make import Make
         from dan.core.asyncio import sync_wait
         build_path = ctx.params['build_path']
-        make = Make(build_path, quiet=True)
+        make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC)
         sync_wait(make.initialize())
 
-        
         comps = []
         for target in make.root.all_targets:
             if isinstance(target, self.target_types) and target.fullname.startswith(incomplete):

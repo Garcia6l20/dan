@@ -85,7 +85,7 @@ class _Wrapper:
 
     @functools.cached_property
     def search_paths(self):
-        qt_core = self.get_dependency(f'Qt{self.qt_major}Core').target
+        qt_core = self.get_dependency(f'Qt{self.qt_major}Core')
         return [qt_core.host_bins if hasattr(qt_core, 'host_bins') else qt_core.bindir, qt_core.prefix] 
 
     @Target.root_cached_property('qt.moc_executable', Path.as_posix, Path)
@@ -172,9 +172,7 @@ def wrap(modules: list[str] = None, ui_files: list[str] = None, resource_files: 
     def decorator(cls):
         from dan.core.include import context
         @context.current.wraps(cls)
-        class QtWapped(_Wrapper, cls):
-            __name__ = f'{cls.__name__}QtWrapped'
-            
+        class QtWapped(_Wrapper, cls):            
             def __init__(self, *args, **kwargs) -> None:
                 super().__init__(*args, **kwargs)
                 self.dependencies.update([f'Qt{major}{module}' for module in self.qt_modules], public=True)

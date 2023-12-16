@@ -1,1 +1,1 @@
-from dan.io.package import Package, ReusePackage
+from dan.io.package import IoPackage, ReusePackage

@@ -91,7 +91,10 @@ class MakeFile(sys.__class__, Logging):
                 new_cls, cls), 'Target wrapper must inherit from original target'
             for t in self.__targets:
                 if type(t) == cls:
+                    stream = t._stream
                     self.__targets.remove(t)
+                    new_instance = self.__find(new_cls)
+                    new_instance._stream = stream
                     return new_cls
             assert False, 'Original target has not been registered'
         return decorator

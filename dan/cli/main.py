@@ -6,7 +6,7 @@ from dan import logging
 
 from dan.core.find import find_file
 from dan.core.pathlib import Path
-from dan.core.progress import ProgressMode, set_progress_mode
+from dan.core.terminal import TerminalMode, set_mode as set_terminal_mode, manager as term_manager
 
 from dan.cli import click
 
@@ -33,8 +33,8 @@ _common_opts = [
                  help='Verbosity level.', envvar='DAN_VERBOSE'),
     click.option('--jobs', '-j',
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
-    click.option('--no-progress', is_flag=True,
-                 help='Disable progress bars', envvar='DAN_NOPROGRESS'),
+    click.option('--no-status', is_flag=True,
+                 help='Disable status', envvar='DAN_NOSTATUS'),
 ]
 
 
@@ -64,8 +64,10 @@ class CommandsContext:
     @contextlib.asynccontextmanager
     async def __call__(self, *args, **kwargs):
         no_init = kwargs.pop('no_init', False)
-        if kwargs.pop('no_progress', False):
-            kwargs['progress_mode'] = ProgressMode.NONE
+        if kwargs.pop('no_status', False):
+            kwargs['terminal_mode'] = TerminalMode.BASIC
+        elif kwargs.pop('code', False):
+            kwargs['terminal_mode'] = TerminalMode.CODE
         self.update(*args, **kwargs)
         quiet = self._make_kwds.pop('quiet', None)
         if quiet:
@@ -139,11 +141,11 @@ user_cli.context_class = click.AsyncContext
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH')
 @click.option('--source-path', '-S', help='Path where source is located.',
-              type=click.Path(resolve_path=True, path_type=Path), required=True, default='.')
+              type=click.Path(resolve_path=True, path_type=Path), required=True, default='.', envvar='DAN_SOURCE_PATH')
 @pass_context
 async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
-    async with ctx(no_init=True, **kwds) as make:
+    async with ctx(no_init=True, no_status=True, **kwds) as make:
         if toolchain is None and make.config.toolchain is None:
             from dan.cxx.detect import get_toolchains
             tp = click.Choice([*get_toolchains(create=False)["toolchains"].keys(), 'default'])
@@ -260,7 +262,7 @@ def uninstall(verbose: int, yes: bool, root: str, name: str):
 @pass_context
 def ls(ctx: CommandsContext):
     """Inspect stuff"""
-    pass
+    ctx._make_kwds['terminal_mode'] = TerminalMode.BASIC
 
 @ls.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
@@ -429,41 +431,50 @@ async def shell(ctx: CommandsContext, **kwds):
 @cli.group()
 def code():
     """VS-Code specific commands"""
-    set_progress_mode(ProgressMode.IDENTIFIED)
 
+
+# from dan.core.bench import benchmark, report_all
 
 @code.command()
 @common_opts
 @click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    # with benchmark('get-targets') as bench:
+        # bench.begin('make')
     async with ctx(**kwargs) as make:
+            # bench.end()
         out = []
         targets = make.context.root.all_targets
+            # with bench('load-dependencies'):
         async with asyncio.TaskGroup() as g:
             for target in targets:
                 g.create_task(target.load_dependencies())
+            # with bench('gen-output'):
         for target in targets:
-            out.append({
-                'name': target.name,
-                'fullname': target.fullname,
-                'buildPath': str(target.build_path),
-                'srcPath': str(target.source_path),
-                'output': str(target.output),
-                'executable': isinstance(target, Executable),
-                'type': type(target).__name__,
-                'env': target.env if isinstance(target, Executable) else None,
-            })
+            # with bench(f'gen-output-{target.name}'):
+                out.append({
+                    'name': target.name,
+                    'fullname': target.fullname,
+                    'buildPath': str(target.build_path),
+                    'srcPath': str(target.source_path),
+                    'output': str(target.output),
+                    'executable': isinstance(target, Executable),
+                    'type': type(target).__name__,
+                    'env': target.env if isinstance(target, Executable) else None,
+                })
+            # with bench('json-dump'):
         import json
         click.echo(json.dumps(out))
+    # report_all()
 
 @code.command()
 @common_opts
 @click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         import json
         out = list()
@@ -481,7 +492,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
 @click.argument('TARGETS', nargs=-1)
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(code.get_test_suites(pretty))
@@ -498,11 +509,11 @@ def get_toolchains(**kwargs):
 @common_opts
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwargs):
     """Build targets (vscode version)"""
-    async with ctx(**kwargs, diags=True) as make:
+    async with ctx(**kwargs, diags=True, code=True) as make:
         if force:
             await make.clean()
         await make.build()
@@ -513,7 +524,7 @@ async def build(ctx: CommandsContext, force=False, **kwargs):
 @click.argument('SOURCES', nargs=-1, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_sources_configuration(sources))
@@ -523,7 +534,7 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
 @minimal_options
 @pass_context
 async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
-    kwargs.update({'quiet': True, 'diags': True})
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_workspace_browse_configuration())
@@ -533,10 +544,10 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
 async def process_result(ctx, result, **kwargs):
     await Cache.save_all()
 
-
 def main():
     import sys
     try:
+        loop = asyncio.new_event_loop()
         cli(auto_envvar_prefix='DAN')
     except Exception as err:
         click.logger.error(str(err))
@@ -545,8 +556,13 @@ def main():
         click.logger.debug(' '.join(traceback.format_tb(tb)))
         try:
             # wait asyncio loop to terminate
-            asyncio.get_running_loop().run_until_complete()
+            loop.run_until_complete()
         except Exception:
             pass
         asyncio.run(Cache.save_all())
         return -1
+    finally:
+        term = term_manager()
+        term.stop()
+        if term._thread:
+            term._thread.get_loop().run_until_complete(term._thread)

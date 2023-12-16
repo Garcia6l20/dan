@@ -2,31 +2,32 @@ from asyncio import *
 from async_property import *
 
 import threading
-import concurrent
+import concurrent.futures
 import multiprocessing
 import typing as t
 import inspect
+import threading
 
 from dan.core.functools import BaseDecorator
 
 
 async def may_await(obj):
-    '''Awaits given object if it is an awaitable
-    
+    """Awaits given object if it is an awaitable
+
     If obj is an awaitable it's await-result is returned.
     If obj is not an awaitable it is returned directly.
-    '''
+    """
     if inspect.isawaitable(obj):
         return await obj
     else:
         return obj
 
-class Cached(BaseDecorator):
 
+class Cached(BaseDecorator):
     def __init__(self, fn, unique=False):
         self.__fn = fn
         self.__unique = unique
-        self.__is_method = fn.__call__.__class__.__name__ == 'method-wrapper'
+        self.__is_method = fn.__call__.__class__.__name__ == "method-wrapper"
         if not self.__is_method and self.__unique:
             self.__cache = None
         else:
@@ -67,9 +68,12 @@ def cached(*args, **kwargs):
     if len(args) == 1 and callable(args[0]):
         return Cached(args[0])
     else:
+
         def wrapper(fn):
             return Cached(fn, *args, **kwargs)
+
         return wrapper
+
 
 class _SyncWaitThread(threading.Thread):
     def __init__(self, coro):
@@ -80,7 +84,13 @@ class _SyncWaitThread(threading.Thread):
 
     def run(self):
         try:
-            self.result = run(self.coro)
+            loop = new_event_loop()
+            self.result = loop.run_until_complete(self.coro)
+            tasks = all_tasks(loop)
+            if len(tasks):
+                for t in tasks:
+                    t.cancel()
+                loop.run_until_complete(wait(tasks))
         except Exception as err:
             self.err = err
 
@@ -93,32 +103,35 @@ def sync_wait(coro):
         raise thread.err
     return thread.result
 
-__async_pool = concurrent.futures.ThreadPoolExecutor(
+
+_async_pool = concurrent.futures.ThreadPoolExecutor(
     max_workers=multiprocessing.cpu_count(),
 )
 
 
 async def async_wait(fn, *args, **kwargs):
     loop = get_running_loop()
+
     def wrapper():
         return fn(*args, **kwargs)
-    return await loop.run_in_executor(__async_pool, wrapper)
+
+    return await loop.run_in_executor(_async_pool, wrapper)
 
 
 class ExceptionGroup(Exception):
-
     def __init__(self, message: str, errors: t.Iterable[Exception] = set()) -> None:
         super().__init__(message)
         self.errors: set[Exception] = set(errors)
-    
+
     def add(self, e: Exception):
         self.errors.add(e)
 
     def __str__(self) -> str:
         s = super().__str__()
         for e in self.errors:
-            s += '\n' + str(e)
+            s += "\n" + str(e)
         return s
+
 
 class TaskGroup:
     """Asynchronous context manager for managing groups of tasks.
@@ -136,14 +149,15 @@ class TaskGroup:
     a task will cancel all remaining tasks and wait for them to exit.
     The exceptions are then combined and raised as an `ExceptionGroup`.
     """
-    def __init__(self, name='a TaskGroup'):
+
+    def __init__(self, name="a TaskGroup"):
         self._entered = False
         self._exiting = False
         self._aborting = False
         self._loop = None
         self._parent_task = None
         self._parent_cancel_requested = False
-        self._tasks = set()
+        self._tasks: set[Task] = set()
         self._errors = []
         self._results = []
         self._base_error = None
@@ -151,23 +165,22 @@ class TaskGroup:
         self._name = name
 
     def __repr__(self):
-        info = ['']
+        info = [""]
         if self._tasks:
-            info.append(f'tasks={len(self._tasks)}')
+            info.append(f"tasks={len(self._tasks)}")
         if self._errors:
-            info.append(f'errors={len(self._errors)}')
+            info.append(f"errors={len(self._errors)}")
         if self._aborting:
-            info.append('cancelling')
+            info.append("cancelling")
         elif self._entered:
-            info.append('entered')
+            info.append("entered")
 
-        info_str = ' '.join(info)
-        return f'<TaskGroup{info_str}>'
+        info_str = " ".join(info)
+        return f"<TaskGroup{info_str}>"
 
     async def __aenter__(self):
         if self._entered:
-            raise RuntimeError(
-                f"TaskGroup {self!r} has been already entered")
+            raise RuntimeError(f"TaskGroup {self!r} has been already entered")
         self._entered = True
 
         if self._loop is None:
@@ -175,21 +188,17 @@ class TaskGroup:
 
         self._parent_task = current_task(self._loop)
         if self._parent_task is None:
-            raise RuntimeError(
-                f'TaskGroup {self!r} cannot determine the parent task')
+            raise RuntimeError(f"TaskGroup {self!r} cannot determine the parent task")
 
         return self
 
     async def __aexit__(self, et, exc, tb):
         self._exiting = True
 
-        if (exc is not None and
-                self._is_base_error(exc) and
-                self._base_error is None):
+        if exc is not None and self._is_base_error(exc) and self._base_error is None:
             self._base_error = exc
 
-        propagate_cancellation_error = \
-            exc if et is CancelledError else None
+        propagate_cancellation_error = exc if et is CancelledError else None
         if self._parent_cancel_requested:
             # If this flag is set we *must* call uncancel().
             if self._parent_task.uncancel() == 0:
@@ -255,7 +264,7 @@ class TaskGroup:
             # cycles (bad for GC); let's not keep a reference to
             # a bunch of them.
             try:
-                me = ExceptionGroup(f'unhandled errors in {self._name}', self._errors)
+                me = ExceptionGroup(f"unhandled errors in {self._name}", self._errors)
                 raise me from None
             finally:
                 self._errors = None
@@ -318,12 +327,14 @@ class TaskGroup:
         if self._parent_task.done():
             # Not sure if this case is possible, but we want to handle
             # it anyways.
-            self._loop.call_exception_handler({
-                'message': f'Task {task!r} has errored out but its parent '
-                           f'task {self._parent_task} is already completed',
-                'exception': exc,
-                'task': task,
-            })
+            self._loop.call_exception_handler(
+                {
+                    "message": f"Task {task!r} has errored out but its parent "
+                    f"task {self._parent_task} is already completed",
+                    "exception": exc,
+                    "task": task,
+                }
+            )
             return
 
         if not self._aborting and not self._parent_cancel_requested:
@@ -348,10 +359,43 @@ class TaskGroup:
             self._abort()
             self._parent_cancel_requested = True
             self._parent_task.cancel()
-    
+
     def results(self):
         if not self._entered:
             raise RuntimeError(f"TaskGroup {self!r} has not been entered")
         if self._exiting and self._tasks:
             raise RuntimeError(f"TaskGroup {self!r} is not finished")
         return self._results
+
+
+class async_lock:
+    def __init__(self, lock):
+        self.lock = lock
+
+    async def __aenter__(self):
+        loop = get_event_loop()
+        await loop.run_in_executor(_async_pool, self.lock.acquire)
+
+    async def __aexit__(self, *args):
+        self.lock.release()
+
+
+class ThreadLock:
+    def __init__(self) -> None:
+        self._lk = threading.Lock()
+
+    def __enter__(self):
+        self._lk.acquire()
+
+    def __exit__(self, *exc):
+        self._lk.release()
+
+    async def __aenter__(self):
+        loop = get_event_loop()
+        await loop.run_in_executor(_async_pool, self._lk.acquire)
+
+    async def __aexit__(self, *exc):
+        self._lk.release()
+
+
+spawn = create_task

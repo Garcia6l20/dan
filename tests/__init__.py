@@ -18,16 +18,17 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
     build_path = tests_path / 'build-unittest'
 
     def __init__(self, subproject: str = None, methodName: str = None, source_path: Path = None) -> None:
-        Logging.__init__(self, self.__class__.__name__)
         unittest.IsolatedAsyncioTestCase.__init__(self, methodName)
         PyMakeBaseTest.build_path.mkdir(exist_ok=True, parents=False)
         self.subproject = subproject
         if self.subproject:
             self.source_path = PyMakeBaseTest.source_path / self.subproject
             self.build_path = PyMakeBaseTest.build_path / self.subproject
+            self.fullname = 'test-' + self.source_path.relative_to(PyMakeBaseTest.source_path).as_posix().replace('/', '-')
         elif source_path is not None:
             self.source_path = source_path
             self.build_path = source_path / 'build'
+            self.fullname = 'test-' + self.source_path.as_posix().replace('/', '-')
 
     def setUp(self) -> None:
         return super().setUp()

@@ -6,9 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-import tqdm
-
 import asyncio
+from dan.core.terminal import write as term_write
 
 
 class CommandError(RuntimeError):
@@ -27,7 +26,7 @@ async def log_stream(stream, *files):
         async for line in lines:
             for file in files:
                 if file in [sys.stdout, sys.stderr]:
-                    tqdm.tqdm.write(line, end='', file=file)
+                    term_write(line, end='') #, file=file)
                 else:
                     file.write(line)
 

@@ -12,6 +12,7 @@ from dan.core.requirements import load_requirements
 from dan.core.settings import InstallMode, InstallSettings, safe_load
 from dan.core.version import Version
 from dan.logging import Logging
+from dan.core.terminal import TermStream
 
 
 class Dependencies:
@@ -45,8 +46,8 @@ class Dependencies:
                     raise RuntimeError(f'cannot find dependency class: {dependency.__name__}')
                 content.append(dep)
             case str():
-                from dan.pkgconfig.package import Package
-                for pkg in Package.all.values():
+                from dan.pkgconfig.package import PackageConfig
+                for pkg in PackageConfig.all.values():
                     if pkg.name == dependency:
                         content.append(pkg)
                         break
@@ -421,6 +422,10 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.name is None:
             self.name = self.__class__.__name__
+            stream_name = self.name
+        else:
+            stream_name = f'{self.__class__.__name__}[{self.name}]'
+
         
         if self.provides is None:
             self.provides = {self.name}
@@ -433,6 +438,9 @@ class Target(Logging, MakefileRegister, internal=True):
         if parent is not None:
             self.makefile = parent.makefile
             self.fullname = f'{parent.fullname}.{self.name}'
+            self._stream = parent._stream.sub(stream_name)
+        else:
+            self._stream = TermStream(stream_name)
 
         if makefile:
             self.makefile = makefile
@@ -583,12 +591,27 @@ class Target(Logging, MakefileRegister, internal=True):
         self._install_missing_dependencies = False
         yield
         self._install_missing_dependencies = True
+    
+    @property
+    def status(self):
+        return self._stream.status
+
+    @property
+    def task_group(self):
+        return self._stream.task_group
+    
+    @property
+    def progress(self):
+        return self._stream.progress
+    
+    def hide_output(self):
+        self._stream.hide()
 
     async def __load_unresolved_dependencies(self, install=None):
         if install is None:
             install = self._install_missing_dependencies
         if len(self.requires) > 0:
-            self.dependencies.update(await load_requirements(self.requires, makefile=self.makefile, logger=self, install=install))
+            self.dependencies.update(await load_requirements(self.requires, name=self.name, makefile=self.makefile, logger=self, install=install))
 
     @asyncio.cached
     async def preload(self):
@@ -643,7 +666,9 @@ class Target(Logging, MakefileRegister, internal=True):
         return True
 
     async def _build_dependencies(self):
-        async with asyncio.TaskGroup(f'building {self.name}\'s target dependencies') as group:
+        if not self.target_dependencies:
+            return
+        async with self.task_group('building dependencies...') as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.build())
 
@@ -656,22 +681,36 @@ class Target(Logging, MakefileRegister, internal=True):
         result = await asyncio.may_await(self.__prebuild__())
 
         if self.up_to_date:
+            self.status('up to date !', icon='✔', timeout=1)
             self.trace('up to date !')
+            if self.is_requirement:
+                self.hide_output()
             return
         elif self.output is not None and self.output.exists():
             self.debug('outdated !')
 
         with utils.chdir(self.build_path):
+            self.status('building...')
             self.debug('building...')
             if diags.enabled:
                 self.diagnostics.clear()
-                
-            result = await asyncio.may_await(self.__build__())
-            if self.output is None:
-                (self.build_path / f'{self.name}.stamp').touch()
-            self.cache['options_sha1'] = self.options.sha1
-            self.trace('built')
-            return result
+            try:
+                result = await asyncio.may_await(self.__build__())
+                if self.output is None:
+                    (self.build_path / f'{self.name}.stamp').touch()
+                self.cache['options_sha1'] = self.options.sha1
+                self.trace('built')
+                self.status('built', icon='✔')
+                self._stream.hide_children()
+                if self.is_requirement:
+                    self.hide_output()
+                return result
+            except Exception as err:
+                msg = f'failed: {err}'
+                self.status(msg, icon='✘')
+                self.error(msg)
+                raise err
+
 
     @property
     def target_dependencies(self):

@@ -290,6 +290,19 @@
             }
         },
         {
+            "name": "stdout",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/test_stdout.py",
+            "justMyCode": false,
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}/tests",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
             "name": "code-test",
             "type": "python",
             "request": "launch",

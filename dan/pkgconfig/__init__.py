@@ -1,1 +1,1 @@
-from dan.pkgconfig.package import Package, MissingPackage, has_package
+from dan.pkgconfig.package import PackageConfig, MissingPackage, has_package

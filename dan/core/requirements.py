@@ -112,11 +112,14 @@ def parse_requirement(req: str) -> RequiredPackage:
     else:
         return RequiredPackage(req)
 
-async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile, logger = None, install = True):
+async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile, name=None, logger = None, install = True):
 
     from dan.pkgconfig.package import find_package
     from dan.logging import _get_makefile_logger
-    from dan.io import Package
+    from dan.io import IoPackage
+
+    if name is None:
+        name = makefile.name
 
     if logger is None:
         logger = _get_makefile_logger()
@@ -131,7 +134,8 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     resolved: list[RequiredPackage] = list()
     unresolved: list[RequiredPackage] = list()
 
-    async with asyncio.TaskGroup('requirement loading') as group:
+    # async with progress.TaskGroup(f'loading {name} requirements', progress_options = { 'disable': not install }) as group:
+    async with asyncio.TaskGroup(f'loading {name} requirements') as group:
         for req in requirements:
             if req.found:
                 resolved.append(req)
@@ -159,7 +163,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 logger.debug('%s using requirements\' target %s', req, t.fullname)
             else:
                 with makefile.context:
-                    t, is_new = await Package.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
+                    t, is_new = await IoPackage.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
                 if is_new:
                     logger.debug('%s: adding package %s', req, t.fullname)
                 elif install:

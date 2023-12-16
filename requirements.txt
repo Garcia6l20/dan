@@ -6,7 +6,6 @@ aiofiles
 aiohttp
 async-property
 termcolor
-tqdm
 dataclasses-json
 lockfile
 pefile
