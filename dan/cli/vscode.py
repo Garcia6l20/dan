@@ -1,3 +1,4 @@
+from asyncio import TaskGroup
 import json
 import os
 from dan.core import asyncio
@@ -9,6 +10,7 @@ from dan.make import Make
 from dan.cxx.targets import CXXObject
 from dan.logging import Logging
 from dan.core.utils import unique
+from dan.core.pathlib import Path
 
 
 def set_exception_breakpoint(
@@ -149,7 +151,7 @@ class Code(Logging):
         with target.skip_missing_dependencies:
             await target.initialize()
 
-    async def _make_source_configuration(self, target: CXXObject):
+    async def _make_source_configuration(self, source: Path, target: CXXObject):
         # interface:
         #   - includePath: string[]
         #   - defines: string[]
@@ -181,20 +183,20 @@ class Code(Logging):
         }
         if target.cpp_std is not None:
             config["standard"] = f"c++{target.cpp_std}"
-        return config
+    
+        return {
+            "uri": str(source),
+            "configuration": config,
+        }
 
     async def get_sources_configuration(self, sources):
-        result = list()
-        for source in sources:
-            target = await self.make.target_of(source)
-            if target:
-                result.append(
-                    {
-                        "uri": source,
-                        "configuration": await self._make_source_configuration(target),
-                    }
-                )
-        return json.dumps(result)
+        targets_map = await self.make.targets_of(sources)
+
+        async with asyncio.TaskGroup() as g:    
+            for source, target in targets_map.items():
+                if target:
+                    g.create_task(self._make_source_configuration(source, target))
+        return json.dumps(g.results())
 
     async def get_workspace_browse_configuration(self):
         # interface:

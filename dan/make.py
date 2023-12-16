@@ -344,37 +344,45 @@ class Make(logging.Logging):
         result.update(self._diagnostics)
         return result
 
-    async def target_of(self, source: Path):
+    async def targets_of(self, sources: list[Path]) -> dict[Path, Target|None]:
         from dan.cxx.targets import CXXObjectsTarget
 
-        source = Path(source)
-        if source.suffix[1].lower() == "h":
+        result = {Path(source): None for source in sources}
 
-            def check(t: CXXObjectsTarget):
-                for p in [*t.includes.private_raw, *t.includes.public_raw]:
-                    p: Path = p
-                    if p not in source.parents:
-                        continue
-                    return True
-                return False
+        def check(t: CXXObjectsTarget):
+            nonlocal result
+            for source in result.keys():
+                if t.source_path not in source.parents:
+                    continue
+                if source.suffix[1].lower() == "h":
+                    for p in [*t.includes.private_raw, *t.includes.public_raw]:
+                        p: Path = p
+                        if p not in source.parents:
+                            continue
+                        result[source] = t
+                else:
+                    t._init_sources()
+                    if source.name in [Path(s).name for s in t.sources]:
+                        result[source] = t
 
-        else:
-
-            def check(t: CXXObjectsTarget):
-                t._init_sources()
-                if source.name in [Path(s).name for s in target.sources]:
-                    return True
-                return False
-
-        for target in [
+        object_targets = [
             target
             for target in self.root.all_targets
             if isinstance(target, CXXObjectsTarget)
-        ]:
-            if target.source_path not in source.parents:
-                continue
-            if check(target):
-                return target
+        ]
+
+        def _on_done(task: asyncio.Task):
+            nonlocal result
+            if not task.cancelled():
+                done = None not in result.values()
+                if done:
+                    g.cancel()
+
+        async with asyncio.TaskGroup() as g:
+            for t in object_targets:
+                g.create_task(asyncio.async_wait(check, t)).add_done_callback(_on_done)
+
+        return result
 
     async def apply_options(self, *options):
         await self.initialize()
