@@ -18,14 +18,15 @@ from dan.core.pathlib import Path
 from dan.core.include import MakeFileError, include_makefile, Context
 from dan.core import aiofiles, asyncio
 from dan.core.requirements import RequiredPackage, load_requirements
-from dan.core.settings import InstallMode, InstallSettings, Settings
+from dan.core.settings import InstallMode, InstallSettings, BuildSettings
 from dan.core.test import Test
 from dan.core.utils import unique
-from dan.cxx import init_toolchains
+from dan.cxx import init_toolchain
 from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
 from dan.core.terminal import TerminalMode, TermStream, set_mode as set_terminal_mode
+from dan.core.utils import Environment
 
 
 def flatten(list_of_lists):
@@ -41,8 +42,7 @@ def flatten(list_of_lists):
 class Config:
     source_path: Path = None
     build_path: Path = None
-    toolchain: str = None
-    settings: Settings = field(default_factory=lambda: Settings())
+    settings: dict[str, BuildSettings] = field(default_factory=lambda: {'default': BuildSettings()})
 
 
 class ConfigCache(Cache[Config]):
@@ -194,14 +194,19 @@ class Make(logging.Logging):
 
         self._diagnostics = diag.DiagnosticCollection()
 
-        self.context = Context()
+        self.contexts = [Context('default')]
+
+    def context(self, name):
+        for ctx in self.contexts:
+            if ctx.name == name:
+                return ctx
 
     @property
     def config(self) -> Config:
         return self._config.data
 
     @property
-    def settings(self) -> Settings:
+    def settings(self) -> BuildSettings:
         return self._config.data.settings
 
     @property
@@ -210,68 +215,67 @@ class Make(logging.Logging):
 
     @property
     def toolchain(self):
-        return self.context.get("cxx_target_toolchain")
+        return self.context.get("cxx_toolchain")
 
     @property
     def root(self) -> MakeFile:
-        return self.context.root
+        return self.makefile_stack.root
 
     @property
     def env(self) -> dict[str, str]:
         from dan.cxx.detect import get_dan_path
 
-        env = self.toolchain.env
-        epath = env.get("PATH", os.environ["PATH"]).split(os.pathsep)
-        epath.insert(0, str(get_dan_path() / "os-utils" / "bin"))
+        env = Environment(self.toolchain.env)
+        paths = [str(get_dan_path() / 'os-utils' / 'bin')]
         for t in self.executable_targets:
             parts = t.env.get("PATH", os.environ["PATH"]).split(os.pathsep)
-            for p in parts:
-                if not p in epath:
-                    epath.append(p)
-        env["PATH"] = os.pathsep.join(epath)
+            paths.extend(parts)
+        env.path_prepend(*paths)
         return env
 
-    async def configure(self, source_path: str, toolchain: str = None):
+    async def configure(self, source_path: str, context: str = None, toolchain: str = None):
         self.config.source_path = str(source_path)
         self.config.build_path = str(self.build_path)
         self.info(f"source path: {self.config.source_path}")
         self.info(f"build path: {self.config.build_path}")
+        if not context in self.config.settings:
+            self.config.settings[context] = BuildSettings()
+        settings = self.config.settings[context]
         if toolchain:
-            self.config.toolchain = toolchain
-        if not self.config.toolchain:
+            settings.toolchain = toolchain
+        if not settings.toolchain:
             self.warning("no toolchain configured")
         await self._config.save()
 
     @asyncio.cached
-    async def initialize(self):
+    async def initialize(self, contexts: list[str] = None):
         assert self.config_path.exists(), "configure first"
 
         self.debug(f"source path: {self.source_path}")
         self.debug(f"build path: {self.build_path}")
 
-        toolchain = self.config.toolchain
-        build_type = self.settings.build_type
+        if contexts is None:
+            contexts = self.config.settings.keys()
+        
+        for context in contexts:
+            ctx = self.context(context)
+            if ctx is None:
+                ctx = Context(context)
+                self.contexts.append(ctx)
+            
+            settings = self.config.settings[context]
+            ctx.set('settings', settings)
 
-        self.info(f"using '{toolchain}' toolchain in '{build_type.name}' mode")
+            init_toolchain(ctx)
+        
+            self.info(f"{ctx.name}: using '{settings.toolchain}' toolchain in '{settings.build_type.name}' mode")
 
-        with self.context:
-            init_toolchains(toolchain, self.settings)
-            try:
-                include_makefile(self.source_path, self.build_path)
-            except MakeFileError as err:
-                self._diagnostics.update(gen_python_diags(err))
-                raise
-
-        target_toolchain = self.context.get("cxx_target_toolchain")
-        target_toolchain.build_type = build_type
-        if self.for_install:
-            library_dest = (
-                Path(self.settings.install.destination)
-                / self.settings.install.libraries_prefix
-            )
-            target_toolchain.rpath = str(library_dest.absolute())
-
-        self.debug(f"targets: {[t.name for t in self.targets]}")
+            with ctx:
+                try:
+                    include_makefile(self.source_path, self.build_path / context)
+                except MakeFileError as err:
+                    self._diagnostics.update(gen_python_diags(err))
+                    raise
 
     def __matches(self, target: Target | Test):
         for required in self.required_targets:
@@ -279,15 +283,15 @@ class Make(logging.Logging):
                 return True
         return False
 
-    @functools.cached_property
     def targets(self) -> list[Target]:
         items = list()
-        if self.required_targets and len(self.required_targets) > 0:
-            for target in self.root.all_targets:
-                if self.__matches(target):
-                    items.append(target)
-        else:
-            items = self.root.all_default
+        for ctx in self.contexts:
+            if self.required_targets and len(self.required_targets) > 0:
+                for target in self.root.all_targets:
+                    if self.__matches(target):
+                        items.append(target)
+            else:
+                items.extend(ctx.root.all_default)
         return items
 
     @functools.cached_property
@@ -419,7 +423,7 @@ class Make(logging.Logging):
         if target in deps:
             return
         await load_requirements(
-            target.requires, makefile=self.root, logger=self, install=True
+            target.requires, makefile=target.context.root, logger=self, install=True
         )
         for d in target.dependencies.all:
             match d:
@@ -431,11 +435,12 @@ class Make(logging.Logging):
                     deps.add(d)
                     await self.get_all_dependencies(d, deps)
 
-    async def build(self, targets: list[Target] = None):
-        await self.initialize()
+    async def build(self, targets: list[Target] = None, contexts: list[str] = None):
+
+        await self.initialize(contexts)
 
         if targets is None:
-            targets = self.targets
+            targets = self.targets()
 
         all_targets = set()
         async with self.term.task_group("installing dependencies...") as g:
@@ -610,5 +615,3 @@ class Make(logging.Logging):
         await self.initialize()
         with self.context:
             await asyncio.gather(*[t.clean() for t in self.targets])
-            # from dan.cxx import target_toolchain
-            # target_toolchain.compile_commands.clear()

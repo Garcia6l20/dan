@@ -15,7 +15,18 @@ from dan.core import asyncio
 from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd, BuildType
 from dan.core.cache import cached_property as dan_cached
 
-class CXXObject(Target, internal=True):
+import copy
+
+class BaseTarget(Target, internal=True):
+
+    __toolchain = 'cxx_toolchain'
+    
+    @property
+    def toolchain(self) -> Toolchain:
+        return self.context.get(self.__toolchain)
+
+
+class CXXObject(BaseTarget, internal=True):
     def __init__(self, source:Path, parent: 'CXXTarget', root: Path = None) -> None:
         if source.is_absolute():
             if root is None:
@@ -23,10 +34,9 @@ class CXXObject(Target, internal=True):
             name = '-'.join(source.relative_to(root).with_suffix(f'').parts)
         else:
             name = '-'.join(source.with_suffix(f'').parts)
-        super().__init__(name, parent=parent, default=False)
+        super().__init__(name=name, parent=parent, default=False)
         self.parent = parent
         self.source = source
-        self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
         obj_fname = source.with_suffix('.obj' if self.toolchain.type == 'msvc' else '.o')
         if source.is_absolute():
             if source.parent.is_relative_to(self.parent.source_path):
@@ -186,7 +196,7 @@ class OptionSet:
             self._public.extend(values)
 
 
-class CXXTarget(Target, internal=True):
+class CXXTarget(BaseTarget, internal=True):
     public_includes: set[str] = set()
     private_includes: set[str] = set()
 
@@ -218,7 +228,6 @@ class CXXTarget(Target, internal=True):
                  *args,
                  **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
 
         self.includes = OptionSet(self, 'includes',
                                   self.public_includes, self.private_includes,

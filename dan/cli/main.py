@@ -12,7 +12,7 @@ from dan.cli import click
 
 from dan.core import diagnostics, asyncio
 from dan.core.cache import Cache
-from dan.core.settings import Settings
+from dan.core.settings import BuildSettings
 from dan.cxx.targets import Executable
 
 
@@ -76,8 +76,8 @@ class CommandsContext:
             self._make = Make(*self._make_args, **self._make_kwds)
             if not no_init:
                 await self._make.initialize()
-        with self._make.context:
-            yield self._make
+        #with self._make.makefile_stack:
+        yield self._make
 
     async def __aexit__(self, *exc):
         pass
@@ -132,26 +132,29 @@ def user_cli():
 user_cli.context_class = click.AsyncContext
 
 @cli.command()
+@click.argument('context', default='default')
 @click.option('--verbose', '-v', count=True,
               help='Verbosity level')
 @click.option('--toolchain', '-t', help='The toolchain to use',
               type=click.ToolchainParamType(), envvar='DAN_TOOLCHAIN')
-@click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(Settings))
+@click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(BuildSettings))
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True, type=click.OptionsParamType())
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH')
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.', envvar='DAN_SOURCE_PATH')
 @pass_context
-async def configure(ctx: CommandsContext, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
+async def configure(ctx: CommandsContext, context: str, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
     async with ctx(no_init=True, no_status=True, **kwds) as make:
-        if toolchain is None and make.config.toolchain is None:
+        if context in make.config.settings:
+            setting_toolchain = make.config.settings[context].toolchain
+        if toolchain is None and setting_toolchain is None:
             from dan.cxx.detect import get_toolchains
             tp = click.Choice([*get_toolchains(create=False)["toolchains"].keys(), 'default'])
             toolchain = click.prompt('Toolchain', type=tp, default='default')
 
-        await make.configure(source_path, toolchain)
+        await make.configure(source_path, context, toolchain)
 
         if len(settings):
             await make.apply_settings(*settings)

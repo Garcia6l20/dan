@@ -18,7 +18,7 @@ class Project(Target, internal=True):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.toolchain: Toolchain = self.context.get('cxx_target_toolchain')
+        self.toolchain: Toolchain = self.context.get('cxx_toolchain')
         self.output = 'libav.built'
         self.__make = self.cache.get('make_path', None)
         

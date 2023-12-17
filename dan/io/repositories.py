@@ -3,10 +3,10 @@ from dan.core.asyncio import sync_wait
 from dan.core.makefile import MakeFile
 
 from dan.cxx.detect import get_dan_path
-from dan.core.target import Target
 from dan.core.runners import CommandError, async_run
 from dan.core import aiofiles
 from dan.core.cache import Cache
+from dan.cxx.targets import BaseTarget
 
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass, field
@@ -62,19 +62,21 @@ def _get_settings() -> RepositoriesSettings:
     return _repo_settings.data
 
 
-class PackageRepository(Target, internal=True):
+class PackageRepository(BaseTarget, internal=True):
 
     # never up-to-date
     up_to_date = False
 
-    def __init__(self, name: RepositoryConfig, *args, **kwargs):
+    def __init__(self, name: str, **kwargs):
         self.repo_data = _get_settings().get(name)
-        super().__init__(name, *args, **kwargs)
+        super().__init__(name, **kwargs)
         self.output = get_dan_path() / 'repositories' / self.name
-        self.toolchain = self.context.get('cxx_target_toolchain')
-        self.pkgs_root = get_packages_path() / self.toolchain.system / \
-            self.toolchain.arch / self.toolchain.build_type.name
         self._package_makefile = None
+    
+    @property
+    def pkgs_root(self):
+        return get_packages_path() / self.toolchain.system / \
+            self.toolchain.arch / self.toolchain.build_type.name
     
     @property
     def is_requirement(self) -> bool:
@@ -112,11 +114,11 @@ class PackageRepository(Target, internal=True):
         return self._package_makefile
 
     @property
-    def installed(self) -> dict[str, Target]:
+    def installed(self) -> dict[str, 'Target']:
         pkgs = self.pkgs_makefile
         return {f'{lib.makefile.name}:{lib.name}@{self.name}': lib for lib in pkgs.all_installed}
 
-    def find(self, name: str, package: str) -> tuple[MakeFile, Target]:
+    def find(self, name: str, package: str) -> tuple[MakeFile, 'Target']:
         for lib in self.pkgs_makefile.all_installed:
             if name in lib.provides and (package is None or lib.makefile.name == package):
                 return lib.makefile, lib

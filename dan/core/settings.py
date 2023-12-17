@@ -52,16 +52,17 @@ class InstallSettings:
     def includes_destination(self):
         return Path(self.destination).absolute() / self.includes_prefix
 
-@dataclass
+@dataclass(eq=True, unsafe_hash=True)
 class ToolchainSettings:
-    cxx_flags: list[str] = field(default_factory=lambda: list())
+    cxx_flags: list[str] = field(default_factory=lambda: list(), compare=False)
     default_library_type: DefaultLibraryType = DefaultLibraryType.static
 
-@dataclass
-class Settings:
+@dataclass(eq=True, unsafe_hash=True)
+class BuildSettings:
+    toolchain: str = None
     build_type: BuildType = BuildType.debug
     install: InstallSettings = field(default_factory=lambda: InstallSettings())
-    target: ToolchainSettings = field(default_factory=lambda: ToolchainSettings())
+    cxx: ToolchainSettings = field(default_factory=lambda: ToolchainSettings())
 
 
 def safe_load(name: str, value,  t: type):

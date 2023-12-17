@@ -204,7 +204,7 @@ class Code(Logging):
         #   - compilerArgs?: string[];
         #   - standard?: see above
         #   - windowsSdkVersion?: string
-        from dan.cxx import target_toolchain as toolchain
+        from dan.cxx import toolchain
         from dan.cxx.targets import CXXTarget
 
         cpp_std = 11

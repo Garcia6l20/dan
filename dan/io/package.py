@@ -23,7 +23,7 @@ class PackageBuild(Target, internal=True):
         self.preload_dependencies.add(self.repo)
         self.package_makefile = package_makefile
         self._build_path = None
-        self.toolchain = self.context.get('cxx_target_toolchain')
+        self.toolchain = self.context.get('cxx_toolchain')
         self.lock: aiofiles.FileLock = None
         self.__up_to_date = True
 
@@ -304,7 +304,7 @@ class IoPackage(Target, internal=True):
             from dan.pkgconfig.package import Data
             data = Data(self.output)
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
-                toolchain = self.context.get('cxx_target_toolchain')
+                toolchain = self.context.get('cxx_toolchain')
                 search_path = get_packages_path() / toolchain.system / toolchain.arch / toolchain.build_type.name
                 dest = self.build_path / self.pkgconfig_path
                 for pkg in data.requires:

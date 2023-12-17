@@ -13,6 +13,7 @@ from dan import logging
 from dan.core.runners import sync_run
 from dan.core.version import Version
 from dan.core.win import vswhere
+from dan.core.utils import Environment
 
 
 class CompilerId:
@@ -300,11 +301,9 @@ class Compiler:
         self.path = path
         if env is None:
             env = dict()
+        env = Environment(env)
         env['LC_LOCAL'] = 'C'
-        epath = env.get('PATH', os.environ['PATH']).split(os.pathsep)
-        if not str(path.parent) in epath:
-            epath.insert(0, str(path.parent))
-        env['PATH'] = os.pathsep.join(epath)
+        env.path_prepend(str(path.parent))
         self.compiler_id = detect_compiler_id(path, env=env, logger=logger)
         if self.compiler_id is None:
             raise RuntimeError(f'Cannot detect compiler ID of {self.path}')

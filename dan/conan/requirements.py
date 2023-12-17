@@ -54,7 +54,7 @@ class Requirements(Target, internal=True):
         self.conanfile = ConanFile(makefile=makefile)
         self.preload_dependencies.add(self.conanfile)
 
-        self.toolchain = self.context.get('cxx_target_toolchain')
+        self.toolchain = self.context.get('cxx_toolchain')
 
     def _get_version(self, toolchain):
         from dan.cxx.msvc_toolchain import MSVCToolchain

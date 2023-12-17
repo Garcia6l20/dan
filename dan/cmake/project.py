@@ -1,10 +1,11 @@
 from pathlib import Path
 from dan.core.settings import InstallMode, InstallSettings
-from dan.core.target import Target, FileDependency, Installer
+from dan.core.target import FileDependency, Installer
 from dan.core.runners import async_run
 from dan.core import aiofiles, asyncio
 from dan.core.find import find_file
-from dan.cxx import Toolchain
+from dan.cxx.targets import BaseTarget
+from dan.core.utils import Environment
 
 import typing as t
 import os
@@ -44,7 +45,7 @@ async def get_ninja(progress):
 
 
 
-class Project(Target, internal=True):
+class Project(BaseTarget, internal=True):
 
     cmake_targets: list[str] = None
     cmake_config_definitions: dict[str, str] = dict()
@@ -57,16 +58,13 @@ class Project(Target, internal=True):
         super().__init__(*args, **kwargs)
         self.cmake_cache_dep = FileDependency(self.build_path / 'CMakeCache.txt')
         self.dependencies.add(self.cmake_cache_dep)
-        self.toolchain : Toolchain = self.context.get('cxx_target_toolchain')
         self.__env = None
 
     def get_env(self):
         if self.__env is None:
-            env = self.toolchain.env
+            env = Environment(self.toolchain.env)
             from dan.cxx.detect import get_dan_path
-            epath = env.get('PATH', os.environ['PATH']).split(os.pathsep)
-            epath.insert(0, str(get_dan_path() / 'os-utils' / 'bin'))
-            env['PATH'] = os.pathsep.join(epath)
+            env.path_prepend(str(get_dan_path() / 'os-utils' / 'bin'))
             self.__env = env
         return self.__env
 

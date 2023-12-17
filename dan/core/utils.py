@@ -72,3 +72,16 @@ def classproperty(func):
                 raise AttributeError("classproperty can only have 0 or 1 argument (the class object)")
 
     return _ClassPropertyDescriptor(func)
+
+
+class Environment(dict):
+
+    def path_prepend(self, *items : str|Path, var_name='PATH'):
+        paths: list[str] = self.get(var_name, '').split(os.pathsep)
+        paths = [*[str(item) for item in items], *paths]
+        self[var_name] = os.pathsep.join(unique(paths))
+    
+    def path_append(self, *items : str|Path, var_name='PATH'):
+        paths: list[str] = self.get(var_name, '').split(os.pathsep)
+        paths = [*paths, *[str(item) for item in items]]
+        self[var_name] = os.pathsep.join(unique(paths))

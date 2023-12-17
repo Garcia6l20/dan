@@ -2,8 +2,7 @@ from dan import self
 from dan.jinja import generator
 from dan.cxx import (
     Library,
-    Executable,
-    target_toolchain as tc)
+    toolchain as tc)
 from dan.src import GitSources
 
 version = '2.1'

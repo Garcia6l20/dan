@@ -65,25 +65,22 @@ class MakeFile(sys.__class__, Logging):
                 return True
         return False
 
-    __target_fullnames = list()
-    __test_fullnames = list()
-    def register(self, cls: type[Target | Test]):
+    def register(self, cls: type[Target | Test]|Target):
         """Register Target/Test class"""
-        t = cls()
+        if isinstance(cls, type):
+            t = cls()
+        else:
+            t = cls
+            cls = t.__class__
         if issubclass(cls, Target):
-            # if t.fullname in MakeFile.__target_fullnames:
-            #     raise RuntimeError(f'duplicate target name: {t.fullname}')
-            MakeFile.__target_fullnames.append(t.fullname)
             self.__targets.add(t)
             self.__find.cache_clear()
             for parent in self.parents:
                 parent.__find.cache_clear()
         if issubclass(cls, Test):
-            # if t.fullname in MakeFile.__test_fullnames:
-            #     raise RuntimeError(f'duplicate test name: {t.fullname}')
-            MakeFile.__test_fullnames.append(t.fullname)
             self.__tests.add(t)
         return cls
+            
 
     def wraps(self, cls: type[Target]):
         def decorator(new_cls: type[Target]):

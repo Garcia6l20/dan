@@ -2,7 +2,7 @@ from functools import cached_property
 from dan.core import aiofiles, diagnostics as diag
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
-from dan.core.utils import unique
+from dan.core.utils import unique, Environment
 from dan.cxx.toolchain import CommandArgsList, Toolchain, Path, FileDependency, CppStd
 from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
@@ -12,20 +12,44 @@ import typing as t
 cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
 
+def get_in(key, *dicts):
+    for d in dicts:
+        if key in d:
+            return d[key]
 
 class UnixToolchain(Toolchain):
+
+    __tools = [
+        ('cc', 'cc', 'CC'),
+        ('cxx', 'cxx', 'CC'),
+        ('ar', 'ar', 'AR'),
+        ('ranlib', 'ranlib', 'RANLIB'),
+        ('as', '_as', 'AS'),
+        ('strip', 'strip', 'STRIP'),
+        ('nm', 'nm', 'NM'),
+    ]
+    
+    def __setup_tools(self, data, tools):
+        for data_name, self_name, env_name in self.__tools:
+            item = get_in(data_name, data, tools)
+            setattr(self, self_name, Path(item) if item else None)
+            if item is not None:
+                self.env[env_name] = str(item)
+    
     def __init__(self, data, tools, *args, **kwargs):
         Toolchain.__init__(self, data, tools, *args, **kwargs)
         self.cc = Path(data['cc'])
         self.cxx = Path(data['cxx'])
-        self.ar = data['ar'] if 'ar' in data else tools['ar']
-        self.ranlib = data['ranlib'] if 'ranlib' in data else tools['ranlib']
-        # self.as_ = data['as'] if 'as' in data else tools['as']
-        # self.strip = data['env']['STRIP'] if 'env' in data and 'STRIP' in data['env'] else tools['strip']
-        self.env = data['env'] if 'env' in data else None
-        self.debug('cxx compiler is %s %s (%s)',
+        env = data['env'] if 'env' in data else None
+        self.env = Environment(env)
+        self.env.path_prepend(self.cc.parent)
+        self.env['CC'] = str(self.cc)
+        self.env['CXX'] = str(self.cxx)
+        self.__setup_tools(data, tools)
+    
+        self.debug('C compiler is %s %s (%s)',
                    self.type, self.version, self.cc)
-        self.debug('cxx compiler is %s %s (%s)',
+        self.debug('C++ compiler is %s %s (%s)',
                    self.type, self.version, self.cxx)
 
     def get_optimization_flags(self, build_type):

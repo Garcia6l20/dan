@@ -34,7 +34,8 @@ def requires(*requirements) -> list[Target]:
 
 
 class Context(Logging):
-    def __init__(self) -> None:
+    def __init__(self, name = None):
+        self.name = name
         self.__root: MakeFile = None
         self.imported_makefiles: dict[Path, MakeFile] = dict()
         self.__ctx_stack: list[Context] = []
@@ -102,6 +103,7 @@ class Context(Logging):
         self.__makefile_stack.pop()
 
 
+
 context: Context = Context()
 
 class MakeFileError(RuntimeError):
@@ -142,9 +144,9 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     if not context.root:
         assert type(name) == type(Path())
         module_path: Path = name / 'dan-build.py'
+        name = f'{context.name}/root'
         spec = importlib.util.spec_from_file_location(
-            'root', module_path)
-        name = 'root'
+            name, module_path)
     else:
         lookups = [
             os.path.join(name, 'dan-build.py'),
@@ -154,7 +156,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             module_path = context.current.source_path / lookup
             if module_path.exists():
                 spec = importlib.util.spec_from_file_location(
-                    f'{context.current.name}.{name}', module_path)
+                    f'{context.name}/{context.current.name}.{name}', module_path)
                 break
         else:
             raise RuntimeError(
@@ -175,7 +177,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         requirements_file = module_path.with_stem('dan-requires')
         if module_path.stem == 'dan-build' and requirements_file.exists():
             context.current.requirements = load_makefile(
-                requirements_file, name='dan-requires', module_name=f'{name}.requirements', is_requirement=True)
+                requirements_file, name='dan-requires', module_name=f'{context.name}/{name}.requirements', is_requirement=True)
 
         try:
             spec.loader.exec_module(module)

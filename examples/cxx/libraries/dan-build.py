@@ -1,5 +1,5 @@
 from dan import self, generator
-from dan.cxx import Library, Executable, LibraryType, target_toolchain
+from dan.cxx import Library, Executable, LibraryType, toolchain
 
 cpp_std = 17
 
@@ -13,11 +13,11 @@ self.options.add('library_type', LibraryType.AUTO, 'The library type to build.')
 @generator('lib-config.hpp')
 async def config(self):
     from dan.core import aiofiles
-    is_linux = target_toolchain.has_definition('__linux')
-    has_this_flag_does_not_exist = target_toolchain.has_cxx_compile_options(
+    is_linux = toolchain.has_definition('__linux')
+    has_this_flag_does_not_exist = toolchain.has_cxx_compile_options(
         '-this-flag-does-not-exist')
-    has_time_h = target_toolchain.has_include('<linux/time.h>')
-    has_kernel_timespec = target_toolchain.can_compile('''
+    has_time_h = toolchain.has_include('<linux/time.h>')
+    has_kernel_timespec = toolchain.can_compile('''
         #include <linux/time.h>
         #include <linux/time_types.h>
         #include <cstdint>
@@ -37,13 +37,13 @@ async def config(self):
 
 opts = []
 
-if target_toolchain.type in ['gcc', 'clang']:
+if toolchain.type in ['gcc', 'clang']:
     may_have_opts = [
         '-Wstringop-overflow',
         '-Warray-bounds',
     ]
     for opt in may_have_opts:
-        if target_toolchain.has_cxx_compile_options(opt):
+        if toolchain.has_cxx_compile_options(opt):
             opts.append(opt)
 
 class SimpleLib(Library):

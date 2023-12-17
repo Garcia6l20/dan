@@ -2,17 +2,14 @@ import sys
 from dan.core.cache import Cache
 
 from dan.core.errors import InvalidConfiguration
-from dan.core.settings import Settings
+from dan.core.settings import BuildSettings
 from dan.cxx.toolchain import Toolchain, BuildType, CppStd
 from dan.cxx.detect import get_toolchains
 
-target_toolchain: Toolchain = None
-"""The target toolchain.
+toolchain: Toolchain = None
+"""Current CXX toolchain.
 """
 
-host_toolchain: Toolchain = None
-"""The host toolchain.
-"""
 
 class __LazyContext(sys.__class__):
     """Base class for the cxx module.
@@ -20,15 +17,10 @@ class __LazyContext(sys.__class__):
     It overloads some context dependent properties exposed by this module, eg.: target and host toolchains.
     """
     @property
-    def target_toolchain(__) -> Toolchain:
+    def toolchain(__) -> Toolchain:
         from dan.core.include import context
-        return context.get('cxx_target_toolchain')
+        return context.get('cxx_toolchain')
 
-    @property
-    def host_toolchain(__) -> Toolchain:
-        from dan.core.include import context
-        return context.get('cxx_host_toolchain')
-    
 
 sys.modules[__name__].__class__ = __LazyContext
 
@@ -40,12 +32,14 @@ def get_default_toolchain(data = None):
     return data['default']
 
 
-def init_toolchains(name: str = None, settings: Settings = None):
+def init_toolchain(ctx):
     data = get_toolchains()
-    if name is None or name == 'default':
-        name = get_default_toolchain(data)
+    settings : BuildSettings = ctx.get('settings')
+    tc_name = settings.toolchain
+    if tc_name is None or tc_name == 'default':
+        tc_name = get_default_toolchain(data)
 
-    toolchain_data = data['toolchains'][name]
+    toolchain_data = data['toolchains'][tc_name]
 
     tc_type = toolchain_data['type']
     match tc_type:
@@ -57,25 +51,15 @@ def init_toolchains(name: str = None, settings: Settings = None):
             tc_type = MSVCToolchain
         case _:
             raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
-    target_settings = settings.target
+    
     cache = Cache.get('dan').data
-    if not 'toolchains' in cache:
-        cache['toolchains'] = {
-            'host': dict(),
-            'target': dict(),
+    if not ctx.name in cache:
+        cache[ctx.name] = {
+            'toolchain': dict()
         }
-    target_toolchain = tc_type(toolchain_data, data['tools'], settings=target_settings, cache=cache['toolchains']['target'])
-    target_toolchain.init()
-    if target_toolchain.is_host:
-        host_toolchain = target_toolchain
-    else:
-        from dan import logging
-        logging.getLogger('cxx').warning('Cross compilation is currently not tested !')
-        host_toolchain = None
-
-    from dan.core.include import context
-    context.set('cxx_target_toolchain', target_toolchain)
-    context.set('cxx_host_toolchain', host_toolchain)
+    toolchain = tc_type(toolchain_data, data['tools'], settings=settings.cxx, cache=cache[ctx.name]['toolchain'])
+    toolchain.init()
+    ctx.set('cxx_toolchain', toolchain)
 
 
 from .targets import Executable, Library, LibraryType, Module
