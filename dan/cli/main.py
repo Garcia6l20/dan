@@ -185,7 +185,7 @@ async def build(ctx: CommandsContext, force=False, **kwds):
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def install_dependencies(ctx: CommandsContext, force, **kwds):
-    """Build targets"""
+    """Install build dependencies"""
     async with ctx(**kwds) as make:
         await make.install_dependencies(force=force)
 
@@ -375,8 +375,9 @@ async def test(ctx, **kwargs):
               help='Use given path for compilers lookup', multiple=True, type=click.Path(exists=True, file_okay=False))
 @click.option('--verbose', '-v', count=True,
               help='Pring debug informations.', envvar='DAN_VERBOSE')
-def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
+async def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
     """Scan system toolchains"""
+    set_terminal_mode(TerminalMode.BASIC)
     match verbose:
         case 1:
             log_level = logging.DEBUG

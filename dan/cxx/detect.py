@@ -480,28 +480,49 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     if compiler.env:
         data['env'] = compiler.env
 
-    def get_compiler_tool(tool, toolname=None):
+    def get_compiler_tool(tool, toolname=None, accept_no_suffix=False):
         if isinstance(tool, tuple):
             tool, toolname = tool
+        
+        toolnames = []
+        if suffix and accept_no_suffix:
+            toolnames.append(toolname)
+
         if not toolname:
             toolname = f'{base_name}-{tool}'
         if prefix:
             toolname = f'{prefix}{toolname}'
         if suffix:
             toolname = f'{toolname}{suffix}'
-        tool_path = (base_path / toolname).with_suffix(extension)
-        if tool_path.exists():
-            logger.debug(f'found {tool} tool: {tool_path}')
-            data[tool] = str(tool_path)
-        else:
-            logger.debug(f'{tool} tool not found: {tool_path}')
+        
+        if not toolname in toolnames:
+            toolnames.insert(0, toolname)
+
+        for toolname in toolnames:
+            tool_path = (base_path / toolname).with_suffix(extension)
+            if tool_path.exists():
+                logger.debug(f'found {tool} tool: {tool_path}')
+                data[tool] = str(tool_path)
+                return True
+
+        logger.debug(f'{tool} tool not found: {tool_path}')
+        return False
+
     if compiler.name == 'gcc':
         get_compiler_tool('cxx', 'g++')
         get_compiler_tool('as')
         get_compiler_tool('dbg', 'gdb')
     elif compiler.name == 'clang':
-        get_compiler_tool('cxx', 'clang++')
-        get_compiler_tool('dbg', 'lldb')
+        if not get_compiler_tool('cxx', 'clang++') and suffix:
+            # clang++ may be a link to clang...
+            # but clang may also be a link to clang-xx,
+            # thus, we've lost the suffix info
+            clang_path = (base_path / 'clang').resolve()
+            clangpp_path = (base_path / 'clang++').resolve()
+            if clang_path == clangpp_path == compiler.path:
+                data['cxx'] = str(base_path / 'clang++')
+    
+        get_compiler_tool('dbg', 'lldb', True)
     elif compiler.name == 'msvc':
         data['link'] = str(compiler.tools['link'])
         data['lib'] = str(compiler.tools['lib'])
@@ -513,8 +534,6 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     name = str(compiler.compiler_id)
     if prefix:
         name = f'{prefix}{name}'
-    if suffix:
-        name = f'{name}{suffix}'
     return name, data
 
 
