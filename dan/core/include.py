@@ -98,7 +98,8 @@ class Context(Logging):
             build_path,
             requirements,
             parent,
-            is_requirement)
+            is_requirement,
+            self)
         yield module
         self.__makefile_stack.pop()
 
@@ -144,9 +145,9 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     if not context.root:
         assert type(name) == type(Path())
         module_path: Path = name / 'dan-build.py'
-        name = f'{context.name}/root'
+        name = 'root'
         spec = importlib.util.spec_from_file_location(
-            name, module_path)
+            f'{context.name}.{name}', module_path)
     else:
         lookups = [
             os.path.join(name, 'dan-build.py'),
@@ -156,7 +157,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             module_path = context.current.source_path / lookup
             if module_path.exists():
                 spec = importlib.util.spec_from_file_location(
-                    f'{context.name}/{context.current.name}.{name}', module_path)
+                    f'{context.name}.{context.current.name}.{name}', module_path)
                 break
         else:
             raise RuntimeError(

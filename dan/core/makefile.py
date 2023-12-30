@@ -17,7 +17,8 @@ class MakeFile(sys.__class__, Logging):
                build_path: Path,
                requirements: 'MakeFile' = None,
                parent: 'MakeFile' = None,
-               is_requirement = False) -> None:
+               is_requirement = False,
+               context = None) -> None:
         self.name = name
         self.description = None
         self.version = None
@@ -34,8 +35,6 @@ class MakeFile(sys.__class__, Logging):
         self.options = Options(self)
         self.__targets: set[Target] = set()
         self.__tests: set[Test] = set()
-
-        from dan.core.include import context
         self.context = context
 
     @property

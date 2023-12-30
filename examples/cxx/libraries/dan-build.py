@@ -24,6 +24,9 @@ async def config(self):
         struct __kernel_timespec ts;
         static_assert(sizeof(ts) == 2 * sizeof(uint64_t));
         ''')
+    is_gcc = toolchain.has_definition('__GNUC__')
+    is_clang = toolchain.has_definition('__clang__')
+    is_win32 = toolchain.has_definition('_WIN32')
     async with aiofiles.open(self.output, 'w') as f:
         await f.write(f'''#pragma once
 
@@ -31,6 +34,9 @@ async def config(self):
 #define HAS_TIME_H {'true' if has_time_h else 'false'}
 #define HAS_KERNEL_TIMESPEC {'true' if has_kernel_timespec else 'false'}
 #define IS_LINUX {'true' if is_linux else 'false'}
+#define IS_GCC {'true' if is_gcc else 'false'}
+#define IS_CLANG {'true' if is_clang else 'false'}
+#define IS_WIN32 {'true' if is_win32 else 'false'}
 
 ''')
 
