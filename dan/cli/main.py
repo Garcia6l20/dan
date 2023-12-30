@@ -1,3 +1,4 @@
+from fnmatch import fnmatch
 import os
 import sys
 import contextlib
@@ -76,7 +77,6 @@ class CommandsContext:
             self._make = Make(*self._make_args, **self._make_kwds)
             if not no_init:
                 await self._make.initialize()
-        #with self._make.makefile_stack:
         yield self._make
 
     async def __aexit__(self, *exc):
@@ -137,6 +137,7 @@ user_cli.context_class = click.AsyncContext
               help='Verbosity level')
 @click.option('--toolchain', '-t', help='The toolchain to use',
               type=click.ToolchainParamType(), envvar='DAN_TOOLCHAIN')
+@click.option('--yes', '-y', help='Say yes to all prompts (use defaults)', is_flag=True)
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(BuildSettings))
 @click.option('--option', '-o', 'options', help='Set or change an option', multiple=True, type=click.OptionsParamType())
 @click.option('--build-path', '-B', help='Path where dan has been initialized.',
@@ -144,15 +145,22 @@ user_cli.context_class = click.AsyncContext
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.', envvar='DAN_SOURCE_PATH')
 @pass_context
-async def configure(ctx: CommandsContext, context: str, toolchain: str, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
+async def configure(ctx: CommandsContext, context: str, toolchain: str, yes: bool, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
     async with ctx(no_init=True, no_status=True, **kwds) as make:
+        setting_toolchain = None
         if context in make.config.settings:
             setting_toolchain = make.config.settings[context].toolchain
         if toolchain is None and setting_toolchain is None:
             from dan.cxx.detect import get_toolchains
-            tp = click.Choice([*get_toolchains(create=False)["toolchains"].keys(), 'default'])
-            toolchain = click.prompt('Toolchain', type=tp, default='default')
+            toolchains = [*get_toolchains(create=False)["toolchains"].keys(), 'default']
+            for default_tc in toolchains:
+                if fnmatch(default_tc, f'*{context}*'):
+                    break
+            if yes:
+                toolchain = default_tc
+            else:
+                toolchain = click.prompt('Toolchain', type=click.Choice(toolchains), default=default_tc)
 
         await make.configure(source_path, context, toolchain)
 
