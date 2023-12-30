@@ -42,7 +42,7 @@ def flatten(list_of_lists):
 class Config:
     source_path: Path = None
     build_path: Path = None
-    settings: dict[str, BuildSettings] = field(default_factory=lambda: {'default': BuildSettings()})
+    settings: dict[str, BuildSettings] = field(default_factory=lambda: dict())
 
 
 class ConfigCache(Cache[Config]):
@@ -194,7 +194,7 @@ class Make(logging.Logging):
 
         self._diagnostics = diag.DiagnosticCollection()
 
-        self.contexts = [Context('default')]
+        self.contexts = []
 
     def context(self, name):
         for ctx in self.contexts:
