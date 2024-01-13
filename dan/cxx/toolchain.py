@@ -102,12 +102,10 @@ class Toolchain(Logging):
         self.get_logger(f'{self.type}-{self.version}')
         self.env = None
         self.rpath = None
-        self._build_type = BuildType.debug
         self.compile_options: list[str] = list()
         self.link_options: list[str] = list()
         self.rpath = None
         self.runtime = RuntimeType.dynamic
-        self.build_type = BuildType.debug
 
     @property
     def arch(self):
@@ -126,7 +124,10 @@ class Toolchain(Logging):
         if not 'arch_detect_flags' in self.cache or self.cache['arch_detect_flags'] != self.settings.cxx_flags:
             return False
         return True
-
+    
+    @property
+    def build_type(self):
+        return self.settings.build_type
     
     def __update_cache(self):
         if self.up_to_date:

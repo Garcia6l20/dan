@@ -34,7 +34,7 @@ def get_default_toolchain(data = None):
 
 def init_toolchain(ctx):
     data = get_toolchains()
-    settings : BuildSettings = ctx.get('settings')
+    settings : BuildSettings = ctx.settings
     tc_name = settings.toolchain
     if tc_name is None or tc_name == 'default':
         tc_name = get_default_toolchain(data)

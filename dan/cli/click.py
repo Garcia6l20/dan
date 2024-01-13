@@ -2,6 +2,7 @@ import dataclasses
 from enum import Enum
 import types as typs
 from click import *
+from click.shell_completion import CompletionItem
 
 import inspect
 import asyncio
@@ -34,7 +35,6 @@ class SettingsParamType(ParamType):
         super().__init__()
 
     def shell_complete(self, ctx, param, incomplete):
-        from click.shell_completion import CompletionItem
         completions: list[str] = list()
         def gen_comps(fields, parts: list[str], prefix=''):
             part = parts[0]
@@ -82,7 +82,6 @@ class SettingsParamType(ParamType):
 
 class OptionsParamType(ParamType):
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
-        from click.shell_completion import CompletionItem
         from dan.make import Make
         from dan.core.asyncio import sync_wait
         build_path = ctx.params['build_path']
@@ -96,6 +95,17 @@ class OptionsParamType(ParamType):
         
         return comps
 
+class ContextParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from dan.make import Make
+        build_path = ctx.params['build_path']
+        make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC)
+        comps = []
+        for context in make.config.settings.keys():
+            if context.startswith(incomplete):
+                comps.append(CompletionItem(context, type='nospace'))
+        
+        return comps
 
 class TargetParamType(ParamType):
     def __init__(self, target_types=None) -> None:
@@ -107,17 +117,18 @@ class TargetParamType(ParamType):
         super().__init__()
 
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
-        from click.shell_completion import CompletionItem
         from dan.make import Make
         from dan.core.asyncio import sync_wait
         build_path = ctx.params['build_path']
-        make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC)
+        make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC,
+                    contexts=ctx.params.get('contexts', None),
+                    all=ctx.params.get('all', False))
         sync_wait(make.initialize())
 
         comps = []
-        for target in make.root.all_targets:
-            if isinstance(target, self.target_types) and target.fullname.startswith(incomplete):
-                comps.append(CompletionItem(target.fullname, type='nospace'))
+        for target in make.targets():
+            if isinstance(target, self.target_types) and target.display_name.startswith(incomplete):
+                comps.append(CompletionItem(target.display_name, type='nospace'))
         
         return comps
 

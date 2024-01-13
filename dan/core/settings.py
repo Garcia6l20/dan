@@ -54,13 +54,13 @@ class InstallSettings:
 
 @dataclass(eq=True, unsafe_hash=True)
 class ToolchainSettings:
+    build_type: BuildType = BuildType.debug
     cxx_flags: list[str] = field(default_factory=lambda: list(), compare=False)
     default_library_type: DefaultLibraryType = DefaultLibraryType.static
 
 @dataclass(eq=True, unsafe_hash=True)
 class BuildSettings:
     toolchain: str = None
-    build_type: BuildType = BuildType.debug
     install: InstallSettings = field(default_factory=lambda: InstallSettings())
     cxx: ToolchainSettings = field(default_factory=lambda: ToolchainSettings())
 

@@ -63,15 +63,13 @@ class CommandsContext:
         self._make_kwds.update(**kwds)
     
     @contextlib.asynccontextmanager
-    async def __call__(self, *args, **kwargs):
-        no_init = kwargs.pop('no_init', False)
-        if kwargs.pop('no_status', False):
+    async def __call__(self, *args, quiet=None, no_status=False, no_init=False, code=False, **kwargs):
+        if no_status:
             kwargs['terminal_mode'] = TerminalMode.BASIC
-        elif kwargs.pop('code', False):
+        elif code:
             kwargs['terminal_mode'] = TerminalMode.CODE
         self.update(*args, **kwargs)
-        quiet = self._make_kwds.pop('quiet', None)
-        if quiet:
+        if self._make_kwds.pop('quiet', False) or quiet:
             self._make_kwds['verbose'] = -1
         if self._make is None:
             self._make = Make(*self._make_args, **self._make_kwds)
@@ -132,7 +130,7 @@ def user_cli():
 user_cli.context_class = click.AsyncContext
 
 @cli.command()
-@click.argument('context', default='default')
+@click.argument('context', default='default', type=click.ContextParamType())
 @click.option('--verbose', '-v', count=True,
               help='Verbosity level')
 @click.option('--toolchain', '-t', help='The toolchain to use',
@@ -147,7 +145,7 @@ user_cli.context_class = click.AsyncContext
 @pass_context
 async def configure(ctx: CommandsContext, context: str, toolchain: str, yes: bool, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
     """Configure dan project"""
-    async with ctx(no_init=True, no_status=True, **kwds) as make:
+    async with ctx(no_init=True, no_status=True, contexts=[context], **kwds) as make:
         setting_toolchain = None
         if context in make.config.settings:
             setting_toolchain = make.config.settings[context].toolchain
@@ -178,6 +176,10 @@ async def configure(ctx: CommandsContext, context: str, toolchain: str, yes: boo
 @cli.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
+@click.option('--all', '-a', is_flag=True,
+              help='Use all contexts')
+@click.option('--context', '-c', 'contexts', type=click.ContextParamType(), multiple=True,
+              help='Use this context')
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
@@ -269,32 +271,73 @@ def uninstall(verbose: int, yes: bool, root: str, name: str):
         os.remove(manifest)
         rm_empty(manifest.parent)
 
-@cli.group()
+@cli.group('set')
 @pass_context
-def ls(ctx: CommandsContext):
+def _set(ctx: CommandsContext):
     """Inspect stuff"""
     ctx._make_kwds['terminal_mode'] = TerminalMode.BASIC
 
-@ls.command()
+@_set.command()
+@common_opts
+@click.argument('CONTEXT', type=click.ContextParamType())
+@pass_context
+async def context(ctx: CommandsContext, context: str, **kwargs):
+    async with ctx(no_init=True, **kwargs) as make:
+        context_names = make.config.settings.keys()
+        if not context in context_names:
+            avail = ', '.join(context_names)
+            raise RuntimeError(f'No such context (available: {avail})')
+        make.config.current_context = context
+        await make.cache.save()
+
+
+@cli.group('get')
+@pass_context
+def _get(ctx: CommandsContext):
+    """Inspect stuff"""
+    ctx._make_kwds['terminal_mode'] = TerminalMode.BASIC
+
+@_get.command()
+@common_opts
+@pass_context
+async def context(ctx: CommandsContext, **kwargs):
+    """List targets"""
+    kwargs['quiet'] = True
+    async with ctx(**kwargs) as make:
+        click.echo(make.config.current_context)
+
+@_get.command()
+@common_opts
+@pass_context
+async def contexts(ctx: CommandsContext, **kwargs):
+    """List targets"""
+    kwargs['quiet'] = True
+    async with ctx(**kwargs) as make:
+        context_names = '\n'.join(make.config.settings.keys())
+        click.echo(context_names)
+
+
+@_get.command()
 @click.option('-a', '--all', 'all', is_flag=True, help='Show all targets (not only defaulted ones)')
 @click.option('-t', '--type', 'show_type', is_flag=True, help='Show target\'s type')
 @common_opts
 @click.argument('TARGETS', nargs=-1)
 @pass_context
-async def targets(ctx: CommandsContext, all: bool, show_type: bool, **kwargs):
+async def targets(ctx: CommandsContext, show_type: bool, all=False, **kwargs):
     """List targets"""
     kwargs['quiet'] = True
-    async with ctx(**kwargs) as make:
+    async with ctx(all=all, **kwargs) as make:
         out = []
-        for target in make.targets:
+        for target in make.targets():
+            name = target.display_name if all else target.name
             if show_type:
-                out.append(target.fullname + ' - ' + type(target).__name__)
+                out.append(name + ' - ' + type(target).__name__)
             else:
-                out.append(target.fullname)
+                out.append(name)
         click.echo('\n'.join(out))
 
 
-@ls.command()
+@_get.command()
 @common_opts
 @click.argument('TARGETS', nargs=-1)
 @pass_context
@@ -309,7 +352,7 @@ async def tests(ctx: CommandsContext, **kwargs):
             else:
                 click.echo(t.fullname)
 
-@ls.command()
+@_get.command()
 @common_opts
 @click.argument('TARGETS', nargs=-1)
 @pass_context
@@ -318,12 +361,9 @@ async def options(ctx: CommandsContext, **kwargs):
     kwargs['quiet'] = True
     async with ctx(**kwargs) as make:
         for o in make.all_options:
-            current = ''
-            if o.value != o.default:
-                current = f', current: {o.value}'
-            click.echo(f'{o.fullname}: {o.help} (type: {o.type.__name__}, default: {o.default}{current})')
+            click.echo(f'{o.fullname}: {o.help} (current: {o.value}, default: {o.default}, type: {o.type.__name__})')
 
-@ls.command()
+@_get.command()
 def toolchains(**kwargs):
     """List toolchains"""
     kwargs['quiet'] = True
@@ -331,7 +371,7 @@ def toolchains(**kwargs):
         click.echo(name)
 
 
-@ls.command()
+@_get.command()
 @common_opts
 @click.option('-n', '--not-found', help='Show not-found dependencies', is_flag=True)
 @click.argument('TARGET', type=click.TargetParamType(target_types=[Executable]))
@@ -518,6 +558,8 @@ def get_toolchains(**kwargs):
 
 @code.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
+@click.option('--context', '-c', 'contexts', type=click.ContextParamType(), multiple=True,
+              help='Use this context')
 @common_opts
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')

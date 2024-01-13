@@ -190,7 +190,7 @@ class UnixToolchain(Toolchain):
         args = [self.cxx, *objects, '-o', str(output), *unique(
             self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
         commands = [args]
-        if self._build_type in [BuildType.release, BuildType.release_min_size]:
+        if self.build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
         return commands
 
@@ -204,7 +204,7 @@ class UnixToolchain(Toolchain):
         args = [self.cxx, '-shared', *objects, *
                 unique(self.default_ldflags, options), '-o', output]
         commands = [args]
-        if self._build_type in [BuildType.release, BuildType.release_min_size]:
+        if self.build_type in [BuildType.release, BuildType.release_min_size]:
             commands.append([self.strip, output])
         return commands
 

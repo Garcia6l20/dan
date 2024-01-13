@@ -10,6 +10,7 @@ from dan.core.requirements import load_requirements
 from dan.core.target import Target
 from dan.logging import Logging
 from dan.pkgconfig.package import parse_requirement
+from dan.core.settings import BuildSettings
 
 
 class TargetNotFound(RuntimeError):
@@ -34,13 +35,14 @@ def requires(*requirements) -> list[Target]:
 
 
 class Context(Logging):
-    def __init__(self, name = None):
+    def __init__(self, name = None, settings: BuildSettings = None):
         self.name = name
         self.__root: MakeFile = None
         self.imported_makefiles: dict[Path, MakeFile] = dict()
         self.__ctx_stack: list[Context] = []
         self.__makefile_stack: list[MakeFile] = []
         self.__attributes = dict()
+        self.settings = settings
 
     @property
     def root(self):

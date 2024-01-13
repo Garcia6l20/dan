@@ -42,6 +42,7 @@ def flatten(list_of_lists):
 class Config:
     source_path: Path = None
     build_path: Path = None
+    current_context: str = None
     settings: dict[str, BuildSettings] = field(default_factory=lambda: dict())
 
 
@@ -150,9 +151,15 @@ class Make(logging.Logging):
         jobs: int = None,
         terminal_mode: TerminalMode = None,
         diags=False,
+        contexts: list[str]=None,
+        all=False,
+        quiet=False,
     ):
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
+
+        if quiet:
+            verbose = -1
 
         match verbose:
             case 1:
@@ -194,7 +201,15 @@ class Make(logging.Logging):
 
         self._diagnostics = diag.DiagnosticCollection()
 
+        if all:
+            contexts = self.config.settings.keys()
+        elif not contexts:
+            contexts = [self.config.current_context]
+        
         self.contexts = []
+        for context_name in contexts:
+            if context_name in self.config.settings:
+                self.contexts.append(Context(context_name, self.config.settings[context_name]))
 
     def context(self, name):
         for ctx in self.contexts:
@@ -218,10 +233,6 @@ class Make(logging.Logging):
         return self.context.get("cxx_toolchain")
 
     @property
-    def root(self) -> MakeFile:
-        return self.makefile_stack.root
-
-    @property
     def env(self) -> dict[str, str]:
         from dan.cxx.detect import get_dan_path
 
@@ -236,8 +247,8 @@ class Make(logging.Logging):
     async def configure(self, source_path: str, context: str = None, toolchain: str = None):
         self.config.source_path = str(source_path)
         self.config.build_path = str(self.build_path)
-        self.info(f"source path: {self.config.source_path}")
-        self.info(f"build path: {self.config.build_path}")
+        self.info("source path: %s", self.config.source_path)
+        self.info("build path: %s", self.config.build_path)
         if not context in self.config.settings:
             self.config.settings[context] = BuildSettings()
         settings = self.config.settings[context]
@@ -245,40 +256,39 @@ class Make(logging.Logging):
             settings.toolchain = toolchain
         if not settings.toolchain:
             self.warning("no toolchain configured")
+        if not self.config.current_context:
+            self.config.current_context = context
+            self.info("setting current context to %s", context)
         await self._config.save()
 
     @asyncio.cached
-    async def initialize(self, contexts: list[str] = None):
+    async def initialize(self):
         assert self.config_path.exists(), "configure first"
 
         self.debug(f"source path: {self.source_path}")
         self.debug(f"build path: {self.build_path}")
-
-        if contexts is None:
-            contexts = self.config.settings.keys()
         
-        for context in contexts:
-            ctx = self.context(context)
-            if ctx is None:
-                ctx = Context(context)
-                self.contexts.append(ctx)
-            
-            settings = self.config.settings[context]
-            ctx.set('settings', settings)
+        for ctx in self.contexts:
 
             init_toolchain(ctx)
         
-            self.info(f"{ctx.name}: using '{settings.toolchain}' toolchain in '{settings.build_type.name}' mode")
+            self.info(f"{ctx.name}: using '{ctx.settings.toolchain}' toolchain in '{ctx.settings.cxx.build_type.name}' mode")
 
             with ctx:
                 try:
-                    include_makefile(self.source_path, self.build_path / context)
+                    include_makefile(self.source_path, self.build_path / ctx.name)
                 except MakeFileError as err:
                     self._diagnostics.update(gen_python_diags(err))
                     raise
 
-    def __matches(self, target: Target | Test):
+    def __matches(self, target: Target | Test, ctx : Context):
         for required in self.required_targets:
+            if '/' in required:
+                ctx_name, required = required.split('/')
+            else:
+                ctx_name = None
+            if ctx_name and ctx_name != ctx.name:
+                return False
             if fnmatch.fnmatch(target.fullname, f"*{required}*"):
                 return True
         return False
@@ -287,8 +297,8 @@ class Make(logging.Logging):
         items = list()
         for ctx in self.contexts:
             if self.required_targets and len(self.required_targets) > 0:
-                for target in self.root.all_targets:
-                    if self.__matches(target):
+                for target in ctx.root.all_targets:
+                    if self.__matches(target, ctx):
                         items.append(target)
             else:
                 items.extend(ctx.root.all_default)
@@ -331,12 +341,14 @@ class Make(logging.Logging):
     @property
     def all_options(self) -> list[Option]:
         opts = []
-        for target in self.targets:
+        for target in self.targets():
             for o in target.options:
                 opts.append(o)
-        for makefile in self.context.all_makefiles:
-            for o in makefile.options:
-                opts.append(o)
+
+        for ctx in self.contexts:
+            for makefile in ctx.all_makefiles:
+                for o in makefile.options:
+                    opts.append(o)
         return opts
 
     @property
@@ -404,7 +416,8 @@ class Make(logging.Logging):
     async def apply_settings(self, *settings):
         from dan.core.settings import apply_settings
 
-        apply_settings(self.settings, *settings, logger=self)
+        for ctx in self.contexts:
+            apply_settings(ctx.settings, *settings, logger=self)
 
     @staticmethod
     def toolchains():
@@ -435,9 +448,9 @@ class Make(logging.Logging):
                     deps.add(d)
                     await self.get_all_dependencies(d, deps)
 
-    async def build(self, targets: list[Target] = None, contexts: list[str] = None):
+    async def build(self, targets: list[Target] = None):
 
-        await self.initialize(contexts)
+        await self.initialize()
 
         if targets is None:
             targets = self.targets()
