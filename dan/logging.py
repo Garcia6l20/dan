@@ -118,7 +118,7 @@ class Logging:
         logger = getattr(self, "_logger", None)
         if logger is None:
             if name is None:
-                name = getattr(self, "fullname", self.__class__.__name__)
+                name = getattr(self, "display_name", getattr(self, "fullname", self.__class__.__name__))
             if name.startswith("root."):
                 name = name.removeprefix("root.")
             logger = getLogger(name)

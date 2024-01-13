@@ -422,10 +422,6 @@ class Target(Logging, MakefileRegister, internal=True):
 
         if self.name is None:
             self.name = self.__class__.__name__
-            stream_name = self.name
-        else:
-            stream_name = f'{self.__class__.__name__}[{self.name}]'
-
         
         if self.provides is None:
             self.provides = {self.name}
@@ -438,9 +434,9 @@ class Target(Logging, MakefileRegister, internal=True):
         if parent is not None:
             self.makefile = parent.makefile
             self.fullname = f'{parent.fullname}.{self.name}'
-            self._stream = parent._stream.sub(stream_name)
+            self._stream = parent._stream.sub(self.display_name)
         else:
-            self._stream = TermStream(stream_name)
+            self._stream = TermStream(self.display_name)
 
         if makefile:
             self.makefile = makefile
@@ -450,7 +446,7 @@ class Target(Logging, MakefileRegister, internal=True):
 
 
         if self.fullname is None:
-            self.fullname = f'{self.makefile.fullname}.{self.name}'
+            self.fullname = f'{self.context.name}.{self.makefile.fullname}.{self.name}'
 
         self.options = Options(self, self.options)
 
@@ -557,10 +553,10 @@ class Target(Logging, MakefileRegister, internal=True):
     def requires(self):
         from dan.pkgconfig.package import RequiredPackage
         return [dep for dep in self.dependencies.all if isinstance(dep, RequiredPackage)]
-
+    
     @cached_property
-    def fullname(self) -> str:
-        return f'{self.makefile.fullname}.{self.name}'
+    def display_name(self) -> str:
+        return f'{self.context.name}/{self.name}'
 
     @property
     def cache(self) -> dict:
