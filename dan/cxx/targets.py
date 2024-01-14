@@ -612,7 +612,7 @@ class Executable(CXXObjectsTarget, internal=True):
             paths.extend(self.toolchain.env['PATH'].split(os.pathsep))
 
         from dan.pkgconfig.package import get_cached_bindirs
-        paths.extend([str(d) for d in get_cached_bindirs()])
+        paths.extend([str(d) for d in get_cached_bindirs(self.context)])
         
         paths.extend(self.shared_dependencies_path)
 

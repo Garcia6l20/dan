@@ -211,7 +211,10 @@ class Make(logging.Logging):
             if context_name in self.config.settings:
                 self.contexts.append(Context(context_name, self.config.settings[context_name]))
 
-    def context(self, name):
+    def context(self, name: str = None):
+        if name is None:
+            assert len(self.contexts) == 1, 'context must be specified'
+            return self.contexts[0]
         for ctx in self.contexts:
             if ctx.name == name:
                 return ctx
@@ -293,9 +296,10 @@ class Make(logging.Logging):
                 return True
         return False
 
-    def targets(self) -> list[Target]:
+    def targets(self, context=None) -> list[Target]:
         items = list()
-        for ctx in self.contexts:
+        contexts = [self.context(context)] if context is not None else self.contexts
+        for ctx in contexts:
             if self.required_targets and len(self.required_targets) > 0:
                 for target in ctx.root.all_targets:
                     if self.__matches(target, ctx):
@@ -338,7 +342,6 @@ class Make(logging.Logging):
                 items.append(test)
         return items
 
-    @property
     def all_options(self) -> list[Option]:
         opts = []
         for target in self.targets():
@@ -354,9 +357,10 @@ class Make(logging.Logging):
     @property
     def diagnostics(self):
         result: diag.DiagnosticCollection = diag.DiagnosticCollection()
-        if self.root:
-            for target in self.root.all_targets:
-                result.update(target.diagnostics)
+        for ctx in self.contexts:
+            if ctx.root:
+                for target in ctx.root.all_targets:
+                    result.update(target.diagnostics)
         result.update(self._diagnostics)
         return result
 
@@ -404,7 +408,7 @@ class Make(logging.Logging):
         await self.initialize()
         from dan.core.settings import _apply_inputs
 
-        all_opts = self.all_options
+        all_opts = self.all_options()
 
         def get_option(name):
             for opt in all_opts:

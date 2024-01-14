@@ -6,26 +6,26 @@ from dan.core.pathlib import Path
 import dan.core.typing as t
 
 
-class InstallMode(Enum):
-    user = 0
-    dev = 1
-    portable = 2
+class InstallMode(str, Enum):
+    user = 'user'
+    dev = 'dev'
+    portable = 'portable'
 
 
-class BuildType(Enum):
-    debug = 0
-    release = 1
-    release_min_size = 2
-    release_debug_infos = 3
+class BuildType(str, Enum):
+    debug = 'debug'
+    release = 'release'
+    release_min_size = 'release_min_size'
+    release_debug_infos = 'release_debug_infos'
 
     @property
     def is_debug_mode(self):
         """Return true if the build type should produce debug symbols (ie.: debug and release_debug_infos)"""
         return self in (BuildType.debug, BuildType.release_debug_infos)
     
-class DefaultLibraryType(Enum):
-    static = 0
-    shared = 1
+class DefaultLibraryType(str, Enum):
+    static = 'static'
+    shared = 'shared'
 
 @dataclass(eq=True, unsafe_hash=True)
 class InstallSettings:
@@ -92,7 +92,7 @@ def _parse_str_value(name, value: str, orig: type, tp: type = None):
                     for n in orig._member_names_]
         value = value.lower()
         if value in names:
-            return orig(names.index(value))
+            return orig._value2member_map_[value]
         else:
             raise RuntimeError(f'{name} should be one of {names}')
     elif issubclass(orig, (set, list)):

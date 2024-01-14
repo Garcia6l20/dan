@@ -350,13 +350,12 @@ class PackageConfig(CXXTarget, internal=True):
         return f'Package[{self.name}] at {hex(id(self))}'
 
 
-_pkgconfig_cache = None
-def get_packages_cache() -> dict[str, PackageConfig]:
-    from dan.core.include import context
-    global _pkgconfig_cache
-    if _pkgconfig_cache is None:
-        _pkgconfig_cache = Cache.instance(context.root.build_path / 'pkgconfig.cache', cache_name='pkgconfig', binary=True)
-    return _pkgconfig_cache.data
+def get_packages_cache(context) -> dict[str, PackageConfig]:
+    pkgconfig_cache = context.get('pkgconfig_cache')
+    if pkgconfig_cache is None:
+        pkgconfig_cache = Cache.instance(context.root.build_path / 'pkgconfig.cache', cache_name='pkgconfig', binary=True)
+        context.set('pkgconfig_cache', pkgconfig_cache)
+    return pkgconfig_cache.data
 
 
 def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
@@ -393,15 +392,16 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
     return pkg
 
-__bindirs = None
-def get_cached_bindirs():
-    global __bindirs
-    if __bindirs is None:
-        __bindirs = set()
-        for pkg in get_packages_cache().values():
-            __bindirs.update(pkg.bin_paths)
+def get_cached_bindirs(context):
+    bindirs = context.get('bindirs')
+    if bindirs is None:
+        bindirs = set()
+        for pkg in get_packages_cache(context).values():
+            bindirs.update(pkg.bin_paths)
+        
+        context.set('bindirs', bindirs)
 
-    return __bindirs
+    return bindirs
 
 _jinja_env: jinja2.Environment = None
 def _get_jinja_env():

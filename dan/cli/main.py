@@ -63,11 +63,13 @@ class CommandsContext:
         self._make_kwds.update(**kwds)
     
     @contextlib.asynccontextmanager
-    async def __call__(self, *args, quiet=None, no_status=False, no_init=False, code=False, **kwargs):
+    async def __call__(self, *args, quiet=None, no_status=False, no_init=False, code=False, context=None, **kwargs):
         if no_status:
             kwargs['terminal_mode'] = TerminalMode.BASIC
         elif code:
             kwargs['terminal_mode'] = TerminalMode.CODE
+        if context:
+            kwargs['contexts'] = [context]
         self.update(*args, **kwargs)
         if self._make_kwds.pop('quiet', False) or quiet:
             self._make_kwds['verbose'] = -1
@@ -354,7 +356,7 @@ async def tests(ctx: CommandsContext, **kwargs):
 
 @_get.command()
 @common_opts
-@click.argument('TARGETS', nargs=-1)
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
 async def options(ctx: CommandsContext, **kwargs):
     """List tests"""
@@ -489,7 +491,7 @@ def code():
 
 @code.command()
 @common_opts
-@click.argument('TARGETS', nargs=-1)
+@click.argument('CONTEXT', nargs=-1)
 @pass_context
 async def get_targets(ctx: CommandsContext, **kwargs):
     kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
@@ -498,7 +500,7 @@ async def get_targets(ctx: CommandsContext, **kwargs):
     async with ctx(**kwargs) as make:
             # bench.end()
         out = []
-        targets = make.context.root.all_targets
+        targets = make.context().root.all_targets
             # with bench('load-dependencies'):
         async with asyncio.TaskGroup() as g:
             for target in targets:
@@ -592,6 +594,28 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_workspace_browse_configuration())
+
+
+@code.command()
+@common_opts
+@click.argument('CONTEXT')
+@pass_context
+async def get_options(ctx: CommandsContext, context, **kwargs):
+    """List options"""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True, 'contexts': [context]})
+    import json
+    async with ctx(**kwargs) as make:
+        opts = list()
+        for o in make.all_options():
+            opts.append({
+                'name': o.name,
+                'fullname': o.fullname,
+                'help': o.help,
+                'type': o.type.__name__,
+                'value': o.value,
+                'default': o.default
+            })
+        click.echo(json.dumps(opts))
 
 @cli.result_callback()
 @pass_context
