@@ -368,7 +368,7 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
 
     makefile = makefile.root
 
-    cache = get_packages_cache()
+    cache = get_packages_cache(makefile.context)
     if name in cache:
         cached_pkg = cache[name]
         if spec and not spec.is_compatible(cached_pkg.version):

@@ -363,6 +363,8 @@ class CXXObjectsTarget(CXXTarget, internal=True):
     def _init_sources(self):
         if callable(self.sources):
             self.sources = list(self.sources())
+        if isinstance(self.sources, (str, Path)):
+            self.sources = [self.sources]
         if not isinstance(self.sources, Iterable):
             assert callable(
                 self.sources), f'{self.name} sources parameter should be an iterable or a callable returning an iterable'

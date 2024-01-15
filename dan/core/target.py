@@ -431,18 +431,19 @@ class Target(Logging, MakefileRegister, internal=True):
         if default is not None:
             self.default = default
 
-        if parent is not None:
+        if makefile:
+            self.makefile = makefile
+        elif parent is not None:
             self.makefile = parent.makefile
+        elif self.makefile is None:
+            raise RuntimeError('Makefile not resolved')
+
+        if parent is not None:
             self.fullname = f'{parent.fullname}.{self.name}'
             self._stream = parent._stream.sub(self.display_name)
         else:
             self._stream = TermStream(self.display_name)
 
-        if makefile:
-            self.makefile = makefile
-
-        if self.makefile is None:
-            raise RuntimeError('Makefile not resolved')
 
 
         if self.fullname is None:
