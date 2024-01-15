@@ -3,7 +3,7 @@ from dan.core.cache import Cache
 
 from dan.core.errors import InvalidConfiguration
 from dan.core.settings import BuildSettings
-from dan.cxx.toolchain import Toolchain, BuildType, CppStd
+from dan.cxx.base_toolchain import Toolchain, BuildType, CppStd
 from dan.cxx.detect import get_toolchains
 
 toolchain: Toolchain = None
@@ -20,6 +20,10 @@ class __LazyContext(sys.__class__):
     def toolchain(__) -> Toolchain:
         from dan.core.include import context
         return context.get('cxx_toolchain')
+
+    @property
+    def target_toolchain(self) -> Toolchain:
+        return self.toolchain
 
 
 sys.modules[__name__].__class__ = __LazyContext

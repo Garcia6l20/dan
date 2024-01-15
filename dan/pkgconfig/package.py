@@ -14,7 +14,7 @@ from dan.core.settings import InstallMode, InstallSettings
 from dan.core.utils import unique
 from dan.core.version import Version, VersionSpec
 from dan.cxx.targets import CXXTarget, Library
-from dan.cxx.toolchain import LibraryList
+from dan.cxx.base_toolchain import LibraryList
 
 import typing as t
 import os

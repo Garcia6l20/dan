@@ -3,7 +3,7 @@ import os
 from dan.core import asyncio
 
 from dan.core.pm import re_match
-from dan.cxx.toolchain import Toolchain
+from dan.cxx.base_toolchain import Toolchain
 
 from dan.make import Make
 from dan.cxx.targets import CXXObject

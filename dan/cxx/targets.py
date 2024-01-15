@@ -12,7 +12,7 @@ from dan.core.target import Target, Installer, InstallMode
 from dan.core.utils import chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
-from dan.cxx.toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd, BuildType
+from dan.cxx.base_toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd, BuildType
 from dan.core.cache import cached_property as dan_cached
 
 import copy
