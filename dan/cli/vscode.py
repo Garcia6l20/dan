@@ -143,7 +143,7 @@ class Code(Logging):
                 }
 
         return json.dumps(
-            make_suite_info(self.make.context.root), indent=2 if pretty else None
+            make_suite_info(self.make.context().root), indent=2 if pretty else None
         )
 
     async def _init_target(self, target):
@@ -204,14 +204,17 @@ class Code(Logging):
         #   - compilerArgs?: string[];
         #   - standard?: see above
         #   - windowsSdkVersion?: string
-        from dan.cxx import toolchain
         from dan.cxx.targets import CXXTarget
+
+        context = self.make.context()
+        root = context.root
+        toolchain = context.get('cxx_toolchain')
 
         cpp_std = 11
         browse_path = set()
         compiler_args = set()
         cxx_targets = [
-            t for t in self.make.root.all_default if isinstance(t, CXXTarget)
+            t for t in root.all_default if isinstance(t, CXXTarget)
         ]
         async with asyncio.TaskGroup("initializing cxx targets") as g:
             for target in cxx_targets:
@@ -226,7 +229,7 @@ class Code(Logging):
 
         from dan.pkgconfig.package import get_packages_cache
 
-        for package in get_packages_cache().values():
+        for package in get_packages_cache(context).values():
             compiler_args.update(package.cxx_flags)
 
         result = {

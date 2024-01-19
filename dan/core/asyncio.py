@@ -361,6 +361,11 @@ class TaskGroup:
             self._parent_cancel_requested = True
             self._parent_task.cancel()
 
+    def cancel(self):
+        for t in self._tasks:
+            if not t.done():
+                t.cancel()
+
     def results(self):
         if not self._entered:
             raise RuntimeError(f"TaskGroup {self!r} has not been entered")

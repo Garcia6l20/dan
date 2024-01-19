@@ -36,6 +36,10 @@ _common_opts = [
                  help='Maximum jobs.', default=None, type=int, envvar='DAN_JOBS'),
     click.option('--no-status', is_flag=True,
                  help='Disable status', envvar='DAN_NOSTATUS'),
+    click.option('--all', '-a', is_flag=True,
+                help='Use all contexts'),
+    click.option('--context', '-c', 'contexts', type=click.ContextParamType(), multiple=True,
+                help='Use this context'),
 ]
 
 
@@ -113,6 +117,7 @@ def cli(ctx: click.AsyncContext, **kwds):
 @pass_context
 @click.pass_context
 async def user_cli_command(click_ctx, ctx, help, *args, **kwargs):
+    """User commands"""
     async with ctx(no_init=False, **kwargs) as make:
         if not click_ctx.args:
             click.echo(user_cli.get_help(click_ctx))
@@ -178,10 +183,6 @@ async def configure(ctx: CommandsContext, context: str, toolchain: str, yes: boo
 @cli.command()
 @click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
 @common_opts
-@click.option('--all', '-a', is_flag=True,
-              help='Use all contexts')
-@click.option('--context', '-c', 'contexts', type=click.ContextParamType(), multiple=True,
-              help='Use this context')
 @click.option('--force', '-f', is_flag=True,
               help='Clean before building')
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
@@ -276,7 +277,7 @@ def uninstall(verbose: int, yes: bool, root: str, name: str):
 @cli.group('set')
 @pass_context
 def _set(ctx: CommandsContext):
-    """Inspect stuff"""
+    """Set group"""
     ctx._make_kwds['terminal_mode'] = TerminalMode.BASIC
 
 @_set.command()
@@ -296,7 +297,7 @@ async def context(ctx: CommandsContext, context: str, **kwargs):
 @cli.group('get')
 @pass_context
 def _get(ctx: CommandsContext):
-    """Inspect stuff"""
+    """Get group"""
     ctx._make_kwds['terminal_mode'] = TerminalMode.BASIC
 
 @_get.command()
@@ -454,10 +455,10 @@ async def scan_toolchains(script: str, paths: list[str], verbose, **kwargs):
 @common_opts
 @click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
 @pass_context
-async def env(ctx: CommandsContext, **kwds):
+async def env(ctx: CommandsContext, **kwargs):
     """Show environment."""
-    kwds['quiet'] = True
-    async with ctx(**kwds) as make:
+    kwargs.update({'quiet': True, 'no_status': True})
+    async with ctx(**kwargs) as make:
         for k, v in make.env.items():
             click.echo(f'{k}={v}')
 
@@ -469,8 +470,6 @@ async def env(ctx: CommandsContext, **kwds):
 async def shell(ctx: CommandsContext, **kwds):
     """Open a new shell with suitable environment."""
     from dan.core.runners import sync_run
-    from copy import copy
-    # kwds['quiet'] = True
     async with ctx(**kwds) as make:
         env = dict(os.environ)
         for k, v in make.env.items():
@@ -479,7 +478,7 @@ async def shell(ctx: CommandsContext, **kwds):
         click.logger.info('entering dan shell...')
         click.logger.debug('env: %s', env)
         
-        sync_run('bash', cwd=make.root.build_path, env=env, pipe=False)
+        sync_run('bash', cwd=make.context().root.build_path, env=env, pipe=False)
 
 
 @cli.group()
@@ -532,7 +531,7 @@ async def get_tests(ctx: CommandsContext, **kwargs):
     async with ctx(**kwargs) as make:
         import json
         out = list()
-        for t in make.context.root.all_tests:
+        for t in make.context().root.all_tests:
             out.append(t.fullname)
             if len(t) > 1:
                 for c in t.cases:

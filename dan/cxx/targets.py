@@ -9,7 +9,7 @@ from functools import cached_property
 from dan.core.pathlib import Path
 from dan.core import cache
 from dan.core.target import Target, Installer, InstallMode
-from dan.core.utils import chunks, unique
+from dan.core.utils import Environment, chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
 from dan.cxx.base_toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd, BuildType
@@ -607,19 +607,16 @@ class Executable(CXXObjectsTarget, internal=True):
 
     @cached_property
     def env(self):
-        env = dict()
-        paths = list()
+        env = Environment()
 
         if 'PATH' in self.toolchain.env:
-            paths.extend(self.toolchain.env['PATH'].split(os.pathsep))
+            env.path_prepend(*self.toolchain.env['PATH'].split(os.pathsep))
 
         from dan.pkgconfig.package import get_cached_bindirs
-        paths.extend([str(d) for d in get_cached_bindirs(self.context)])
+        env.path_prepend(*get_cached_bindirs(self.context))
         
-        paths.extend(self.shared_dependencies_path)
+        env.path_prepend(*self.shared_dependencies_path)
 
-        if len(paths):
-            env['PATH'] = os.pathsep.join(paths)
         return env
 
     async def __initialize__(self):

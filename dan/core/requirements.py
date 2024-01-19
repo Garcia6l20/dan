@@ -59,6 +59,10 @@ class RequiredPackage(Logging):
         setattr(self, '_logger', None)
         self.__skipped = list()
 
+    @property
+    def display_name(self):
+        return str(self)
+
     def __getstate__(self) -> object:
         return {
             'pn': self.pn,

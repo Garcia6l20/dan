@@ -20,7 +20,7 @@ from dan.core import aiofiles, asyncio
 from dan.core.requirements import RequiredPackage, load_requirements
 from dan.core.settings import InstallMode, InstallSettings, BuildSettings
 from dan.core.test import Test
-from dan.core.utils import unique
+from dan.core.utils import IndexList, unique
 from dan.cxx import init_toolchain
 from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
@@ -206,18 +206,16 @@ class Make(logging.Logging):
         elif not contexts:
             contexts = [self.config.current_context]
         
-        self.contexts = []
+        self.contexts: IndexList[Context] = []
         for context_name in contexts:
             if context_name in self.config.settings:
                 self.contexts.append(Context(context_name, self.config.settings[context_name]))
 
-    def context(self, name: str = None):
+    def context(self, name: str = None) -> Context:
         if name is None:
             assert len(self.contexts) == 1, 'context must be specified'
             return self.contexts[0]
-        for ctx in self.contexts:
-            if ctx.name == name:
-                return ctx
+        return self.contexts[name]
 
     @property
     def config(self) -> Config:
@@ -230,10 +228,12 @@ class Make(logging.Logging):
     @property
     def source_path(self):
         return Path(self.config.source_path)
-
+    
     @property
     def toolchain(self):
-        return self.context.get("cxx_toolchain")
+        assert len(self.contexts) == 1, 'Only available in single-context mode'
+        return self.contexts[0].get('cxx_toolchain')
+
 
     @property
     def env(self) -> dict[str, str]:
@@ -320,26 +320,28 @@ class Make(logging.Logging):
                 else:
                     test_name = required
                     test_case = None
+                
+                for ctx in self.contexts:
+                    for test in ctx.root.all_tests:
+                        if fnmatch.fnmatch(test.fullname, f"*{test_name}*"):
+                            if len(test) > 1 and test_case is not None:
+                                cases = list()
+                                for case in test.cases:
+                                    if fnmatch.fnmatch(case.name, test_case):
+                                        cases.append(case)
+                                if len(cases) == 0:
+                                    self.warning(
+                                        "couldn't find any test case in %s matching '%s'",
+                                        test.name,
+                                        test_case,
+                                    )
+                                test.cases = cases
 
-                for test in self.root.all_tests:
-                    if fnmatch.fnmatch(test.fullname, f"*{test_name}*"):
-                        if len(test) > 1 and test_case is not None:
-                            cases = list()
-                            for case in test.cases:
-                                if fnmatch.fnmatch(case.name, test_case):
-                                    cases.append(case)
-                            if len(cases) == 0:
-                                self.warning(
-                                    "couldn't find any test case in %s matching '%s'",
-                                    test.name,
-                                    test_case,
-                                )
-                            test.cases = cases
-
-                        items.append(test)
+                            items.append(test)
         else:
-            for test in self.root.all_tests:
-                items.append(test)
+            for ctx in self.contexts:
+                for test in ctx.root.all_tests:
+                    items.append(test)
         return items
 
     def all_options(self) -> list[Option]:
@@ -387,7 +389,7 @@ class Make(logging.Logging):
 
         object_targets = [
             target
-            for target in self.root.all_targets
+            for target in self.context().root.all_targets
             if isinstance(target, CXXObjectsTarget)
         ]
 
@@ -581,7 +583,7 @@ class Make(logging.Logging):
 
     @property
     def executable_targets(self) -> list[Executable]:
-        return [exe for exe in self.targets if isinstance(exe, Executable)]
+        return [exe for exe in self.targets() if isinstance(exe, Executable)]
 
     async def scan_toolchains(self, script: Path = None):
         from dan.cxx.detect import create_toolchains, load_env_toolchain
@@ -614,21 +616,19 @@ class Make(logging.Logging):
         tests = self.tests
         if len(tests) == 0:
             self.error("No test selected")
+            return 255        
+
+        async with self.term.task_group("testing...") as g:
+            for test in tests:
+                g.create_task(self._test_target(test))
+
+        if all(g.results()):
+            self.info("Success !")
+            return 0
+        else:
+            self.error("Failed !")
             return 255
-
-        with self.context:
-            async with self.term.task_group("testing...") as g:
-                for test in tests:
-                    g.create_task(self._test_target(test))
-
-            if all(g.results()):
-                self.info("Success !")
-                return 0
-            else:
-                self.error("Failed !")
-                return 255
 
     async def clean(self):
         await self.initialize()
-        with self.context:
-            await asyncio.gather(*[t.clean() for t in self.targets])
+        await asyncio.gather(*[t.clean() for t in self.targets()])
