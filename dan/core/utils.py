@@ -81,6 +81,22 @@ def classproperty(func):
 
 
 class Environment(dict):
+
+    @staticmethod
+    def current():
+        return Environment(os.environ)
+    
+    def merge(self, other, list_entries = ['PATH', 'LD_LIBRARY_PATH'], list_merge_mode = 'prepend'):
+        for k, v in other.items():
+            if k not in list_entries:
+                self[k] = v
+            else:
+                if list_merge_mode == 'prepend':
+                    self.path_prepend(v)
+                else:
+                    self.path_append(v)
+        return self
+    
     def path_prepend(self, *items: str | Path, var_name="PATH"):
         paths: list[str] = self.get(var_name, "").split(os.pathsep)
         paths = [*[str(item) for item in items], *paths]
