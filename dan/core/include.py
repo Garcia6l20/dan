@@ -35,6 +35,9 @@ def requires(*requirements) -> list[Target]:
 
 
 class Context(Logging):
+
+    _all: list['Context'] = []
+    
     def __init__(self, name = None, settings: BuildSettings = None):
         self.name = name
         self.__root: MakeFile = None
@@ -44,6 +47,16 @@ class Context(Logging):
         self.__attributes = dict()
         self.settings = settings
 
+        Context._all.append(self)
+
+    @staticmethod
+    def find_global(context_name: str, makefile_name: str):
+        for ctx in Context._all:
+            if ctx.name == context_name:
+                for makefile in ctx.all_makefiles:
+                    if makefile.fullname == makefile_name:
+                        return makefile
+    
     @property
     def root(self):
         return self.__root
@@ -106,7 +119,7 @@ class Context(Logging):
         self.__makefile_stack.pop()
 
 
-
+# TODO: remove me !!!
 context: Context = Context()
 
 class MakeFileError(RuntimeError):
@@ -200,3 +213,6 @@ def include(*names: str | Path) -> list[Target]:
     """
     for name in names:
         include_makefile(name)
+
+def get_makefile(context_name: str, makefile_name: str):
+    return Context.find_global(context_name, makefile_name)

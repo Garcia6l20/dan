@@ -206,11 +206,14 @@ class PackageConfig(CXXTarget, internal=True):
             '__libs': self.__libs,
             '__lib_paths': self.__lib_paths,
             '__bin_paths': self.__bin_paths,
+            'context': self.context.name,
+            'makefile': self.makefile.fullname,
         }
     
     def __setstate__(self, data: dict):
-        from dan.core.include import context
-        makefile = context.root
+        from dan.core.include import get_makefile
+        makefile = get_makefile(data['context'], data['makefile'])
+
         self.__init__(data['pn'], data['search_paths'], data['config_path'],
                       data=data['data'],
                       dan_plugin=data['dan_plugin'],
