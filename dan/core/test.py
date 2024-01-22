@@ -60,7 +60,8 @@ class Test(Logging, MakefileRegister, internal=True):
             self.executable = self.makefile.find(self.executable)
 
         self.name = self.name or self.executable.name
-        self.fullname = f'{self.executable.makefile.fullname}.{self.name}'
+        if not hasattr(self, 'fullname'):
+            self.fullname = f'{self.context.name}{self.executable.makefile.fullname}.{self.name}'
         self.file = Path(self.file) if self.file else None
         self.workingDir = self.executable.build_path
 
