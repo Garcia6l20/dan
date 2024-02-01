@@ -13,6 +13,7 @@ from dan.io.repositories import RepositoriesSettings, RepositoryConfig, _get_set
 from dan.make import Make
 from dan.cxx.detect import get_dan_path
 from dan.core import asyncio, aiofiles
+from dan.core.terminal import set_mode as set_terminal_mode, TerminalMode
 
 def get_source_path():
     source_path = get_dan_path() / 'deps'
@@ -32,7 +33,7 @@ async def get_make(toolchain='default', quiet=True):
         make = Make(source_path / 'build', **kwds)
         make.config.source_path = str(source_path)
         make.config.build_path = str(source_path / 'build')
-        make.config.toolchain = toolchain
+        make.config.current_context = 'default'
         await make._config.save()
         await make.initialize()
         _make = make
@@ -69,6 +70,7 @@ async def make_context(toolchain='default', quiet=True):
 @click.group()
 @click.option('--verbose', '-v', count=True)
 def cli(verbose):
+    set_terminal_mode(TerminalMode.BASIC)
     if verbose == 0:
         logging.getLogger().setLevel(logging.ERROR)
     elif verbose == 1:

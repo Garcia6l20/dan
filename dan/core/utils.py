@@ -92,20 +92,20 @@ class Environment(dict):
                 self[k] = v
             else:
                 if list_merge_mode == 'prepend':
-                    self.path_prepend(v)
+                    self.path_prepend(v, var_name=k)
                 else:
-                    self.path_append(v)
+                    self.path_append(v, var_name=k)
         return self
     
     def path_prepend(self, *items: str | Path, var_name="PATH"):
         paths: list[str] = self.get(var_name, "").split(os.pathsep)
         paths = [*[str(item) for item in items], *paths]
-        self[var_name] = os.pathsep.join(unique(paths))
+        self[var_name] = os.pathsep.join(unique(filter(lambda p: len(p) > 0, paths)))
 
     def path_append(self, *items: str | Path, var_name="PATH"):
         paths: list[str] = self.get(var_name, "").split(os.pathsep)
         paths = [*paths, *[str(item) for item in items]]
-        self[var_name] = os.pathsep.join(unique(paths))
+        self[var_name] = os.pathsep.join(unique(filter(lambda p: len(p) > 0, paths)))
 
 
 class IndexList(list[T]):

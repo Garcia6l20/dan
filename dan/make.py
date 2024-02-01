@@ -442,7 +442,7 @@ class Make(logging.Logging):
         if target in deps:
             return
         await load_requirements(
-            target.requires, makefile=target.context.root, logger=self, install=True
+            target.requires, makefile=target.makefile, logger=self, install=True
         )
         for d in target.dependencies.all:
             match d:
@@ -595,13 +595,12 @@ class Make(logging.Logging):
 
     async def run(self):
         await self.initialize()
-        with self.context:
-            results = await asyncio.gather(
-                *[t.execute(log=True) for t in self.executable_targets]
-            )
-            for result in results:
-                if result[2] != 0:
-                    return result[2]
+        results = await asyncio.gather(
+            *[t.execute(log=True) for t in self.executable_targets]
+        )
+        for result in results:
+            if result[2] != 0:
+                return result[2]
         return 0
 
     async def _test_target(self, t: Test):

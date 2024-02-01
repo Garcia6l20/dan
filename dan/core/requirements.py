@@ -116,6 +116,14 @@ def parse_requirement(req: str) -> RequiredPackage:
     else:
         return RequiredPackage(req)
 
+def find_makefile_requirement(makefile, req_name):
+    req = None
+    while makefile is not None and req is None:
+        if makefile.requirements:
+            req = makefile.requirements.find(req_name)
+        makefile = makefile.parent
+    return req
+
 async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile, name=None, logger = None, install = True):
 
     from dan.pkgconfig.package import find_package
@@ -158,14 +166,9 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
                 req.target = t
                 resolved.append(req)
                 continue
-            
-            if makefile.requirements:
-                # install requirement from dan-requires.py
-                t = makefile.requirements.find(req.name)
-                if not t:
-                    raise RuntimeError(f'Unresolved requirement {req}, it should have been defined in {makefile.requirements.__file__}')
-                logger.debug('%s using requirements\' target %s', req, t.fullname)
-            else:
+
+            t = find_makefile_requirement(makefile, req.name)
+            if t is None:
                 with makefile.context:
                     t, is_new = await IoPackage.instance(req.name, req.version_spec, package=req.package, repository=req.repository, makefile=makefile.root)
                 if is_new:

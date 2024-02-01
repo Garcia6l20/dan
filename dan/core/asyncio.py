@@ -45,7 +45,7 @@ class Cached(BaseDecorator):
                 await self.__cache
             return self.__cache.result()
         else:
-            args = tuple(filter(None, args))
+            args = tuple(filter(lambda a: a is not None, args))
             key = id(args[0]) if self.__unique else hash((args, frozenset(kwds)))
             if key not in self.__cache:
                 self.__cache[key] = Future()

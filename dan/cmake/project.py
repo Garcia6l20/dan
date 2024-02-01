@@ -97,6 +97,7 @@ class Project(BaseTarget, internal=True):
                 cmake_options[opt.cmake_name] = value
 
         cmake_options['CMAKE_PREFIX_PATH'] = self.makefile.root.pkgs_path.as_posix()
+        cmake_options['CMAKE_POSITION_INDEPENDENT_CODE'] = 'ON'
 
         base_opts = []
         if self.cmake_generator.startswith('Ninja'):

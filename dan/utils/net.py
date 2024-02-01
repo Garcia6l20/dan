@@ -19,9 +19,6 @@ async def fetch_file(url, dest: Path, name: str = None, chunk_size=1024, progres
                 raise RuntimeError(f"unable to fetch {url}: {message.decode()}")
             size = int(resp.headers.get("content-length", 0))
 
-            # with progress.Bar(
-            #     f"downloading {name}", total=size // 1024, leave=False, unit="Ko"
-            # ) as progressbar:
             with progress(f"downloading {name}", total=size // 1024) as bar:
                 async with aiofiles.open(dest, mode="wb") as f:
                     async for chunk in resp.content.iter_chunked(chunk_size):
