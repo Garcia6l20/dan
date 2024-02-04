@@ -11,6 +11,7 @@ import typing as t
 
 cxx_extensions = ['.cpp', '.cxx', '.C', '.cc']
 c_extensions = ['.c']
+asm_extensions = ['.s', 'S']
 
 def get_in(key, *dicts):
     for d in dicts:
@@ -19,33 +20,36 @@ def get_in(key, *dicts):
 
 class UnixToolchain(Toolchain):
 
+    vendors = ['gcc', 'clang']
+
     __tools = [
         ('cc', 'cc', 'CC'),
         ('cxx', 'cxx', 'CC'),
         ('ar', 'ar', 'AR'),
+        ('objcopy', 'objcopy', 'OBJCOPY'),
         ('ranlib', 'ranlib', 'RANLIB'),
         ('as', '_as', 'AS'),
         ('strip', 'strip', 'STRIP'),
         ('nm', 'nm', 'NM'),
     ]
     
-    def __setup_tools(self, data, tools):
+    def __setup_tools(self):
         for data_name, self_name, env_name in self.__tools:
-            item = get_in(data_name, data, tools)
+            item = get_in(data_name, self.data, self.tools)
             setattr(self, self_name, Path(item) if item else None)
             if item is not None:
                 self.env[env_name] = str(item)
     
-    def __init__(self, data, tools, *args, **kwargs):
-        Toolchain.__init__(self, data, tools, *args, **kwargs)
-        self.cc = Path(data['cc'])
-        self.cxx = Path(data['cxx'])
-        env = data['env'] if 'env' in data else None
+    def __init__(self, *args, **kwargs):
+        Toolchain.__init__(self, *args, **kwargs)
+        self.cc = Path(self.data['cc'])
+        self.cxx = Path(self.data['cxx'])
+        env = self.data['env'] if 'env' in self.data else None
         self.env = Environment(env)
         self.env.path_prepend(self.cc.parent)
         self.env['CC'] = str(self.cc)
         self.env['CXX'] = str(self.cxx)
-        self.__setup_tools(data, tools)
+        self.__setup_tools()
     
         self.debug('C compiler is %s %s (%s)',
                    self.type, self.version, self.cc)
@@ -79,7 +83,7 @@ class UnixToolchain(Toolchain):
 
     @cached_property
     def default_cxxflags(self):
-        flags = [*self.settings.cxx_flags]
+        flags = list()
         if self.env:
             if 'CXXFLAGS' in self.env:
                 flags.extend(self.env["CXXFLAGS"].strip().split(' '))
@@ -113,7 +117,7 @@ class UnixToolchain(Toolchain):
         return opts
 
     def make_link_options(self, libraries: set[Path | str]) -> list[str]:
-        opts = list()
+        opts = list(self.settings.link_flags)
         for lib in libraries:
             if isinstance(lib, Path):
                 opts.append(f'-l{lib.stem.removeprefix("lib")}')
@@ -126,7 +130,7 @@ class UnixToolchain(Toolchain):
         return unique([f'-D{d}' for d in definitions])
 
     def make_compile_options(self, options: set[str]) -> list[str]:
-        result = list()
+        result = list(self.settings.compile_flags)
         for o in options:
             match o:
                 case CppStd():
@@ -137,13 +141,19 @@ class UnixToolchain(Toolchain):
 
     def make_library_name(self, basename: str, shared: bool) -> str:
         if not shared:
+            if self.settings.archive_extension is not None:
+                return f'{basename}.{self.settings.archive_extension}'
             return f'lib{basename}.a'
+        elif self.settings.library_extension is not None:
+                return f'{basename}.{self.settings.library_extension}'
         elif self.system.is_windows:
             return f'lib{basename}.dll'
         else:
             return f'lib{basename}.so'
 
     def make_executable_name(self, basename: str) -> str:
+        if self.settings.executable_extension is not None:
+            return f'{basename}.{self.settings.executable_extension}'
         return f'{basename}.exe' if self.system.is_windows else basename
 
     def get_base_compile_args(self, sourcefile: Path, build_type) -> list[str]:
@@ -151,7 +161,9 @@ class UnixToolchain(Toolchain):
             case _ if sourcefile.suffix in cxx_extensions:
                 return [self.cxx, *self.default_cxxflags, *self.get_optimization_flags(build_type), *self.default_cflags]
             case _ if sourcefile.suffix in c_extensions:
-                return [self.cc, *self.get_optimization_flags(build_type), *self.default_cflags]
+                return [self.cc, *self.default_cxxflags, *self.get_optimization_flags(build_type), *self.default_cflags]
+            case _ if sourcefile.suffix in asm_extensions:
+                return [self.cc, *self.default_cxxflags, *self.get_optimization_flags(build_type), *self.default_cflags]
             case _:
                 raise RuntimeError(
                     f'Unhandled source file extention: {sourcefile.suffix}')
@@ -191,7 +203,7 @@ class UnixToolchain(Toolchain):
             self.default_ldflags, self.default_cflags, self.default_cxxflags, self.link_options, options)]
         commands = [args]
         if self.build_type in [BuildType.release, BuildType.release_min_size]:
-            commands.append([self.strip, output])
+            commands.append([self.objcopy, '-S', output, output])
         return commands
 
     def make_static_lib_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
@@ -205,7 +217,7 @@ class UnixToolchain(Toolchain):
                 unique(self.default_ldflags, options), '-o', output]
         commands = [args]
         if self.build_type in [BuildType.release, BuildType.release_min_size]:
-            commands.append([self.strip, output])
+            commands.append([self.objcopy, '-S', output, output])
         return commands
 
     async def get_default_include_paths(self, lang='c++') -> list[Path]:

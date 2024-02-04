@@ -6,7 +6,6 @@ import fnmatch
 
 from dataclasses_json import dataclass_json
 import sys
-from collections.abc import Iterable
 
 from dan import logging
 
@@ -26,15 +25,8 @@ from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
 from dan.core.terminal import TerminalMode, TermStream, set_mode as set_terminal_mode
-from dan.core.utils import Environment
+from dan.core.utils import Environment, flatten
 
-
-def flatten(list_of_lists):
-    if len(list_of_lists) == 0:
-        return list_of_lists
-    if isinstance(list_of_lists[0], Iterable):
-        return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
-    return list_of_lists[:1] + flatten(list_of_lists[1:])
 
 
 @dataclass_json
@@ -145,6 +137,7 @@ class Make(logging.Logging):
     def __init__(
         self,
         build_path: str,
+        source_path: str = None,
         targets: list[str] = None,
         verbose: int = 0,
         for_install: bool = False,
@@ -197,6 +190,12 @@ class Make(logging.Logging):
         self._config = ConfigCache.instance(self.config_path)
         self.cache = Cache.instance(self.cache_path, binary=True)
 
+        if self.config.build_path is None:
+            self.config.build_path = str(self.build_path)
+
+        if source_path is not None:
+            self.config.source_path = str(source_path)
+
         self.debug(f"jobs: {jobs}")
 
         self._diagnostics = diag.DiagnosticCollection()
@@ -206,7 +205,7 @@ class Make(logging.Logging):
         elif not contexts:
             contexts = [self.config.current_context]
         
-        self.contexts: IndexList[Context] = []
+        self.contexts: IndexList[Context] = IndexList()
         for context_name in contexts:
             if context_name in self.config.settings:
                 self.contexts.append(Context(context_name, self.config.settings[context_name]))
@@ -246,10 +245,34 @@ class Make(logging.Logging):
             paths.extend(parts)
         env.path_prepend(*paths)
         return env
+    
+    async def project_config(self):
+        from dan.core.config import load_project_config, ConfigContext
 
-    async def configure(self, source_path: str, context: str = None, toolchain: str = None):
-        self.config.source_path = str(source_path)
-        self.config.build_path = str(self.build_path)
+        project_config = load_project_config(self.source_path)
+
+        from dan.core.toolchains import BaseToolchain
+        toolchain_classes = BaseToolchain.load_all()
+
+        # fake_cache = dict()
+        # toolchains = []
+        # for toolchain_class in BaseToolchain.registered_classes(lambda t: t.final):
+        #     toolchains.append(toolchain_class())
+
+        contexts = []
+        for ctx_class in ConfigContext.registered_classes():
+            ctx = ctx_class()
+            for ToolchainClass in toolchain_classes:
+                settings = ToolchainClass.SettingsClass()
+                toolchain = ToolchainClass()
+                if ctx.try_configure(toolchain, settings):
+                    ctx.accepted_toolchains.append((toolchain, settings))
+            contexts.append(ctx)
+    
+        return contexts
+
+
+    async def configure(self, context: str = None, toolchain: str = None):
         self.info("source path: %s", self.config.source_path)
         self.info("build path: %s", self.config.build_path)
         if not context in self.config.settings:
@@ -262,6 +285,8 @@ class Make(logging.Logging):
         if not self.config.current_context:
             self.config.current_context = context
             self.info("setting current context to %s", context)
+        if context not in self.contexts:
+            self.contexts.append(Context(context, self.config.settings[context]))
         await self._config.save()
 
     @asyncio.cached
@@ -273,9 +298,9 @@ class Make(logging.Logging):
         
         for ctx in self.contexts:
 
-            init_toolchain(ctx)
+            toolchain = init_toolchain(ctx)
         
-            self.info(f"{ctx.name}: using '{ctx.settings.toolchain}' toolchain in '{ctx.settings.cxx.build_type.name}' mode")
+            self.info(f"{ctx.name}: using '{toolchain.name}' toolchain in '{toolchain.build_type.name}' mode")
 
             with ctx:
                 try:
@@ -419,10 +444,11 @@ class Make(logging.Logging):
 
         _apply_inputs(options, get_option, logger=self, input_type_name="option")
 
-    async def apply_settings(self, *settings):
+    async def apply_settings(self, *settings, context=None):
         from dan.core.settings import apply_settings
 
-        for ctx in self.contexts:
+        contexts = self.contexts if context is None else [self.contexts[context]]
+        for ctx in contexts:
             apply_settings(ctx.settings, *settings, logger=self)
 
     @staticmethod

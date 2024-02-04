@@ -8,7 +8,7 @@ import sys
 
 import asyncio
 from dan.core.terminal import write as term_write
-from dan.core.utils import Environment
+from dan.core.utils import Environment, flatten
 
 
 class CommandError(RuntimeError):
@@ -159,6 +159,8 @@ def list2cmdline(command: list|str):
         for part in command:
             if isinstance(part, Path):
                 cmd.append(part.as_posix())
+            elif isinstance(part, (list, tuple, set)):
+                cmd.extend(flatten(part))
             else:
                 cmd.append(part)
         return subprocess.list2cmdline(cmd)

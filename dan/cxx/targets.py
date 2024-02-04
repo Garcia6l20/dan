@@ -614,6 +614,8 @@ class Executable(CXXObjectsTarget, internal=True):
 
         from dan.pkgconfig.package import get_cached_bindirs
         env.path_prepend(*get_cached_bindirs(self.context))
+
+        env.path_prepend(self.makefile.root.pkgs_path / 'lib', var_name='LD_LIBRARY_PATH')
         
         env.path_prepend(*self.shared_dependencies_path)
 

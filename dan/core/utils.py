@@ -3,6 +3,7 @@ from dan.core.pathlib import Path
 import os
 
 import typing as t
+from collections.abc import Iterable
 
 T = t.TypeVar("T")
 
@@ -33,7 +34,7 @@ def unique(*seqs):
     full = list()
     for seq in seqs:
         full.extend(seq)
-    return [x for x in full if not (x in seen or seen.add(x))]
+    return [x for x in full if not isinstance(x, t.Hashable) or not (x in seen or seen.add(x))]
 
 
 def chunks(lst, chunk_size):
@@ -109,15 +110,23 @@ class Environment(dict):
 
 
 class IndexList(list[T]):
-    def __init__(self, iterable: t.Iterable[T], index_key="name"):
+    def __init__(self, *args, index_key="name"):
         self.__index_key = index_key
-        super().__init__(iterable)
+        super().__init__(*args)
 
     def __getitem__(self, index) -> T | None:
         match index:
             case int() | slice():
                 return super().__getitem__(index)
             case _:
-                for item in super():
+                for item in self:
                     if getattr(item, self.__index_key, None) == index:
                         return item
+
+
+def flatten(list_of_lists):
+    if len(list_of_lists) == 0:
+        return list_of_lists
+    if isinstance(list_of_lists[0], Iterable) and not isinstance(list_of_lists[0], str):
+        return flatten(list_of_lists[0]) + flatten(list_of_lists[1:])
+    return list_of_lists[:1] + flatten(list_of_lists[1:])

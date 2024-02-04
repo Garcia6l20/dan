@@ -436,7 +436,10 @@ class Target(Logging, MakefileRegister, internal=True):
         elif parent is not None:
             self.makefile = parent.makefile
         elif self.makefile is None:
-            raise RuntimeError('Makefile not resolved')
+            from dan.core.include import context
+            self.makefile = context.current
+            if self.makefile is None:
+                raise RuntimeError('Makefile not resolved')
 
         if parent is not None:
             self.fullname = f'{parent.fullname}.{self.name}'
@@ -475,9 +478,15 @@ class Target(Logging, MakefileRegister, internal=True):
         self._build_path = None
         
         if inspect.isclass(self.source_path) and issubclass(self.source_path, Target):
-            # delayed resolution
+            # class-defined source -> delayed resolution
             def _get_source_path(TargetClass, self):
                 return self.get_dependency(TargetClass).output
+            self.preload_dependencies.add(self.source_path, public=False)
+            type(self).source_path = property(functools.partial(_get_source_path, self.source_path))
+        elif isinstance(self.source_path, Target):
+            # target-defined source -> delayed resolution
+            def _get_source_path(target, self):
+                return target.output
             self.preload_dependencies.add(self.source_path, public=False)
             type(self).source_path = property(functools.partial(_get_source_path, self.source_path))
 

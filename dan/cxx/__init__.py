@@ -35,6 +35,18 @@ def get_default_toolchain(data = None):
     data = data or get_toolchains()
     return data['default']
 
+def get_toolchain_class(toolchain_data: dict):
+    tc_id = toolchain_data['id']
+    from .base_toolchain import Toolchain
+    Toolchain.load_all()
+    for cls in Toolchain.registered_classes(lambda t: t.final):
+        if tc_id == cls.name:
+            return cls
+
+
+def get_toolchain_classes():
+    data = get_toolchains()
+    return [get_toolchain_class(toolchain_data) for toolchain_data in data['toolchains'].values()]
 
 def init_toolchain(ctx):
     data = get_toolchains()
@@ -44,26 +56,17 @@ def init_toolchain(ctx):
         tc_name = get_default_toolchain(data)
 
     toolchain_data = data['toolchains'][tc_name]
+    ToolchainClass = get_toolchain_class(toolchain_data)
 
-    tc_type = toolchain_data['type']
-    match tc_type:
-        case 'gcc' | 'clang':
-            from .unix_toolchain import UnixToolchain
-            tc_type = UnixToolchain
-        case 'msvc':
-            from .msvc_toolchain import MSVCToolchain
-            tc_type = MSVCToolchain
-        case _:
-            raise InvalidConfiguration(f'Unhandeld toolchain type: {tc_type}')
-    
     cache = Cache.get('dan').data
     if not ctx.name in cache:
         cache[ctx.name] = {
             'toolchain': dict()
         }
-    toolchain = tc_type(toolchain_data, data['tools'], settings=settings.cxx, cache=cache[ctx.name]['toolchain'])
+    toolchain = ToolchainClass(settings=settings.config, cache=cache[ctx.name]['toolchain'])
     toolchain.init()
     ctx.set('cxx_toolchain', toolchain)
+    return toolchain
 
 
 from .targets import Executable, Library, LibraryType, Module

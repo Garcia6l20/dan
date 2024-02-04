@@ -55,14 +55,18 @@ class InstallSettings:
 @dataclass(eq=True, unsafe_hash=True)
 class ToolchainSettings:
     build_type: BuildType = BuildType.debug
-    cxx_flags: list[str] = field(default_factory=lambda: list(), compare=False)
+    compile_flags: list[str] = field(default_factory=lambda: list(), compare=False)
+    link_flags: list[str] = field(default_factory=lambda: list(), compare=False)
     default_library_type: DefaultLibraryType = DefaultLibraryType.static
+    executable_extension: t.Optional[str] = None
+    archive_extension: t.Optional[str] = None
+    library_extension: t.Optional[str] = None
 
 @dataclass(eq=True, unsafe_hash=True)
 class BuildSettings:
     toolchain: str = None
     install: InstallSettings = field(default_factory=lambda: InstallSettings())
-    cxx: ToolchainSettings = field(default_factory=lambda: ToolchainSettings())
+    config: t.Any = None
 
 
 def safe_load(name: str, value,  t: type):
@@ -103,6 +107,8 @@ def _parse_str_value(name, value: str, orig: type, tp: type = None):
         return orig(result)
     elif orig == bool:
         return value.lower() in ('true', 'yes', 'on', '1')
+    elif value.lower() in ('none', 'null', 'undefined'):
+        return None
     else:
         if tp is not None:
             raise TypeError(f'unhandled type {orig}[{tp}]')
@@ -174,8 +180,14 @@ def apply_settings(base, *settings, logger=None):
             if not hasattr(setting, part):
                 raise RuntimeError(f'no such setting: {name}')
             setting = getattr(setting, part)
-        if not hasattr(setting, parts[-1]):
-            raise RuntimeError(f'no such setting: {name}')
-        value = getattr(setting, parts[-1])
+        part = parts[-1]
+        if not hasattr(setting, part):
+            if isinstance(setting, dict) and part in setting:
+                value = setting[part]
+                return setting, value, type(value)
+            else:
+                raise RuntimeError(f'no such setting: {name}')
+        else:
+            value = getattr(setting, part)
         return setting, value, type(setting)
     _apply_inputs(settings, get_setting, logger=logger)

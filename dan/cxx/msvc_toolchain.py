@@ -13,6 +13,9 @@ import os
 
 
 class MSVCToolchain(Toolchain):
+
+    vendors = ['msvc']
+
     def __init__(self, data, *args, **kwargs):
         Toolchain.__init__(self, data, *args, **kwargs)
         self.cc = Path(data['cc'])

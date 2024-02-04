@@ -1,10 +1,33 @@
 from pathlib import Path
-from contextlib import nullcontext
 
 import aiohttp
+import socket
 
 from dan.core import aiofiles
 
+class Ping:
+    def __init__(self, host: str, port: int):
+        self.host = host
+        self.port = port
+    
+    def ping(self, timeout = 0.5):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        try:
+            s.connect((self.host, self.port))
+            s.close()
+            return True
+        except socket.error:
+            s.close()
+            return False
+
+
+__has_network_connection = None
+def has_network_connection(timeout = 0.5):
+    global __has_network_connection
+    if __has_network_connection is None:
+        __has_network_connection = Ping(host='8.8.8.8', port=443).ping(timeout)
+    return __has_network_connection
 
 async def fetch_file(url, dest: Path, name: str = None, chunk_size=1024, progress=None):
     if name is None:

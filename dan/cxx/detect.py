@@ -140,7 +140,7 @@ def get_target_arch(defines: dict[str, str]) -> str:
     elif '_M_ARM' in defines:
         arch = 'arm'
     else:
-        for defs in _arm_defines:
+        for defs in _arm_defines.values():
             if dict_contains(defines, *defs):
                 arch = 'arm'
                 break
@@ -213,7 +213,7 @@ def _parse_compiler_version(defines: dict[str, str]):
         else:
             return None
         
-        system = get_target_system(defines)
+        system = get_target_system(defines) or 'none'
         arch = get_target_arch(defines)
 
         return CompilerId(compiler, Version(major, minor, patch), arch=arch, system=system)
@@ -432,11 +432,11 @@ def get_compilers(logger: logging.Logger, paths = None):
                         f'Cannot load msvc with {arch} architecture')
     else:
         logger.debug('looking for gcc%s', logging.lazy_fmt(lambda: '' if paths is None else ' in' + ', '.join(paths)))
-        for gcc in find_executables(r'gcc(-\d+)?(\.exe)?', paths, default_paths):
+        for gcc in find_executables(r'[\w\d-]+gcc(-\d+)?(\.exe)?', paths, default_paths):
             gcc = gcc.resolve()
             compilers.add(Compiler(gcc, logger=logger))
         logger.debug('looking for clang%s', logging.lazy_fmt(lambda: '' if paths is None else ' in' + ', '.join(paths)))
-        for clang in find_executables(r'clang(-\d+)?(\.exe)?', paths, default_paths):
+        for clang in find_executables(r'[\w\d-]+clang(-\d+)?(\.exe)?', paths, default_paths):
             clang = clang.resolve()
             compilers.add(Compiler(clang, logger=logger))
     return compilers
@@ -511,6 +511,7 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
         get_compiler_tool('cxx', 'g++')
         get_compiler_tool('as')
         get_compiler_tool('dbg', 'gdb')
+        get_compiler_tool('objcopy', 'objcopy')
     elif compiler.name == 'clang':
         if not get_compiler_tool('cxx', 'clang++') and suffix:
             # clang++ may be a link to clang...
@@ -533,6 +534,9 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     name = str(compiler.compiler_id)
     if prefix:
         name = f'{prefix}{name}'
+    if not compiler.arch in name:
+        name = f'{name}-{compiler.arch}'
+    data['id'] = name
     return name, data
 
 
@@ -617,9 +621,6 @@ def create_toolchains(paths = None):
         return data
     for cc in compilers:
         k, v = create_toolchain(cc, logger)
-        arch_k = f'{k}-{v["arch"]}'
-        if arch_k in toolchains.keys():
-            k = arch_k
         if not k in toolchains.keys():
             logger.info(f'new toolchain \'{k}\' found')
         elif toolchains[k] != v:
@@ -637,14 +638,18 @@ def create_toolchains(paths = None):
             logger.info(f'toolchain \'{k}\' unchanged')
             continue
         toolchains[k] = v
-    for tool in _required_tools:
-        if isinstance(tool, tuple):
-            tool, toolname = tool
-        else:
-            toolname = tool
-        tools[tool] = str(find_executable(toolname, paths, default_paths))
-    data['tools'] = tools
+
+    if default_paths:
+        for tool in _required_tools:
+            if isinstance(tool, tuple):
+                tool, toolname = tool
+            else:
+                toolname = tool
+            tools[tool] = str(find_executable(toolname, paths, default_paths))
+        data['tools'] = tools
+
     data['toolchains'] = toolchains
+
     if not 'default' in data:
         from dan.core.osinfo import OSInfo
         osi = OSInfo()

@@ -137,10 +137,10 @@ def user_cli():
 user_cli.context_class = click.AsyncContext
 
 @cli.command()
-@click.argument('context', default='default', type=click.ContextParamType())
+@click.argument('context', default='auto', type=click.ContextParamType())
 @click.option('--verbose', '-v', count=True,
               help='Verbosity level')
-@click.option('--toolchain', '-t', help='The toolchain to use',
+@click.option('--toolchain', '-t', 'in_toolchain', help='The toolchain to use',
               type=click.ToolchainParamType(), envvar='DAN_TOOLCHAIN')
 @click.option('--yes', '-y', help='Say yes to all prompts (use defaults)', is_flag=True)
 @click.option('--setting', '-s', 'settings', help='Set or change a setting', multiple=True, type=click.SettingsParamType(BuildSettings))
@@ -150,27 +150,65 @@ user_cli.context_class = click.AsyncContext
 @click.option('--source-path', '-S', help='Path where source is located.',
               type=click.Path(resolve_path=True, path_type=Path), required=True, default='.', envvar='DAN_SOURCE_PATH')
 @pass_context
-async def configure(ctx: CommandsContext, context: str, toolchain: str, yes: bool, settings: tuple[str], options: tuple[str], source_path: Path, **kwds):
+async def configure(ctx: CommandsContext, context: str, in_toolchain: str, yes: bool, settings: tuple[str], options: tuple[str], **kwds):
     """Configure dan project"""
-    async with ctx(no_init=True, no_status=True, contexts=[context], **kwds) as make:
-        setting_toolchain = None
-        if context in make.config.settings:
-            setting_toolchain = make.config.settings[context].toolchain
-        if toolchain is None and setting_toolchain is None:
-            from dan.cxx.detect import get_toolchains
-            toolchains = [*get_toolchains(create=False)["toolchains"].keys(), 'default']
-            for default_tc in toolchains:
-                if fnmatch(default_tc, f'*{context}*'):
-                    break
-            if yes:
-                toolchain = default_tc
+    contexts = [context]
+    user_contexts = dict()
+    async with ctx(no_init=True, no_status=True, contexts=contexts, **kwds) as make:
+
+        if context == 'auto':
+            context_config = await make.project_config()
+            if len(context_config) == 0:
+                context = 'default'
+                # make.contexts = [context]
             else:
-                toolchain = click.prompt('Toolchain', type=click.Choice(toolchains), default=default_tc)
+                contexts.clear()
+                for ctx in context_config:
+                    assert len(ctx.accepted_toolchains) > 0, f'No suitable toolchain found for {ctx.name} context'
+                    contexts.append(ctx.name)
+                    user_contexts[ctx.name] = {
+                        'toolchains': [(t.name, s) for t, s in ctx.accepted_toolchains],
+                    }
 
-        await make.configure(source_path, context, toolchain)
+        for ctx in contexts:
+            toolchain = in_toolchain
+            toolchain_settings = None
+            
+            if ctx in user_contexts and len(user_contexts[ctx]['toolchains']) == 1:
+                toolchain = user_contexts[ctx]['toolchains'][0][0]
+                toolchain_settings = user_contexts[ctx]['toolchains'][0][1]
+            
+            if toolchain is None:
+                if ctx in make.config.settings:
+                    toolchain = make.config.settings[ctx].toolchain
 
-        if len(settings):
-            await make.apply_settings(*settings)
+                from dan.cxx.detect import get_toolchains
+                if ctx in user_contexts:
+                    toolchains = user_contexts[ctx]['toolchains']
+                else:
+                    toolchains = [*get_toolchains(create=False)["toolchains"].keys(), 'default']
+                for default_tc in toolchains:
+                    if fnmatch(default_tc, f'*{ctx}*'):
+                        break
+                if yes:
+                    toolchain = default_tc
+                else:
+                    toolchain = click.prompt('Toolchain', type=click.Choice(toolchains), default=default_tc)
+
+            if ctx in make.config.settings:
+                build_settings = make.config.settings[ctx]
+            else:
+                build_settings = BuildSettings(toolchain=toolchain)
+                make.config.settings[ctx] = build_settings
+
+            if toolchain_settings:
+                build_settings.config = toolchain_settings
+                # user_contexts[ctx]['configure'](build_settings)
+
+            await make.configure(ctx, toolchain)
+
+            if len(settings):
+                await make.apply_settings(*settings, context=ctx)
 
         # NOTE: intializing make after applying setting
         #       to check settings are valid implicitly (cache save skipped)

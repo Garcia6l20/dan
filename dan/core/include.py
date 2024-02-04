@@ -137,6 +137,7 @@ def load_makefile(module_path: Path,
                   is_requirement=False) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
+
     if module_path in context.imported_makefiles:
         return context.imported_makefiles[module_path]
     spec = importlib.util.spec_from_file_location(
@@ -180,11 +181,10 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
         
     if module_path in context.imported_makefiles:
         return context.imported_makefiles[module_path]
-
-    if (module_path.parent / '__init__.py').exists():
-        p = str(module_path.parent.parent)
-        if not p in sys.path:
-            sys.path.append(p)
+    
+    module_python_path = str(module_path.parent)
+    if module_python_path not in sys.path:
+        sys.path.append(module_python_path)
 
     module = importlib.util.module_from_spec(spec)
     context.imported_makefiles[module_path] = module

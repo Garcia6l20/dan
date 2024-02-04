@@ -7,8 +7,9 @@ from dan.core.runners import async_run, sync_run, CommandError
 from dan.core.version import Version
 from dan.logging import Logging
 from dan.cxx.compile_commands import CompileCommands
+from dan.core.toolchains import BaseToolchain, Lang
 
-import typing as t
+import dan.core.typing as t
 
 import tempfile
 
@@ -85,19 +86,58 @@ class SystemName(str):
     def is_linux(self):
         return self == 'linux'
 
+class _VendorToolchainTag:
+    pass
 
-class Toolchain(Logging):
-    def __init__(self, data: dict[str,str], tools: dict, settings: ToolchainSettings, cache: dict = None) -> None:
+class Toolchain(BaseToolchain, Logging):
+
+    kind = 'cxx'
+    languages = [
+        Lang('c++', ['c++', 'cxx', 'cpp', 'cc']),
+        Lang('c', ['c']),
+        Lang('asm', ['s', 'S']),
+    ]
+    vendors: list[str] = None
+    vendor: str = None
+    data: dict = None
+    tools: dict = None
+    SettingsClass = ToolchainSettings
+
+    @classmethod
+    def load(cls):
+        from dan.cxx.detect import get_toolchains
+        import dan.cxx.unix_toolchain
+        import dan.cxx.msvc_toolchain
+
+        toolchains = []
+        toolchains_data = get_toolchains(False)
+        toolchain_classes = list(Toolchain.registered_classes(Toolchain))
+        for tc_name, tc_data in toolchains_data['toolchains'].items():
+            tc_type = tc_data['type']
+            for cls in toolchain_classes:
+                if tc_type in cls.vendors:
+                    class VendorToolchain(cls):
+                        final = True
+                        vendor = tc_type
+                        name = tc_name
+                        data = tc_data
+                        tools = toolchains_data['tools']
+                    toolchains.append(VendorToolchain)
+        return toolchains
+
+
+
+    def __init__(self, settings: ToolchainSettings = None, cache: dict = None) -> None:
+        super().__init__(settings or ToolchainSettings())
         self.cc : Path = None
         self.cxx : Path = None
-        self.tools = tools
         self._compile_commands: CompileCommands = None
-        self.cxx_flags = set()
-        self.type = data['type']
-        # self.arch = data['arch']
-        self.system = SystemName(data['system'])
-        self.version = Version(data['version'])
-        self.settings = settings
+        self.cxx_flags = list()
+        self.type = self.data['type']
+        self.arch = self.data['arch']
+        self.env = self.data['env']
+        self.system = SystemName(self.data['system'])
+        self.version = Version(self.data['version'])
         self.cache = dict() if cache is None else cache
         self.get_logger(f'{self.type}-{self.version}')
         self.env = None
@@ -107,10 +147,10 @@ class Toolchain(Logging):
         self.rpath = None
         self.runtime = RuntimeType.dynamic
 
-    @property
-    def arch(self):
-        self.__update_cache()
-        return self.cache['arch']
+    # @property
+    # def arch(self):
+    #     self.__update_cache()
+    #     return self.cache['arch']
     
     @property
     def is_host(self):
@@ -121,7 +161,7 @@ class Toolchain(Logging):
     def up_to_date(self):
         if not 'arch' in self.cache or self.cache['arch'] is None:
             return False
-        if not 'arch_detect_flags' in self.cache or self.cache['arch_detect_flags'] != self.settings.cxx_flags:
+        if not 'arch_detect_flags' in self.cache or self.cache['arch_detect_flags'] != self.settings.compile_flags:
             return False
         return True
     
@@ -134,11 +174,11 @@ class Toolchain(Logging):
             return
 
         from dan.cxx.detect import get_compiler_defines, get_target_arch
-        defines = get_compiler_defines(self.cc, self.type, self.settings.cxx_flags, self.env)
+        defines = get_compiler_defines(self.cc, self.type, self.settings.compile_flags, self.env)
         arch = get_target_arch(defines)
         self.cache['defines'] = defines
         self.cache['arch'] = arch
-        self.cache['arch_detect_flags'] = self.settings.cxx_flags
+        self.cache['arch_detect_flags'] = self.settings.compile_flags
         
         from dan.core.osinfo import OSInfo
         osi = OSInfo()
@@ -201,7 +241,7 @@ class Toolchain(Logging):
     def debug_files(self, output: Path) -> set[Path]:
         return set()
 
-    def make_compile_commands(self, sourcefile: Path, output: Path, options: set[str], build_type=None) -> CommandArgsList:
+    def make_compile_commands(self, sourcefile: Path, output: Path, options: list[str], build_type=None) -> CommandArgsList:
         raise NotImplementedError()
     
     def from_unix_flags(self, flags: list[str]) -> list[str]:
@@ -212,7 +252,7 @@ class Toolchain(Logging):
         """Convert flags from target-compiler-style to unix-style"""
         return flags
 
-    async def compile(self, sourcefile: Path, output: Path, options: set[str], build_type=None, **kwds):
+    async def compile(self, sourcefile: Path, output: Path, options: list[str], build_type=None, **kwds):
         commands = self.make_compile_commands(sourcefile, output, options, build_type)
         diags = []
         if diag.enabled:
@@ -228,10 +268,10 @@ class Toolchain(Logging):
                 raise CompilationFailure(err, sourcefile, options, command, self, diags) from None
         return commands, diags
 
-    def make_link_commands(self, objects: set[Path], output: Path, options: set[str]) -> CommandArgsList:
+    def make_link_commands(self, objects: set[Path], output: Path, options: list[str]) -> CommandArgsList:
         raise NotImplementedError()
 
-    async def link(self, objects: set[Path], output: Path, options: set[str], **kwds):
+    async def link(self, objects: set[Path], output: Path, options: list[str], **kwds):
         commands = self.make_link_commands(objects, output, options)
         diags = []
         if diag.enabled:
@@ -275,7 +315,7 @@ class Toolchain(Logging):
     def cxxmodules_flags(self) -> list[str]:
         ...
 
-    def can_compile(self, source: str, options: set[str] = set(), extension='.cpp'):
+    def can_compile(self, source: str, options: list[str] = list(), extension='.cpp'):
         with tempfile.NamedTemporaryFile('w', suffix=extension) as f:
             f.write(source)
             f.flush()
@@ -283,11 +323,11 @@ class Toolchain(Logging):
             _, __, rc = sync_run(self.make_compile_commands(fname, fname.with_suffix('.o'), options)[0], no_raise=True)
             return rc == 0
 
-    def has_include(self, *includes, options: set[str] = set(), extension='.cpp'):
+    def has_include(self, *includes, options: list[str] = list(), extension='.cpp'):
         source = '\n'.join([f'#include {inc}' for inc in includes])
         return self.can_compile(source, options, extension)
 
-    def has_definition(self, *definitions, options: set[str] = set(), extension='.cpp'):
+    def has_definition(self, *definitions, options: list[str] = list(), extension='.cpp'):
         source = '\n'.join([f'''#ifndef {d}
         #error "{d} is not defined"
         #endif''' for d in definitions])
