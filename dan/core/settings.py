@@ -100,7 +100,8 @@ def _parse_str_value(name, value: str, orig: type, tp: type = None):
         else:
             raise RuntimeError(f'{name} should be one of {names}')
     elif issubclass(orig, (set, list)):
-        assert tp is not None
+        if tp is None:
+            tp = str # assume str
         result = list()
         for sub in value.split(';'):
             result.append(_parse_str_value(name, sub, tp))
