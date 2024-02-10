@@ -61,6 +61,7 @@ class ToolchainSettings:
     executable_extension: t.Optional[str] = None
     archive_extension: t.Optional[str] = None
     library_extension: t.Optional[str] = None
+    position_independent_code: bool = True
 
 @dataclass(eq=True, unsafe_hash=True)
 class BuildSettings:

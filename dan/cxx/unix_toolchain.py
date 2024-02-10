@@ -4,7 +4,6 @@ from dan.core.pm import re_match
 from dan.core.settings import BuildType
 from dan.core.utils import unique, Environment
 from dan.cxx.base_toolchain import CommandArgsList, Toolchain, Path, FileDependency, CppStd
-from dan.cxx import auto_fpic
 from dan.core.runners import sync_run
 
 import typing as t
@@ -194,7 +193,7 @@ class UnixToolchain(Toolchain):
         args = self.get_base_compile_args(sourcefile, build_type)
         args.extend([*self.compile_options, *options, '-MD', '-MT', str(output),
                     '-MF', f'{output}.d', '-o', str(output), '-c', str(sourcefile)])
-        if auto_fpic:
+        if self.settings.position_independent_code:
             args.insert(1, '-fPIC')
         return [args]
 

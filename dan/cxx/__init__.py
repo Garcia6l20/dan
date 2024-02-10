@@ -28,9 +28,6 @@ class __LazyContext(sys.__class__):
 
 sys.modules[__name__].__class__ = __LazyContext
 
-
-auto_fpic = True
-
 def get_default_toolchain(data = None):
     data = data or get_toolchains()
     return data['default']
