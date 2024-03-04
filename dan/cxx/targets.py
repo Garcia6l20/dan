@@ -31,7 +31,10 @@ class CXXObject(BaseTarget, internal=True):
         if source.is_absolute():
             if root is None:
                 root = parent.build_path
-            name = '-'.join(source.relative_to(root).with_suffix(f'').parts)
+            try:
+                name = '-'.join(source.relative_to(root).with_suffix(f'').parts)
+            except ValueError:
+                name = '-'.join(source.relative_to(parent.build_path).with_suffix(f'').parts)
         else:
             name = '-'.join(source.with_suffix(f'').parts)
         super().__init__(name=name, parent=parent, default=False)
@@ -371,10 +374,15 @@ class CXXObjectsTarget(CXXTarget, internal=True):
         sources = list()
         if self.source_path != self.makefile.source_path:
             self.sources = [self.source_path / source for source in self.sources]
+        
         if self.sources:
-            source_root = Path(os.path.commonpath(self.sources))
+            source_root = Path(os.path.commonpath([s for s in self.sources if isinstance(s, (str, Path))]))
             for source in self.sources:
-                source = Path(source)
+                if isinstance(source, type):
+                    self.dependencies.add(source, public=False)
+                    source = self.makefile.find(source).output
+                else:
+                    source = Path(source)
                 if source.is_absolute():
                     root = source_root
                     if root.is_file():

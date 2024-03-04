@@ -28,7 +28,7 @@ class BaseToolchain(Registry, registry=True):
     languages : list[Lang] = None
     SettingsClass: type = None
     __loaded = False
-    __all = []
+    __all: list['BaseToolchain'] = []
 
     def __init__(self, settings: t.Any):
         if settings is not None:
