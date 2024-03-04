@@ -171,7 +171,7 @@ def _apply_inputs(inputs: list[str], get_item: t.Callable[[str], tuple[t.Any, t.
             if logger is not None:
                 logger.info('%s: %s = %s', input_type_name, name, out_value)
         else:
-            raise RuntimeError(f'cannot process given input: {input}')
+            logger.warning('cannot process given input: %s', input)
 
 
 def apply_settings(base, *settings, logger=None):
