@@ -286,6 +286,13 @@ class Make(logging.Logging):
             self.config.current_context = context
             self.info("setting current context to %s", context)
         if context not in self.contexts:
+            if settings.config is None:
+                from dan.core.toolchains import BaseToolchain
+                toolchain_classes = BaseToolchain.load_all()
+                for ToolchainClass in toolchain_classes:
+                    if ToolchainClass.name == settings.toolchain:
+                        settings.config = ToolchainClass.SettingsClass()
+                        break
             self.contexts.append(Context(context, self.config.settings[context]))
         await self._config.save()
 
