@@ -636,8 +636,11 @@ class _TermManager:
         last_update = 0
 
         async def auto_refresh():
-            await asyncio.sleep(self._min_delay)
-            self.update()
+            try:
+                await asyncio.sleep(self._min_delay)
+                self.update()
+            except asyncio.CancelledError:
+                pass
 
         auto_refresh_task = asyncio.create_task(auto_refresh())
         with self.ts.hidden_cursor() if mode == TerminalMode.STICKY else nullcontext():

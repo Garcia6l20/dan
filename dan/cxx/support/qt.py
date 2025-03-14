@@ -138,7 +138,7 @@ class _Wrapper:
                 if self.source_path == p or self.source_path in p.parents:
                     search_paths.add(p)
             self.debug('looking for source files to moc in: %s', ', '.join([p.as_posix() for p in search_paths]))
-            for file in find_files('.+\.h\w*', search_paths):
+            for file in find_files(r'.+\.h\w*', search_paths):
                 out, err, rc = await async_run([self.moc, file], logger=None, log=False, cwd=self.build_path, no_raise=True, env=self.toolchain.env)
                 if rc != 0 or len(out) == 0:
                     self.debug('skipping %s: %s%s', file.name, out, err)

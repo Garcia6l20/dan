@@ -52,7 +52,10 @@ def init_toolchain(ctx):
     if tc_name is None or tc_name == 'default':
         tc_name = get_default_toolchain(data)
 
-    toolchain_data = data['toolchains'][tc_name]
+    toolchains = data['toolchains']
+    if tc_name not in toolchains:
+        raise InvalidConfiguration(f"Toolchain '{tc_name}' not found")
+    toolchain_data = toolchains[tc_name]
     ToolchainClass = get_toolchain_class(toolchain_data)
 
     cache = Cache.get('dan').data

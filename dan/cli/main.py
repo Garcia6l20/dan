@@ -22,6 +22,8 @@ from dan.make import InstallMode, Make
 from dan.cli.vscode import Code
 
 
+logger = logging.getLogger(__name__)
+
 _minimal_options = [
     click.option('--build-path', '-B', help='Path where dan has been initialized.',
                  type=click.Path(resolve_path=True, path_type=Path), required=True, default='build', envvar='DAN_BUILD_PATH'),
@@ -179,11 +181,16 @@ async def configure(ctx: CommandsContext, context: str, in_toolchain: str, yes: 
                 toolchain = user_contexts[ctx]['toolchains'][0][0]
                 toolchain_settings = user_contexts[ctx]['toolchains'][0][1]
             
+            from dan.cxx.detect import get_toolchains
+            toolchains_data = get_toolchains(create=False)
+            if toolchain not in toolchains_data["toolchains"]:
+                old_toolchain, toolchain = toolchain, toolchains_data["default"]
+                logger.warning(f'No such toolchain: {old_toolchain}, using default: {toolchain}')
+
             if toolchain is None:
                 if ctx in make.config.settings:
                     toolchain = make.config.settings[ctx].toolchain
 
-                from dan.cxx.detect import get_toolchains
                 if ctx in user_contexts:
                     toolchains = user_contexts[ctx]['toolchains']
                 else:
