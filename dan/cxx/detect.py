@@ -615,12 +615,24 @@ def create_toolchains(paths = None):
         toolchains = dict()
         tools = dict()
 
+    def get_toolchain_duplicate(name, values):
+        checked_items = ("cc", "cxx")
+        for k, v in toolchains.items():
+            if k == name:
+                continue
+            for item in checked_items:
+                if values[item] == v[item]:
+                    return k
+
     compilers = get_compilers(logger, paths)
     if len(compilers) == 0:
         logger.warning('no toolchain found')
         return data
     for cc in compilers:
         k, v = create_toolchain(cc, logger)
+        arch_k = f'{k}-{v["arch"]}'
+        if arch_k in toolchains.keys():
+            k = arch_k
         if not k in toolchains.keys():
             logger.info(f'new toolchain \'{k}\' found')
         elif toolchains[k] != v:
@@ -634,6 +646,13 @@ def create_toolchains(paths = None):
                 continue
             else:
                 logger.info(f'updating toolchain \'{k}\'')
+        elif (dup := get_toolchain_duplicate(k, v)):
+            dup_v = toolchains[dup]
+            if Version(dup_v["version"]) > Version(v["version"]):
+                k, v = dup, dup_v
+
+            logger.info(f'toolchain \'{k}\' is a replaces for \'{dup}\'')
+            del toolchains[dup]
         else:
             logger.info(f'toolchain \'{k}\' unchanged')
             continue
