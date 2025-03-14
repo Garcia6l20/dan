@@ -128,7 +128,7 @@ PathImpl = type(Path())
 class FileDependency(PathImpl):
     
     def __init__(self, *args, **kwargs):
-        super(PathImpl, self).__init__()
+        super(PathImpl, self).__init__(*args, **kwargs)
 
     @property
     def up_to_date(self):
@@ -825,7 +825,7 @@ class Target(Logging, MakefileRegister, internal=True):
         makefile = cls.get_static_makefile()
         if makefile is not None:
             inst = makefile.find(cls)
-            fn = functools.partial(fn, inst)
+            fn = staticmethod(functools.partial(fn, inst))
         setattr(cls, name, fn)
         return fn
 
