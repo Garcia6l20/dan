@@ -13,7 +13,7 @@ import dan.core.typing as t
 from dan.core import diagnostics as diag
 from dan.core.cache import Cache
 from dan.core.makefile import MakeFile
-from dan.core.pathlib import Path
+from dan.core.paths import Path, DAN_PATH
 from dan.core.include import MakeFileError, include_makefile, Context
 from dan.core import aiofiles, asyncio
 from dan.core.requirements import RequiredPackage, load_requirements
@@ -25,16 +25,17 @@ from dan.core.target import Option, Target
 from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
 from dan.core.terminal import TerminalMode, TermStream, set_mode as set_terminal_mode
-from dan.core.utils import Environment, flatten
+from dan.core.utils import Env, flatten
+from dan.env import Environment
 
+sys.pycache_prefix = str(DAN_PATH / "__pycache__")
 
 @dataclass_json
 @dataclass
 class Config:
     source_path: Path = None
-    build_path: Path = None
     current_context: str = None
-    settings: dict[str, BuildSettings] = field(default_factory=lambda: dict())
+    contexts: dict[str, str] = field(default_factory=lambda: dict())
 
 
 class ConfigCache(Cache[Config]):
@@ -135,7 +136,8 @@ class Make(logging.Logging):
 
     def __init__(
         self,
-        build_path: str,
+        env: Environment = None,
+        build_path: str = None,
         source_path: str = None,
         targets: list[str] = None,
         verbose: int = 0,
@@ -150,25 +152,12 @@ class Make(logging.Logging):
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
 
+        self._env = env
+
         if quiet:
             verbose = -1
 
-        match verbose:
-            case 1:
-                log_level = logging.DEBUG
-            case 2:
-                log_level = logging.TRACE
-            case -1:
-                log_level = logging.ERROR
-            case 0:
-                log_level = logging.INFO
-            case _:
-                logging.getLogger().warning(
-                    "unknown verbosity level: %s, using INFO", verbose
-                )
-                log_level = logging.INFO
-
-        logging.getLogger().setLevel(log_level)
+        logging.set_verbosity(verbose)
 
         if terminal_mode is not None:
             set_terminal_mode(terminal_mode)
@@ -180,17 +169,26 @@ class Make(logging.Logging):
 
         self.for_install = for_install
 
-        self.build_path = Path(build_path)
-        self.config_path = build_path / self._config_name
-        self.cache_path = build_path / self._cache_name
+        if env is not None:
+            if build_path is None:
+                build_path = env.build_path
+
+            if source_path is None:
+                source_path = env.source_path
+
+        if source_path is not None:
+            source_path = Path(source_path)
+        else:
+            source_path = Path.cwd()
+            
+        base_path = source_path / ".dan"
+
+        self.config_path = base_path / self._config_name
+        self.cache_path = base_path / self._cache_name
 
         self.required_targets = targets
-        sys.pycache_prefix = str(build_path / "__pycache__")
         self._config = ConfigCache.instance(self.config_path)
         self.cache = Cache.instance(self.cache_path, binary=True)
-
-        if self.config.build_path is None:
-            self.config.build_path = str(self.build_path)
 
         if source_path is not None:
             self.config.source_path = str(source_path)
@@ -202,20 +200,46 @@ class Make(logging.Logging):
         if all:
             contexts = self.config.settings.keys()
         elif not contexts:
+            if self.config.current_context is None:
+                self.config.current_context = "default"
             contexts = [self.config.current_context]
 
         self.contexts: IndexList[Context] = IndexList()
         for context_name in contexts:
-            if context_name in self.config.settings:
-                self.contexts.append(
-                    Context(context_name, self.config.settings[context_name])
-                )
+            if not context_name in self.config.contexts:
+                if env is not None:
+                    self.config.contexts[context_name] = env.name
+                    context_env = env
+                else:
+                    context_env = None
+            else:
+                context_env = Environment.load(self.config.contexts[context_name])
+                # self.config.settings[context_name] = BuildSettings()
+            self.contexts.append(
+                Context(context_name, context_env)
+            )
 
     def context(self, name: str = None) -> Context:
         if name is None:
-            assert len(self.contexts) == 1, "context must be specified"
-            return self.contexts[0]
+            name = self.config.current_context
         return self.contexts[name]
+    
+    def bind_context(self, ctx_name, env: Environment = None):
+        if env is None:
+            env = ctx_name
+        if isinstance(env, str):
+            env = Environment.load(env)
+
+        self.contexts[ctx_name] = Context(ctx_name, env)
+        self.config.contexts[ctx_name] = env.name
+        
+        return self.contexts[ctx_name]
+
+    @property
+    def build_path(self):
+        build_base = self.context().env.build_path
+        sub_path = self.source_path.relative_to(Path.home())
+        return build_base / sub_path
 
     @property
     def config(self) -> Config:
@@ -236,10 +260,8 @@ class Make(logging.Logging):
 
     @property
     def env(self) -> dict[str, str]:
-        from dan.cxx.detect import get_dan_path
-
-        env = Environment(self.toolchain.env)
-        paths = [str(get_dan_path() / "os-utils" / "bin")]
+        env = Env(self.toolchain.env)
+        paths = [str(DAN_PATH / "os-utils" / "bin")]
         for t in self.executable_targets:
             parts = t.env.get("PATH", os.environ["PATH"]).split(os.pathsep)
             paths.extend(parts)
@@ -272,29 +294,11 @@ class Make(logging.Logging):
 
         return contexts
 
-    async def configure(self, context: str = None, toolchain: str = None):
+    async def configure(self, context: str = None):
         self.info("source path: %s", self.config.source_path)
-        self.info("build path: %s", self.config.build_path)
-        if not context in self.config.settings:
-            self.config.settings[context] = BuildSettings()
-        settings = self.config.settings[context]
-        if toolchain:
-            settings.toolchain = toolchain
-        if not settings.toolchain:
-            self.warning("no toolchain configured")
         if not self.config.current_context:
             self.config.current_context = context
             self.info("setting current context to %s", context)
-        if context not in self.contexts:
-            if settings.config is None:
-                from dan.core.toolchains import BaseToolchain
-
-                toolchain_classes = BaseToolchain.load_all()
-                for ToolchainClass in toolchain_classes:
-                    if ToolchainClass.name == settings.toolchain:
-                        settings.config = ToolchainClass.SettingsClass()
-                        break
-            self.contexts.append(Context(context, self.config.settings[context]))
         await self._config.save()
 
     @asyncio.cached
@@ -302,7 +306,6 @@ class Make(logging.Logging):
         assert self.config_path.exists(), "configure first"
 
         self.debug(f"source path: {self.source_path}")
-        self.debug(f"build path: {self.build_path}")
 
         for ctx in self.contexts:
 
@@ -314,7 +317,7 @@ class Make(logging.Logging):
 
             with ctx:
                 try:
-                    include_makefile(self.source_path, self.build_path / ctx.name)
+                    include_makefile(self.source_path, self.build_path)
                 except MakeFileError as err:
                     self._diagnostics.update(gen_python_diags(err))
                     raise

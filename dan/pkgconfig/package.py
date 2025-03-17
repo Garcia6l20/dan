@@ -35,16 +35,24 @@ def _get_pkg_config_paths():
             _pkg_config_paths = [Path(p) for p in paths.split(os.pathsep)]
     return _pkg_config_paths
 
-def find_pkg_config(name, paths: str|Path|list[str|Path] = list()) -> Path:
+def find_pkg_config(name, paths: str|Path|list[str|Path] = list(), use_default_paths=True) -> Path:
     if isinstance(paths, (str, Path)):
         paths = [paths]
-    return find_file(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
+    if use_default_paths:
+        paths = [*paths, *_get_pkg_config_paths(), *library_paths_lookup]
+    else:
+        paths = [*paths, *_get_pkg_config_paths()]
+    return find_file(fr'(lib)?{re.escape(name)}\.pc$', paths, re.IGNORECASE)
 
 
-def find_pkg_configs(name, paths: str|Path|list[str|Path] = list()) -> t.Generator[Path, None, None]:
+def find_pkg_configs(name, paths: str|Path|list[str|Path] = list(), use_default_paths=True) -> t.Generator[Path, None, None]:
     if isinstance(paths, (str, Path)):
         paths = [paths]
-    yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', [*paths, *_get_pkg_config_paths(), *library_paths_lookup], re.IGNORECASE)
+    if use_default_paths:
+        paths = [*paths, *_get_pkg_config_paths(), *library_paths_lookup]
+    else:
+        paths = [*paths, *_get_pkg_config_paths()]
+    yield from find_files(fr'(lib)?{re.escape(name)}\.pc$', paths, re.IGNORECASE)
 
 
 def has_package(name,  paths=list()):
@@ -74,15 +82,16 @@ def parse_package_requires(reqs):
         result.append(parse_requirement(' '.join(tmp)))
     return result
 
-class Data:
+class PkgConfig:
     def __init__(self, path) -> None:
+        self._name = None
         self._path = Path(path)
         self._items = dict()
         with open(self._path) as f:
             lines = [l for l in [l.strip().removesuffix('\n')
                                  for l in f.readlines()] if len(l)]
             for line in lines:
-                m = Data.__split_expr.match(line)
+                m = PkgConfig.__split_expr.match(line)
                 if m:
                     k = m.group(1).lower()
                     v = m.group(2)
@@ -138,12 +147,22 @@ class Data:
         return self._requires
     
     @property
+    def name(self):
+        if self._name is None:
+            name = self.get('name')
+            self._name = name.strip().replace(" ", ".")
+        return self._name
+
+    @property
     def version(self) -> Version:
         if self._version is None:
             v = self.get('version')
             if v:
                 self._version = Version(v)
         return self._version
+    
+    def __str__(self):
+        return f"{self.name}-v{self.version}"
 
 
 class PackageConfig(CXXTarget, internal=True):
@@ -151,13 +170,13 @@ class PackageConfig(CXXTarget, internal=True):
 
     default = False
 
-    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, dan_plugin=None, search_plugin=True, data: Data = None, **kwargs) -> None:
+    def __init__(self, name, search_paths: list[str] = list(), config_path: Path = None, dan_plugin=None, search_plugin=True, data: PkgConfig = None, **kwargs) -> None:
         if data is not None:
             self.config_path = data.path
             self.data = data
         else:
             self.config_path = config_path or find_pkg_config(name, search_paths)
-            self.data: Data = None
+            self.data: PkgConfig = None
         self.search_paths = search_paths
         if not self.config_path:
             raise MissingPackage(name)
@@ -180,7 +199,7 @@ class PackageConfig(CXXTarget, internal=True):
         self.__lib_paths = None
         self.__bin_paths = None
         if not data:
-            self.data = Data(self.config_path)
+            self.data = PkgConfig(self.config_path)
 
 
         self.version = self.data.version
@@ -364,7 +383,7 @@ def get_packages_cache(context) -> dict[str, PackageConfig]:
     return pkgconfig_cache.data
 
 
-def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None):
+def find_package(name, spec: VersionSpec = None, search_paths: list = None, makefile = None, use_default_paths = False):
     
     pkg = None
 
@@ -381,10 +400,10 @@ def find_package(name, spec: VersionSpec = None, search_paths: list = None, make
             raise RuntimeError(f'incompatible package {name} ({cached_pkg.version} {spec})')
         return cached_pkg
 
-    search_paths = search_paths or [makefile.pkgs_path]
-    for config in find_pkg_configs(name, search_paths):
+    search_paths = unique(search_paths or makefile.env.package_search_paths)
+    for config in find_pkg_configs(name, search_paths, use_default_paths=use_default_paths):
         if spec is not None:
-            data = Data(config)
+            data = PkgConfig(config)
             if spec.is_compatible(data.version):
                 pkg = PackageConfig(name, data=data, makefile=makefile)
                 break

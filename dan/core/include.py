@@ -11,22 +11,23 @@ from dan.core.target import Target
 from dan.logging import Logging
 from dan.pkgconfig.package import parse_requirement
 from dan.core.settings import BuildSettings
+from dan.env import Environment
 
 
 class TargetNotFound(RuntimeError):
     def __init__(self, name) -> None:
-        super().__init__(f'package {name} not found')
+        super().__init__(f"package {name} not found")
 
 
 def requires(*requirements) -> list[Target]:
-    ''' Requirement lookup
+    """Requirement lookup
 
     1. Searches for a target exported by a previously included makefile
     2. Searches for pkg-config library
 
     :param names: One (or more) requirement(s).
     :return: The list of found targets.
-    '''
+    """
     # return [parse_requirement(req) for req in requirements]
     global context
     requirements = [parse_requirement(req) for req in requirements]
@@ -36,16 +37,18 @@ def requires(*requirements) -> list[Target]:
 
 class Context(Logging):
 
-    _all: list['Context'] = []
-    
-    def __init__(self, name = None, settings: BuildSettings = None):
+    _all: list["Context"] = []
+
+    def __init__(
+        self, name=None, env: Environment = None
+    ):
         self.name = name
         self.__root: MakeFile = None
         self.imported_makefiles: dict[Path, MakeFile] = dict()
         self.__ctx_stack: list[Context] = []
         self.__makefile_stack: list[MakeFile] = []
         self.__attributes = dict()
-        self.settings = settings
+        self.env = env
 
         Context._all.append(self)
 
@@ -56,7 +59,7 @@ class Context(Logging):
                 for makefile in ctx.all_makefiles:
                     if makefile.fullname == makefile_name:
                         return makefile
-    
+
     @property
     def root(self):
         return self.__root
@@ -68,7 +71,6 @@ class Context(Logging):
     @property
     def all_makefiles(self) -> set[MakeFile]:
         return self.imported_makefiles.values()
-
 
     def get(self, name, default=None):
         if name in self.__attributes:
@@ -92,7 +94,15 @@ class Context(Logging):
         assert context is not None
 
     @contextmanager
-    def _init_makefile(self, module, name: str = 'root', build_path: Path = None, requirements: MakeFile = None, parent: MakeFile = None, is_requirement=False):
+    def _init_makefile(
+        self,
+        module,
+        name: str = "root",
+        build_path: Path = None,
+        requirements: MakeFile = None,
+        parent: MakeFile = None,
+        is_requirement=False,
+    ):
         source_path = Path(module.__file__).parent
 
         if self.__root is None:
@@ -108,13 +118,8 @@ class Context(Logging):
         module.__class__ = MakeFile
         self.__makefile_stack.append(module)
         module._setup(
-            name,
-            source_path,
-            build_path,
-            requirements,
-            parent,
-            is_requirement,
-            self)
+            name, source_path, build_path, requirements, parent, is_requirement, self
+        )
         yield module
         self.__makefile_stack.pop()
 
@@ -122,66 +127,73 @@ class Context(Logging):
 # TODO: remove me !!!
 context: Context = Context()
 
+
 class MakeFileError(RuntimeError):
     def __init__(self, path) -> None:
         self.path = Path(path)
-        super().__init__(f'failed to load {self.path}')
+        super().__init__(f"failed to load {self.path}")
 
 
-def load_makefile(module_path: Path,
-                  name: str = None,
-                  module_name: str = None,
-                  build_path: Path = None,
-                  requirements: MakeFile = None,
-                  parent: MakeFile = None,
-                  is_requirement=False) -> MakeFile:
+def load_makefile(
+    module_path: Path,
+    name: str = None,
+    module_name: str = None,
+    build_path: Path = None,
+    requirements: MakeFile = None,
+    parent: MakeFile = None,
+    is_requirement=False,
+) -> MakeFile:
     name = name or module_path.stem
     module_name = module_name or name
 
     if module_path in context.imported_makefiles:
         return context.imported_makefiles[module_path]
-    spec = importlib.util.spec_from_file_location(
-        module_name, module_path)
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
     module = importlib.util.module_from_spec(spec)
     context.imported_makefiles[module_path] = module
-    with context._init_makefile(module, name, build_path, requirements, parent, is_requirement):
+    with context._init_makefile(
+        module, name, build_path, requirements, parent, is_requirement
+    ):
         try:
             spec.loader.exec_module(module)
         except Exception as err:
-            context.error('makefile error while loading \'%s\': %s', module_path, err)
+            context.error("makefile error while loading '%s': %s", module_path, err)
             raise MakeFileError(module_path) from err
     return module
 
 
 def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
-    ''' Include a sub-directory (or a sub-makefile).
+    """Include a sub-directory (or a sub-makefile).
     :returns: The set of exported targets.
-    '''
+    """
     global context
     if not context.root:
         assert type(name) == type(Path())
-        module_path: Path = name / 'dan-build.py'
-        name = 'root'
+        module_path: Path = name / "dan-build.py"
+        name = "root"
         spec = importlib.util.spec_from_file_location(
-            f'{context.name}.{name}', module_path)
+            f"{context.name}.{name}", module_path
+        )
     else:
         lookups = [
-            os.path.join(name, 'dan-build.py'),
-            f'{name}.py',
+            os.path.join(name, "dan-build.py"),
+            f"{name}.py",
         ]
         for lookup in lookups:
             module_path = context.current.source_path / lookup
             if module_path.exists():
                 spec = importlib.util.spec_from_file_location(
-                    f'{context.name}.{context.current.name}.{name}', module_path)
+                    f"{context.name}.{context.current.name}.{name}", module_path
+                )
                 break
         else:
             raise RuntimeError(
-                f'Cannot find anything to include for "{name}" (looked for: {", ".join(lookups)})')
-        
+                f'Cannot find anything to include for "{name}" (looked for: {", ".join(lookups)})'
+            )
+
     if module_path in context.imported_makefiles:
         return context.imported_makefiles[module_path]
-    
+
     module_python_path = str(module_path.parent)
     if module_python_path not in sys.path:
         sys.path.append(module_python_path)
@@ -190,10 +202,14 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
     context.imported_makefiles[module_path] = module
 
     with context._init_makefile(module, name, build_path):
-        requirements_file = module_path.with_stem('dan-requires')
-        if module_path.stem == 'dan-build' and requirements_file.exists():
+        requirements_file = module_path.with_stem("dan-requires")
+        if module_path.stem == "dan-build" and requirements_file.exists():
             context.current.requirements = load_makefile(
-                requirements_file, name='dan-requires', module_name=f'{context.name}/{name}.requirements', is_requirement=True)
+                requirements_file,
+                name="dan-requires",
+                module_name=f"{context.name}/{name}.requirements",
+                is_requirement=True,
+            )
 
         try:
             spec.loader.exec_module(module)
@@ -201,7 +217,7 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             if len(context.missing) == 0:
                 raise err
         except Exception as err:
-            context.error('makefile error while including %s: %s', module_path, err)
+            context.error("makefile error while including %s: %s", module_path, err)
             raise MakeFileError(module_path) from err
 
 
@@ -213,6 +229,7 @@ def include(*names: str | Path) -> list[Target]:
     """
     for name in names:
         include_makefile(name)
+
 
 def get_makefile(context_name: str, makefile_name: str):
     return Context.find_global(context_name, makefile_name)

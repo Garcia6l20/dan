@@ -143,7 +143,7 @@ class VersionSpec:
 
     @staticmethod
     def parse(data: str) -> tuple[str|None, 'VersionSpec']:
-        m = re.match(r'(.+?)?\s+?([><]=?|=)\s+([\d\.]+)', data)
+        m = re.match(r'(.+?)?\s?([><]=?|=)\s?([\d\.]+)', data)
         if m:
             name = m[1]
             op = m[2]

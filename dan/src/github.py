@@ -65,27 +65,29 @@ class GitHubReleaseSources(TarSources, internal=True):
         if settings.github.api_token is not None:
             api_token = settings.github.api_token
 
-        if self.use_tags:
-            url = f'https://api.github.com/repos/{self.user}/{self.project}/tags'
-            async with aiohttp.ClientSession() as session:
-                if api_token is not None:
-                    session.headers['Authorization'] = f'Bearer {api_token}'
-                async with session.get(url) as resp:
-                    data = await resp.read()
-                    if resp.status != 200:
-                        raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
-                    releases = json.loads(data)
-                    return {Version(release['name']): release for release in releases}
-        else:
-            url = f'https://api.github.com/repos/{self.user}/{self.project}/releases'
-            async with aiohttp.ClientSession() as session:
-                if api_token is not None:
-                    session.headers['Authorization'] = f'Bearer {api_token}'
-                async with session.get(url) as resp:
-                    data = await resp.read()
-                    if resp.status != 200:
-                        raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
-                    releases = json.loads(data)
-                    return {Version(release['tag_name']): release for release in releases}
-
+        try:
+            if self.use_tags:
+                url = f'https://api.github.com/repos/{self.user}/{self.project}/tags'
+                async with aiohttp.ClientSession() as session:
+                    if api_token is not None:
+                        session.headers['Authorization'] = f'Bearer {api_token}'
+                    async with session.get(url) as resp:
+                        data = await resp.read()
+                        if resp.status != 200:
+                            raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
+                        releases = json.loads(data)
+                        return {Version(release['name']): release for release in releases}
+            else:
+                url = f'https://api.github.com/repos/{self.user}/{self.project}/releases'
+                async with aiohttp.ClientSession() as session:
+                    if api_token is not None:
+                        session.headers['Authorization'] = f'Bearer {api_token}'
+                    async with session.get(url) as resp:
+                        data = await resp.read()
+                        if resp.status != 200:
+                            raise RuntimeError(f'unable to fetch {url}: {data.decode()}')
+                        releases = json.loads(data)
+                        return {Version(release['tag_name']): release for release in releases}
+        except Exception as err:
+            self.warning("cannot fetch %s: %s", url, err)
 

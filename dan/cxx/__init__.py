@@ -47,8 +47,9 @@ def get_toolchain_classes():
 
 def init_toolchain(ctx):
     data = get_toolchains()
-    settings : BuildSettings = ctx.settings
-    tc_name = settings.toolchain
+    from dan.env import Environment
+    env : Environment = ctx.env
+    tc_name = env.cxx_toolchain
     if tc_name is None or tc_name == 'default':
         tc_name = get_default_toolchain(data)
 
@@ -63,7 +64,7 @@ def init_toolchain(ctx):
         cache[ctx.name] = {
             'toolchain': dict()
         }
-    toolchain = ToolchainClass(settings=settings.config, cache=cache[ctx.name]['toolchain'])
+    toolchain = ToolchainClass(settings=env.cxx_settings, cache=cache[ctx.name]['toolchain'])
     toolchain.init()
     ctx.set('cxx_toolchain', toolchain)
     return toolchain

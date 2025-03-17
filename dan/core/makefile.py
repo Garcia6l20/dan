@@ -8,6 +8,8 @@ from dan.core.target import Options, Target
 from dan.core.test import Test
 from dan.logging import Logging
 
+from dan.env import Environment
+
 
 class MakeFile(sys.__class__, Logging):
 
@@ -25,7 +27,6 @@ class MakeFile(sys.__class__, Logging):
         self.source_path = source_path
         self.build_path = build_path
         self.__requirements = requirements
-        self.__pkgs_path = None
         self.parent = parent
         self.__is_requirement = is_requirement
         self.__cache: Cache = None
@@ -54,6 +55,10 @@ class MakeFile(sys.__class__, Logging):
         while parent is not None:
             yield parent
             parent = parent.parent
+
+    @property
+    def env(self) -> Environment:
+        return self.context.env
 
     @property
     def is_requirement(self):
@@ -142,17 +147,8 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def pkgs_path(self):
-        if self.__pkgs_path is None:
-            if self.requirements:
-                return self.requirements.parent.build_path / 'pkgs'
-            else:
-                return self.build_path / 'pkgs'
-        else:
-            return self.__pkgs_path
-        
-    @pkgs_path.setter
-    def pkgs_path(self, value):
-        self.__pkgs_path = value
+        return self.env.packages_path
+
 
     @requirements.setter
     def requirements(self, value: 'MakeFile'):

@@ -2,7 +2,7 @@ from functools import cached_property
 from dan.core import aiofiles, diagnostics as diag
 from dan.core.pm import re_match
 from dan.core.settings import BuildType
-from dan.core.utils import unique, Environment
+from dan.core.utils import unique, Env
 from dan.cxx.base_toolchain import CommandArgsList, Toolchain, Path, FileDependency, CppStd
 from dan.core.runners import sync_run
 
@@ -44,7 +44,7 @@ class UnixToolchain(Toolchain):
         self.cc = Path(self.data['cc'])
         self.cxx = Path(self.data['cxx'])
         env = self.data['env'] if 'env' in self.data else None
-        self.env = Environment(env)
+        self.env = Env(env)
         self.env.path_prepend(self.cc.parent)
         self.env['CC'] = str(self.cc)
         self.env['CXX'] = str(self.cxx)

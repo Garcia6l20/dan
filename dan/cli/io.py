@@ -3,20 +3,18 @@ from dan import logging
 import fnmatch
 import os
 import contextlib
-from pathlib import Path
-
 from dan.cli import click
 from dan.core.requirements import parse_package
 from dan.core.cache import Cache
+from dan.core.paths import Path, DAN_PATH
 from dan.core.runners import async_run
 from dan.io.repositories import RepositoriesSettings, RepositoryConfig, _get_settings
 from dan.make import Make
-from dan.cxx.detect import get_dan_path
 from dan.core import asyncio, aiofiles
 from dan.core.terminal import set_mode as set_terminal_mode, TerminalMode
 
 def get_source_path():
-    source_path = get_dan_path() / 'deps'
+    source_path = DAN_PATH / 'deps'
     source_path.mkdir(exist_ok=True, parents=True)
     return source_path
 
@@ -200,7 +198,7 @@ def dev():
 @click.argument('NAME')
 async def create_repository(force, name):
     """Create a new package repository"""
-    package_path: Path = get_dan_path() / 'repositories' / name
+    package_path = DAN_PATH / 'repositories' / name
     if package_path.exists():
         if force or click.confirm(f'{name} repository already exists, remove it ?', default=False):
             click.logger.info('Removing existing directory %s', package_path)
@@ -244,11 +242,11 @@ async def create_repository(force, name):
 @click.option('--default-version', prompt='Default github release version')
 @click.option('package_requirements', '--package-requirement', multiple=True)
 async def create_package(force, repo_name, package_name, **kwargs):
-    repo_path = get_dan_path() / 'repositories' / repo_name
+    repo_path = DAN_PATH / 'repositories' / repo_name
     if not repo_path.exists():
         click.logger.error('%s does not exist', repo_path)
         return -1
-    packages_path: Path = get_dan_path() / 'repositories' / repo_name / 'packages'
+    packages_path = DAN_PATH / 'repositories' / repo_name / 'packages'
     dest = packages_path / package_name
     if dest.exists():
         if force or click.confirm(f'{dest} package folder already exists, remove it ?', default=False):

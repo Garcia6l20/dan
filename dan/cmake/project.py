@@ -1,11 +1,11 @@
-from pathlib import Path
+from dan.core.paths import Path, DAN_PATH
 from dan.core.settings import InstallMode, InstallSettings
 from dan.core.target import FileDependency, Installer
 from dan.core.runners import async_run
 from dan.core import aiofiles, asyncio
 from dan.core.find import find_file
 from dan.cxx.targets import BaseTarget
-from dan.core.utils import Environment
+from dan.core.utils import Env
 
 import typing as t
 import os
@@ -13,13 +13,12 @@ import os
 import platform
 
 async def get_ninja(progress):
-    from dan.cxx.detect import get_dan_path
     match platform.system():
         case 'Windows':
             suffix = '.exe'
         case _:
             suffix = ''
-    bin_path = get_dan_path() / 'os-utils' / 'bin'
+    bin_path = DAN_PATH / 'os-utils' / 'bin'
     ninja_path = bin_path / f'ninja{suffix}'
     ninja_version = '1.11.1'
     if not ninja_path.exists():
@@ -62,9 +61,8 @@ class Project(BaseTarget, internal=True):
 
     def get_env(self):
         if self.__env is None:
-            env = Environment(self.toolchain.env)
-            from dan.cxx.detect import get_dan_path
-            env.path_prepend(str(get_dan_path() / 'os-utils' / 'bin'))
+            env = Env(self.toolchain.env)
+            env.path_prepend(str(DAN_PATH / 'os-utils' / 'bin'))
             self.__env = env
         return self.__env
 
@@ -96,7 +94,7 @@ class Project(BaseTarget, internal=True):
                     value = 'ON' if value else 'OFF'
                 cmake_options[opt.cmake_name] = value
 
-        cmake_options['CMAKE_PREFIX_PATH'] = self.makefile.root.pkgs_path.as_posix()
+        cmake_options['CMAKE_PREFIX_PATH'] = self.env.packages_path.as_posix()
         cmake_options['CMAKE_POSITION_INDEPENDENT_CODE'] = 'ON'
 
         base_opts = []

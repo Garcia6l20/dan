@@ -1,7 +1,11 @@
 import os
 import pathlib
+import shutil
 
-Path = type(pathlib.Path())
+import typing as t
+
+# PathT = t.Union[str, os.PathLike, pathlib.Path]
+Path: type[pathlib.Path] = type(pathlib.Path())
 
 @property
 def modification_time(self):
@@ -44,3 +48,18 @@ def is_empty(self):
         return False
 
 Path.is_empty = is_empty
+
+def is_child_of(self, parent):
+    return parent in self.parents
+
+Path.is_child_of = is_child_of
+
+_orig_rmdir = Path.rmdir
+
+def rmdir(self, recursive=False):
+    if recursive:
+        shutil.rmtree(self.as_posix())
+    else:
+        _orig_rmdir(self)
+
+Path.rmdir = rmdir

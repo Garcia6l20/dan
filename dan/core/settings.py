@@ -50,7 +50,6 @@ class InstallSettings:
 
 @dataclass(eq=True, unsafe_hash=True)
 class BuildSettings:
-    toolchain: str = None
     install: InstallSettings = field(default_factory=lambda: InstallSettings())
     config: t.Any = None
 

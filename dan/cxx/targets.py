@@ -9,7 +9,7 @@ from functools import cached_property
 from dan.core.pathlib import Path
 from dan.core import cache
 from dan.core.target import Target, Installer, InstallMode
-from dan.core.utils import Environment, chunks, unique
+from dan.core.utils import Env, chunks, unique
 from dan.core.runners import async_run
 from dan.core import asyncio
 from dan.cxx.base_toolchain import CompilationFailure, LibraryList, LinkageFailure, Toolchain, CppStd, BuildType, DefaultLibraryType
@@ -563,11 +563,16 @@ class Library(CXXObjectsTarget, internal=True):
             self.output.touch()
 
         self.debug('done')
+
+    def is_owned_path(self, path: Path):
+        """Check if the path is owned by the target"""
+        return path.is_child_of(self.source_path) or path.is_child_of(self.build_path)
     
     def __install_headers__(self, installer: Installer) -> list:
         tasks = list()
         header_expr = re.compile(self.header_match)
         for public_include_dir in self.includes.public_raw:
+            # assert self.is_owned_path(public_include_dir), f'{public_include_dir} is not owned by {self.name}'
             headers = public_include_dir.rglob('*.h*')
             for header in headers:
                 if header_expr.match(header.as_posix()):
@@ -645,7 +650,7 @@ class Executable(CXXObjectsTarget, internal=True):
 
     @cached_property
     def env(self):
-        env = Environment()
+        env = Env()
 
         if 'PATH' in self.toolchain.env:
             env.path_prepend(*self.toolchain.env['PATH'].split(os.pathsep))

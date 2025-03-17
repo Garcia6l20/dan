@@ -1,8 +1,6 @@
-from pathlib import Path
 from dan.core.asyncio import sync_wait
 from dan.core.makefile import MakeFile
-
-from dan.cxx.detect import get_dan_path
+from dan.core.paths import DAN_PATH, Path
 from dan.core.runners import CommandError, async_run
 from dan.core import aiofiles
 from dan.core.cache import Cache
@@ -56,7 +54,7 @@ def _get_settings() -> RepositoriesSettings:
     global _repo_settings
     if _repo_settings is None:
         _repo_settings = RepositoriesConfig(
-            get_dan_path() / 'repositories.json')
+            DAN_PATH / 'repositories.json')
         if not _repo_settings.path.exists():
             sync_wait(_repo_settings.save(force=True))
     return _repo_settings.data
@@ -67,10 +65,10 @@ class PackageRepository(BaseTarget, internal=True):
     # never up-to-date
     up_to_date = False
 
-    def __init__(self, name: str, **kwargs):
+    def __init__(self, name: str, makefile=None, **kwargs):
         self.repo_data = _get_settings().get(name)
-        super().__init__(name, **kwargs)
-        self.output = get_dan_path() / 'repositories' / self.name
+        super().__init__(name, **kwargs, build_path=makefile.env.build_path / name)
+        self.output = DAN_PATH / 'repositories' / self.name
         self._package_makefile = None
     
     @property
@@ -89,7 +87,7 @@ class PackageRepository(BaseTarget, internal=True):
                 await async_run(f'git clone -b {self.repo_data.branch} {self.repo_data.url} {self.name}', logger=self, cwd=self.output.parent)
 
             except Exception as e:
-                await aiofiles.rmtree(self.output)
+                # await aiofiles.rmtree(self.output)
                 raise e
         else:
             try:
@@ -109,7 +107,6 @@ class PackageRepository(BaseTarget, internal=True):
                                                        build_path=self.build_path / self.name,
                                                        parent=self.makefile,
                                                        is_requirement=True)
-                self._package_makefile.pkgs_path = self.pkgs_root
 
         return self._package_makefile
 
@@ -146,4 +143,4 @@ def get_all_repo_instances(makefile=None) -> list[PackageRepository]:
 
 
 def get_packages_path() -> Path:
-    return get_dan_path() / 'packages'
+    return DAN_PATH / 'packages'

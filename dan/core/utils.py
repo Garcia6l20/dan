@@ -81,11 +81,11 @@ def classproperty(func):
     return _ClassPropertyDescriptor(func)
 
 
-class Environment(dict):
+class Env(dict):
 
     @staticmethod
     def current():
-        return Environment(os.environ)
+        return Env(os.environ)
     
     def merge(self, other, list_entries = ['PATH', 'LD_LIBRARY_PATH'], list_merge_mode = 'prepend'):
         for k, v in other.items():
@@ -122,6 +122,31 @@ class IndexList(list[T]):
                 for item in self:
                     if getattr(item, self.__index_key, None) == index:
                         return item
+        raise ValueError(f"Index {index} not found")
+    
+    def __setitem__(self, index, value):
+        match index:
+            case int() | slice():
+                return super().__setitem__(index, value)
+            case _:
+                for ii, item in enumerate(self):
+                    if getattr(item, self.__index_key, None) == index:
+                        break
+                else:
+                    raise ValueError(f"Index {index} not found")
+                
+                return super().__setitem__(ii, value)
+
+
+    def __contains__(self, key):
+        if super().__contains__(key):
+            return True
+        else:
+            for item in self:
+                if getattr(item, self.__index_key, None) == key:
+                    return True
+        return False
+
 
 
 def flatten(list_of_lists):

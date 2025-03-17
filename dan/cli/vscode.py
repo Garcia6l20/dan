@@ -6,10 +6,13 @@ from dan.core.pm import re_match
 from dan.cxx.base_toolchain import Toolchain
 
 from dan.make import Make
-from dan.cxx.targets import CXXObject
+from dan.cxx.targets import CXXObject, Executable
 from dan.logging import Logging
 from dan.core.utils import unique
 from dan.core.pathlib import Path
+
+from dan.cli import click
+from dan.cli.common import common_opts, minimal_options, pass_context, CommandsContext
 
 
 def set_exception_breakpoint(
@@ -239,3 +242,151 @@ class Code(Logging):
             "standard": f"c++{cpp_std}",
         }
         return json.dumps(result)
+
+
+@click.group()
+def code():
+    """VS-Code specific commands."""
+
+
+from dan.core.bench import benchmark, report_all
+
+@code.command()
+@common_opts
+@click.argument('CONTEXT', nargs=-1)
+@pass_context
+async def get_targets(ctx: CommandsContext, **kwargs):
+    """Get targets."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    with benchmark('get-targets') as bench:
+        make_init = bench.begin('make-init')
+        async with ctx(**kwargs) as make:
+            make_init.end()
+            out = []
+            targets = make.context().root.all_targets
+            with bench('load-dependencies'):
+                async with asyncio.TaskGroup() as g:
+                    for target in targets:
+                        g.create_task(target.load_dependencies())
+                with bench('gen-output'):
+                    for target in targets:
+                        with bench(f'gen-output-{target.name}'):
+                            out.append({
+                                'name': target.name,
+                                'fullname': target.fullname,
+                                'buildPath': str(target.build_path),
+                                'srcPath': str(target.source_path),
+                                'output': str(target.output),
+                                'executable': isinstance(target, Executable),
+                                'type': type(target).__name__,
+                                'env': target.env if isinstance(target, Executable) else None,
+                            })
+                with bench('json-dump'):
+                    click.echo(json.dumps(out))
+    report_all()
+
+@code.command()
+@common_opts
+@click.argument('TARGETS', nargs=-1)
+@pass_context
+async def get_tests(ctx: CommandsContext, **kwargs):
+    """Get tests."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    async with ctx(**kwargs) as make:
+        out = list()
+        for t in make.context().root.all_tests:
+            out.append(t.fullname)
+            if len(t) > 1:
+                for c in t.cases:
+                    out.append(f'{t.fullname}:{c.name}')
+        click.echo(json.dumps(out))
+
+
+@code.command()
+@common_opts
+@click.option('--pretty', is_flag=True)
+@click.argument('TARGETS', nargs=-1)
+@pass_context
+async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
+    """Get test suites."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    async with ctx(**kwargs) as make:
+        code = Code(make)
+        click.echo(code.get_test_suites(pretty))
+
+
+@code.command()
+def get_toolchains(**kwargs):
+    """Get toolchains."""
+    click.echo(json.dumps(list(Make.toolchains()['toolchains'].keys())))
+
+@code.command()
+@common_opts
+@pass_context
+async def get_buildfiles(ctx: CommandsContext, **kwargs):
+    """Get buildfiles."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    async with ctx(**kwargs) as make:
+        builfiles = [f.__file__ for f in make.makefiles()]        
+        click.echo(json.dumps(builfiles))
+
+
+@code.command()
+@click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
+@click.option('--context', '-c', 'contexts', type=click.ContextParamType(), multiple=True,
+              help='Use this context')
+@common_opts
+@click.option('--force', '-f', is_flag=True,
+              help='Clean before building')
+@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def build(ctx: CommandsContext, force=False, **kwargs):
+    """Build targets (vscode version)."""
+    async with ctx(**kwargs, diags=True, code=True) as make:
+        if force:
+            await make.clean()
+        await make.build()
+
+
+@code.command()
+@minimal_options
+@click.argument('SOURCES', nargs=-1, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
+@pass_context
+async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
+    """Get source configuration."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    async with ctx(**kwargs) as make:
+        code = Code(make)
+        click.echo(await code.get_sources_configuration(sources))
+
+
+@code.command()
+@minimal_options
+@pass_context
+async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
+    """Get workspace browse configuration."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    async with ctx(**kwargs) as make:
+        code = Code(make)
+        click.echo(await code.get_workspace_browse_configuration())
+
+
+@code.command()
+@common_opts
+@click.argument('CONTEXT')
+@pass_context
+async def get_options(ctx: CommandsContext, context, **kwargs):
+    """Get options."""
+    kwargs.update({'quiet': True, 'diags': True, 'no_status': True, 'contexts': [context]})
+    async with ctx(**kwargs) as make:
+        opts = list()
+        for o in make.all_options():
+            opts.append({
+                'name': o.name,
+                'fullname': o.fullname,
+                'help': o.help,
+                'type': o.type.__name__,
+                'value': o.value,
+                'default': o.default
+            })
+        click.echo(json.dumps(opts))

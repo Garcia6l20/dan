@@ -411,7 +411,8 @@ class Target(Logging, MakefileRegister, internal=True):
                  parent: 'Target' = None,
                  version: str = None,
                  default: bool = None,
-                 makefile=None) -> None:
+                 makefile=None,
+                 build_path=None) -> None:
         
         self.parent = parent
         self.__cache: dict = None
@@ -475,7 +476,7 @@ class Target(Logging, MakefileRegister, internal=True):
             self, None, self.preload_dependencies)
 
         self._output: Path = None
-        self._build_path = None
+        self._build_path = build_path
         
         if inspect.isclass(self.source_path) and issubclass(self.source_path, Target):
             # class-defined source -> delayed resolution
@@ -502,7 +503,10 @@ class Target(Logging, MakefileRegister, internal=True):
     def output(self):
         if self._output is None:
             return None
-        return self.build_path / self._output
+        if not self._output.is_absolute():
+            return self.build_path / self._output
+        else:
+            return self._output
 
     @property
     def routput(self):
@@ -520,6 +524,10 @@ class Target(Logging, MakefileRegister, internal=True):
     @version.setter
     def version(self, value):
         self._version = value
+
+    @property
+    def env(self):
+        return self.makefile.env
 
     @output.setter
     def output(self, path):
@@ -548,15 +556,14 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @property
     def build_path(self) -> Path:
-        if self._build_path is not None:
-            return self._build_path
-        
-        build_path = self.makefile.build_path
+        if self._build_path is None:
+            build_path = self.makefile.build_path
 
-        if self.subdirectory is not None:
-            build_path /= self.subdirectory
+            if self.subdirectory is not None:
+                build_path /= self.subdirectory
 
-        return build_path
+            self._build_path = build_path
+        return self._build_path
         
     
     @property
@@ -621,6 +628,11 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @asyncio.cached
     async def preload(self):
+        # self.build_path.mkdir(parents=True, exist_ok=True)
+        # logger = self.get_logger()
+        # import logging
+        # logger.addHandler(logging.FileHandler(self.build_path / f'{self.name}.log'))
+
         self.trace('preloading...')
 
         async with asyncio.TaskGroup(f'building {self.name}\'s preload dependencies') as group:
@@ -734,7 +746,6 @@ class Target(Logging, MakefileRegister, internal=True):
         async with asyncio.TaskGroup(f'cleaning {self.name} outputs') as group:
             output = self.build_path / f'{self.name}.stamp' if self.output is None else self.output
             if output and output.exists():
-                self.info('debug...')
                 if output.is_dir():
                     group.create_task(aiofiles.rmtree(output, force=True))
                 else:

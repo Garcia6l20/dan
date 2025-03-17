@@ -186,3 +186,22 @@ class lazy_fmt:
 
     def __str__(self):
         return self.__fn()
+
+
+def set_verbosity(verbosity):
+    if verbosity is not None:
+        match verbosity:
+            case 1:
+                log_level = DEBUG
+            case 2:
+                log_level = TRACE
+            case -1:
+                log_level = ERROR
+            case 0:
+                log_level = INFO
+            case _:
+                getLogger().warning(
+                    "unknown verbosity level: %s, using INFO", verbosity
+                )
+                log_level = INFO
+        getLogger().setLevel(log_level)

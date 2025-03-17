@@ -9,13 +9,14 @@ from dan.core.find import find_file, find_files
 from dan.core.version import Version, VersionSpec
 from dan.io.repositories import get_packages_path, get_repo_instance
 from dan.src.base import SourcesProvider
+from dan.core.makefile import MakeFile
 
 
 class PackageBuild(Target, internal=True):
 
     inherits_version = False
     
-    def __init__(self, name, version, repository, package_makefile, *args, spec: VersionSpec = None, **kwargs):
+    def __init__(self, name, version, repository, package_makefile: MakeFile, packages_root=None, source_root=None, *args, spec: VersionSpec = None, **kwargs):
         self.spec = spec
         self.pn = name
         super().__init__(name, *args, version=version, **kwargs)
@@ -26,6 +27,12 @@ class PackageBuild(Target, internal=True):
         self.toolchain = self.context.get('cxx_toolchain')
         self.lock: aiofiles.FileLock = None
         self.__up_to_date = True
+        if packages_root is None:
+            packages_root = get_packages_path() / self.toolchain.system / self.toolchain.arch / self.toolchain.build_type.name
+        self.packages_root = packages_root
+        if source_root is None:
+            source_root = get_packages_path() / 'src'
+        self.source_root = source_root
 
     @property
     def is_requirement(self) -> bool:
@@ -60,7 +67,6 @@ class PackageBuild(Target, internal=True):
                         self.version = version
                         break
 
-        packages_path = get_packages_path()
         makefile = self.package_makefile
 
         # set package version
@@ -70,14 +76,13 @@ class PackageBuild(Target, internal=True):
         else:
             version_option.value = str(self.version)
 
-        pkgs_root = packages_path / self.toolchain.system / self.toolchain.arch / self.toolchain.build_type.name
-        makefile.pkgs_path = pkgs_root / self.name / str(self.version)
-        src_path = packages_path / 'src' / self.name / str(self.version)
+        self.output = self.packages_root / self.name / str(self.version)
+        src_path = self.source_root / self.name / str(self.version)
 
-        self._build_path = makefile.pkgs_path
+        self._build_path = self.output
         self.lock = aiofiles.FileLock(self.build_path / 'build.lock')
 
-        self.install_settings = InstallSettings(self.build_path)
+        self.install_settings = InstallSettings(self.env.packages_path)
         
         # update package build-path
         makefile.build_path = self.build_path / 'build'
@@ -98,6 +103,10 @@ class PackageBuild(Target, internal=True):
 
         return await super().__initialize__()
     
+    async def __clean__(self):
+        self.__up_to_date = False
+        return await super().__clean__()
+
     @property
     def up_to_date(self):
         return self.__up_to_date
@@ -301,8 +310,8 @@ class IoPackage(Target, internal=True):
                 group.create_task(self._import_cmake_pkg(pkg))
 
         if self.output.exists():
-            from dan.pkgconfig.package import Data
-            data = Data(self.output)
+            from dan.pkgconfig.package import PkgConfig
+            data = PkgConfig(self.output)
             async with asyncio.TaskGroup(f'importing {self.name} package requirements') as group:
                 toolchain = self.context.get('cxx_toolchain')
                 search_path = get_packages_path() / toolchain.system / toolchain.arch / toolchain.build_type.name

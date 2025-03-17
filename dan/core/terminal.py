@@ -21,7 +21,7 @@ class TerminalMode(enum.Enum):
     CODE = 3
 
 
-mode = TerminalMode.STICKY
+mode = TerminalMode.BASIC
 
 
 def set_mode(new_mode: TerminalMode):
@@ -159,9 +159,12 @@ class _OutputStreamProgress:
         self._done = False
 
     async def __auto_update(self):
-        while True:
-            await asyncio.sleep(0.25)
-            self.__call__(0)
+        try:
+            while True:
+                await asyncio.sleep(0.25)
+                self.__call__(0)
+        except asyncio.CancelledError:
+            pass
 
     def __enter__(self):
         self._done = False
@@ -500,16 +503,19 @@ class _TermManager:
     def start(self):
         if self._thread is not None:
             self.stop()
-        try:
-            loop = asyncio.get_running_loop()
-            self._thread = asyncio.create_task(self._render(), name="terminal-rendering")
-        except RuntimeError:
-            pass
+        loop = asyncio.get_event_loop()
+        self._thread = loop.create_task(self._render(), name="terminal-rendering")
 
     def stop(self):
         if self._thread is not None:
             self._stop_requested = True
             self._up_ev.set()
+
+    async def clean(self):
+        if self._thread is not None:
+            self._stop_requested = True
+            self._up_ev.set()
+            await self._thread
 
     def update(self):
         self._up_ev.set()
@@ -672,15 +678,15 @@ def manager():
     if _manager is None:
         _manager = _TermManager()
         _manager.start()
-        atexit.register(_cleanup_manager)
     return _manager
 
 
-def _cleanup_manager():
+async def cleanup_manager():
     global _manager
     if _manager is not None:
-        _manager.stop()
+        await _manager.clean()
         del _manager
+        _manager = None
 
 
 def write(s: str, end="\n"):

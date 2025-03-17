@@ -20,8 +20,8 @@ def parse_package(name: str) -> tuple[str, str, str]:
             repository = m[3]
         # repo specification <lib>@<repo>
         case r'(.+?)@(.+)' as m:
-            package = None
             library = m[1]
+            package = library
             repository = m[2]
         # package specification <pkg>:<lib>
         case r'(.+?):(.+)' as m:
@@ -124,11 +124,23 @@ def find_makefile_requirement(makefile, req_name):
         makefile = makefile.parent
     return req
 
+
+# _req_cache = None
+# def _get_req_cache(root):
+#     from dan.core.cache import Cache
+#     global _req_cache
+#     if _req_cache is None:
+#         _req_cache = Cache.instance(root.build_path / "requirements.cache", cache_name="requirements-cache", binary=True)
+#     return _req_cache
+
+
 async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile, name=None, logger = None, install = True):
 
     from dan.pkgconfig.package import find_package
     from dan.logging import _get_makefile_logger
     from dan.io import IoPackage
+
+    # cache = _get_req_cache(makefile.root)
 
     if name is None:
         name = makefile.name
@@ -139,7 +151,7 @@ async def load_requirements(requirements: t.Iterable[RequiredPackage], makefile,
     deps_install_path = makefile.root.pkgs_path
     deps_settings = InstallSettings(deps_install_path)
 
-    pkgs_search_paths = [deps_install_path]
+    pkgs_search_paths = makefile.env.package_search_paths
     if makefile.requirements:
         pkgs_search_paths.append(makefile.requirements.pkgs_path)
 

@@ -11,39 +11,49 @@ from dan.core.terminal import TerminalMode
 import dan.core.typing as t
 from dan import logging
 
+
 class AsyncContext(Context):
-    def invoke(__self, __callback, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.loop = asyncio.get_event_loop() or asyncio.new_event_loop()
+
+    def invoke(self, __callback, *args, **kwargs):
         ret = super().invoke(__callback, *args, **kwargs)
         if inspect.isawaitable(ret):
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            if self.loop.is_running():
                 return ret  # must be awaited
-            return loop.run_until_complete(ret)
+            return self.loop.run_until_complete(ret)
         else:
             return ret
 
 
 BaseCommand.context_class = AsyncContext
 
-logger = logging.getLogger('cli')
+logger = logging.getLogger("cli")
 
 
 class SettingsParamType(ParamType):
+
+    _instances = dict()
+
     def __init__(self, setting_cls) -> None:
         self.setting_cls = setting_cls
         self.fields = dataclasses.fields(self.setting_cls)
+        if not self.setting_cls in self._instances:
+            self._instances[self.setting_cls] = self.setting_cls()
         super().__init__()
 
     def shell_complete(self, ctx, param, incomplete):
         completions: list[str] = list()
-        def gen_comps(fields, parts: list[str], prefix=''):
+
+        def gen_comps(fields, parts: list[str], prefix=""):
             part = parts[0]
             if part.startswith('"'):
                 part = part[1:]
             value = None
-            if '=' in part:
-                part, value = part.split('=')
-            elif '+=' in part or '-=' in part:
+            if "=" in part:
+                part, value = part.split("=")
+            elif "+=" in part or "-=" in part:
                 part, value = part.split(part[:-2])
             for field in fields:
                 if part.startswith(field.name):
@@ -55,63 +65,93 @@ class SettingsParamType(ParamType):
                     if dataclasses.is_dataclass(type):
                         subfields = dataclasses.fields(type)
                         subparts = parts[1:]
-                        gen_comps(subfields, subparts, f'{field.name}.')
+                        gen_comps(subfields, subparts, f"{field.name}.")
                     elif issubclass(type, (set, list)):
-                        if part.endswith(('+', '-')):
-                            completions.append(CompletionItem(f'{prefix}{field.name}{part[-1]}=', type='nospace'))
+                        if part.endswith(("+", "-")):
+                            completions.append(
+                                CompletionItem(
+                                    f"{prefix}{field.name}{part[-1]}=", type="nospace"
+                                )
+                            )
                         else:
-                            for s in ('=', '+=', '-='):
-                                completions.append(CompletionItem(f'{prefix}{field.name}{s}', type='nospace'))
+                            for s in ("=", "+=", "-="):
+                                completions.append(
+                                    CompletionItem(
+                                        f"{prefix}{field.name}{s}", type="nospace"
+                                    )
+                                )
                     elif issubclass(type, Enum):
                         for evalue in type._member_names_:
                             if value is None or evalue.startswith(value):
-                                completions.append(CompletionItem(f'"{prefix}{field.name}={evalue}"'))
+                                completions.append(
+                                    CompletionItem(f'"{prefix}{field.name}={evalue}"')
+                                )
                     else:
-                        completions.append(CompletionItem(f'{prefix}{field.name}=', type='nospace'))
+                        completions.append(
+                            CompletionItem(f"{prefix}{field.name}=", type="nospace")
+                        )
                     break
                 elif field.name.startswith(part):
                     type = field.type
                     if isinstance(type, typs.GenericAlias):
                         type = t.get_origin(type)
                     if dataclasses.is_dataclass(type):
-                        completions.append(CompletionItem(f'{prefix}{field.name}.', type='nospace'))
+                        completions.append(
+                            CompletionItem(f"{prefix}{field.name}.", type="nospace")
+                        )
                     else:
-                        completions.append(CompletionItem(f'{prefix}{field.name}', type='nospace'))
-        gen_comps(fields=self.fields, parts=incomplete.split('.'))
+                        completions.append(
+                            CompletionItem(f"{prefix}{field.name}", type="nospace")
+                        )
+
+        gen_comps(fields=self.fields, parts=incomplete.split("."))
         return completions
+
+    def convert(self, value, param, ctx):
+        from dan.core.settings import apply_settings
+
+        settings = self._instances[self.setting_cls]
+        apply_settings(settings, value, logger=logger)
+        return settings
+
 
 class OptionsParamType(ParamType):
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from dan.make import Make
         from dan.core.asyncio import sync_wait
-        build_path = ctx.params['build_path']
+
+        build_path = ctx.params["build_path"]
         make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC)
         sync_wait(make.initialize())
-        
+
         comps = []
         for opt in make.all_options:
             if opt.fullname.startswith(incomplete):
-                comps.append(CompletionItem(opt.fullname, type='nospace'))
-        
+                comps.append(CompletionItem(opt.fullname, type="nospace"))
+
         return comps
+
 
 class ContextParamType(ParamType):
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from dan.make import Make
-        build_path = ctx.params['build_path']
+
+        build_path = ctx.params["build_path"]
         make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC)
         comps = []
         for context in make.config.settings.keys():
             if context.startswith(incomplete):
-                comps.append(CompletionItem(context, type='nospace'))
-        
+                comps.append(CompletionItem(context, type="nospace"))
+
         return comps
+
 
 class TargetParamType(ParamType):
     def __init__(self, target_types=None) -> None:
         from dan.core.target import Target
+
         if target_types is None:
-            self.target_types = (Target)
+            self.target_types = Target
         else:
             self.target_types = tuple(target_types)
         super().__init__()
@@ -119,17 +159,24 @@ class TargetParamType(ParamType):
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from dan.make import Make
         from dan.core.asyncio import sync_wait
-        build_path = ctx.params['build_path']
-        make = Make(build_path, quiet=True, terminal_mode=TerminalMode.BASIC,
-                    contexts=ctx.params.get('contexts', None),
-                    all=ctx.params.get('all', False))
+
+        build_path = ctx.params["build_path"]
+        make = Make(
+            build_path,
+            quiet=True,
+            terminal_mode=TerminalMode.BASIC,
+            contexts=ctx.params.get("contexts", None),
+            all=ctx.params.get("all", False),
+        )
         sync_wait(make.initialize())
 
         comps = []
         for target in make.targets():
-            if isinstance(target, self.target_types) and target.display_name.startswith(incomplete):
-                comps.append(CompletionItem(target.display_name, type='nospace'))
-        
+            if isinstance(target, self.target_types) and target.display_name.startswith(
+                incomplete
+            ):
+                comps.append(CompletionItem(target.display_name, type="nospace"))
+
         return comps
 
 
@@ -137,11 +184,29 @@ class ToolchainParamType(ParamType):
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
         from dan.cxx.detect import get_toolchains
         from click.shell_completion import CompletionItem
+
         toolchains = get_toolchains(create=False)["toolchains"]
-        
+
         comps = []
         for name in toolchains.keys():
             if name.startswith(incomplete):
                 comps.append(CompletionItem(name))
 
         return comps
+
+
+class EnvironmentParamType(ParamType):
+    def shell_complete(self, ctx: AsyncContext, param, incomplete):
+        from dan.env import Environment
+
+        comps = []
+        for env in Environment.available():
+            if env.name.startswith(incomplete):
+                comps.append(CompletionItem(env.name))
+
+        return comps
+
+    def convert(self, value, param, ctx):
+        from dan.env.env import Environment
+
+        return Environment.load(value)

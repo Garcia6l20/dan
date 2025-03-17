@@ -8,7 +8,7 @@ import sys
 
 import asyncio
 from dan.core.terminal import write as term_write
-from dan.core.utils import Environment, flatten
+from dan.core.utils import Env, flatten
 
 
 class CommandError(RuntimeError):
@@ -173,7 +173,7 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
     try:
         command = list2cmdline(command)
         if env is not None:
-            env = Environment.current().merge(env)
+            env = Env.current().merge(env)
         if input is not None:
             stdin = asyncio.subprocess.PIPE
         else:

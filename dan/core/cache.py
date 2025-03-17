@@ -20,7 +20,7 @@ class Cache(t.Generic[T]):
         cls.dataclass = t.get_args(cls.__orig_bases__[0])[0]
         return super().__init_subclass__()
 
-    def __init__(self, path: Path|str, *args, cache_name:str = None, binary=False, **kwargs):
+    def __init__(self, path: Path|str, *args, cache_name:str = None, binary=False, data=None, **kwargs):
         self.__path = Path(path)     
         self.__name = cache_name or path.stem   
         self.__serializer = json if not binary else pickle
@@ -34,18 +34,24 @@ class Cache(t.Generic[T]):
         assert not self.name in self.__caches, 'a cache should be unique'
         self.__caches[self.name] = self
 
-        if self.path.exists():
-            with open(self.path, 'rb') as f:
-                if dataclasses.is_dataclass(self.dataclass):
-                    self.__data = self.dataclass.from_json(f.read())
-                else:
-                    self.__data = self.__serializer.load(f)
-                if not isinstance(self.__data, self.dataclass):
-                    self.__data = self.dataclass(**self.__data)
-                self.__modification_date = self.path.modification_time
+        self.__state = None
+        self.__modification_date = 0.0
+
+        if data is None:
+            if self.path.exists():
+                with open(self.path, 'rb') as f:
+                    if dataclasses.is_dataclass(self.dataclass):
+                        body = f.read()
+                        self.__data = self.dataclass.from_json(body.decode())
+                    else:
+                        self.__data = self.__serializer.load(f)
+                    if not isinstance(self.__data, self.dataclass):
+                        self.__data = self.dataclass(**self.__data)
+                    self.__modification_date = self.path.modification_time
+            else:
+                self.__data = self.dataclass(*args, **kwargs)
         else:
-            self.__data = self.dataclass(*args, **kwargs)
-            self.__modification_date = 0.0
+            self.__data = data
         
         self.__initial_state = self._dump()
         self.__dirty = False
@@ -86,6 +92,10 @@ class Cache(t.Generic[T]):
     
     @property
     def dirty(self):
+        if not self.path.exists():
+            if self.__state is None:
+                self.__state = self.__initial_state
+            return True
         if not self.__dirty:
             self.__state = self._dump()
             self.__dirty = self.__initial_state != self.__state

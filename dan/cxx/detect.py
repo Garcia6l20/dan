@@ -1,5 +1,5 @@
 import os
-from dan.core.pathlib import Path
+from dan.core.paths import Path, DAN_PATH
 import subprocess
 import sys
 import tempfile
@@ -13,7 +13,7 @@ from dan import logging
 from dan.core.runners import sync_run
 from dan.core.version import Version
 from dan.core.win import vswhere
-from dan.core.utils import Environment
+from dan.core.utils import Env
 
 
 class CompilerId:
@@ -301,7 +301,7 @@ class Compiler:
         self.path = path
         if env is None:
             env = dict()
-        env = Environment(env)
+        env = Env(env)
         env['LC_LOCAL'] = 'C'
         env.path_prepend(str(path.parent))
         self.compiler_id = detect_compiler_id(path, env=env, logger=logger)
@@ -540,18 +540,9 @@ def create_toolchain(compiler: Compiler, logger=logging.getLogger('toolchain')):
     return name, data
 
 
-_home_var = 'USERPROFILE' if os.name == 'nt' else 'HOME'
-
-
-@functools.cache
-def get_dan_path():
-    path = Path(os.getenv('DAN_DATA', os.getenv(_home_var))) / '.dan'
-    path.mkdir(exist_ok=True, parents=False)
-    return path
-
 
 def get_toolchain_path():
-    return get_dan_path() / 'toolchains.dat'
+    return DAN_PATH / 'toolchains.dat'
 
 
 def load_env_toolchain(script: Path = None, name: str = None):
