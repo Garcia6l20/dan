@@ -76,7 +76,7 @@
     "configurations": [
         {
             "name": "examples",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -92,7 +92,7 @@
         },
         {
             "name": "configure-test",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -114,7 +114,7 @@
         },
         {
             "name": "simple",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -130,7 +130,7 @@
         },
         {
             "name": "cxx",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -146,7 +146,7 @@
         },
         {
             "name": "cxx/modules",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -162,7 +162,7 @@
         },
         {
             "name": "cxx/simple",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -178,7 +178,7 @@
         },
         {
             "name": "cxx/libraries",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -194,10 +194,10 @@
         },
         {
             "name": "cxx/dan.io",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
-            "justMyCode": true,
+            "justMyCode": false,
             "args": [
                 "${input:makefileCommand}",
                 "-v"
@@ -210,7 +210,7 @@
         },
         {
             "name": "cxx/src",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -226,7 +226,7 @@
         },
         {
             "name": "cxx/src/catch2",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -242,7 +242,7 @@
         },
         {
             "name": "cxx/src/spdlog",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -258,7 +258,7 @@
         },
         {
             "name": "cxx/conan",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -274,7 +274,7 @@
         },
         {
             "name": "unit tests",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "unittest",
             "justMyCode": false,
@@ -291,7 +291,7 @@
         },
         {
             "name": "stdout",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/tests/test_stdout.py",
             "justMyCode": false,
@@ -304,7 +304,7 @@
         },
         {
             "name": "code-test",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,
@@ -319,7 +319,7 @@
         },
         {
             "name": "scan-toolchains",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "module": "dan",
             "justMyCode": true,

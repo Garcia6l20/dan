@@ -25,26 +25,31 @@ class Environment:
     @property
     def system_packages_path(self):
         return self.path / "system-packages"
-    
+
     @property
     def source_path(self):
         return self.path / "src"
-    
+
     @property
     def build_path(self):
         return self.path / "build"
-    
+
     @property
     def packages_path(self):
         return self.path / "packages"
-    
+
     @property
     def package_search_paths(self):
-        return [self.packages_path / "lib", self.system_packages_path]
-    
+        return [
+            self.packages_path / "lib/pkgconfig",
+            self.packages_path / "share/pkgconfig",
+            self.system_packages_path,
+        ]
+
     @cached_property
     def system_packages(self):
         from dan.pkgconfig.package import PkgConfig
+
         packages = []
         for pkg in self.system_packages_path.iterdir():
             packages.append(PkgConfig(pkg))
@@ -62,7 +67,9 @@ class Environment:
     @classmethod
     def available(cls):
         return [
-            env.name for env in DAN_PATH.joinpath("environments").iterdir() if env.is_dir()
+            env.name
+            for env in DAN_PATH.joinpath("environments").iterdir()
+            if env.is_dir()
         ]
 
     @classmethod

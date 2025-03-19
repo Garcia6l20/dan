@@ -34,7 +34,11 @@ def unique(*seqs):
     full = list()
     for seq in seqs:
         full.extend(seq)
-    return [x for x in full if not isinstance(x, t.Hashable) or not (x in seen or seen.add(x))]
+    return [
+        x
+        for x in full
+        if not isinstance(x, t.Hashable) or not (x in seen or seen.add(x))
+    ]
 
 
 def chunks(lst, chunk_size):
@@ -86,18 +90,20 @@ class Env(dict):
     @staticmethod
     def current():
         return Env(os.environ)
-    
-    def merge(self, other, list_entries = ['PATH', 'LD_LIBRARY_PATH'], list_merge_mode = 'prepend'):
+
+    def merge(
+        self, other, list_entries=["PATH", "LD_LIBRARY_PATH"], list_merge_mode="prepend"
+    ):
         for k, v in other.items():
             if k not in list_entries:
                 self[k] = v
             else:
-                if list_merge_mode == 'prepend':
+                if list_merge_mode == "prepend":
                     self.path_prepend(v, var_name=k)
                 else:
                     self.path_append(v, var_name=k)
         return self
-    
+
     def path_prepend(self, *items: str | Path, var_name="PATH"):
         paths: list[str] = self.get(var_name, "").split(os.pathsep)
         paths = [*[str(item) for item in items], *paths]
@@ -114,7 +120,7 @@ class IndexList(list[T]):
         self.__index_key = index_key
         super().__init__(*args)
 
-    def __getitem__(self, index) -> T | None:
+    def get(self, index, default=None) -> T | None:
         match index:
             case int() | slice():
                 return super().__getitem__(index)
@@ -122,8 +128,14 @@ class IndexList(list[T]):
                 for item in self:
                     if getattr(item, self.__index_key, None) == index:
                         return item
-        raise ValueError(f"Index {index} not found")
-    
+        return default
+
+    def __getitem__(self, index) -> T:
+        result = self.get(index)
+        if result is None:
+            raise ValueError(f"Index {index} not found")
+        return result
+
     def __setitem__(self, index, value):
         match index:
             case int() | slice():
@@ -133,10 +145,9 @@ class IndexList(list[T]):
                     if getattr(item, self.__index_key, None) == index:
                         break
                 else:
-                    raise ValueError(f"Index {index} not found")
-                
-                return super().__setitem__(ii, value)
+                    return super().append(value)
 
+                return super().__setitem__(ii, value)
 
     def __contains__(self, key):
         if super().__contains__(key):
@@ -146,7 +157,6 @@ class IndexList(list[T]):
                 if getattr(item, self.__index_key, None) == key:
                     return True
         return False
-
 
 
 def flatten(list_of_lists):

@@ -188,7 +188,9 @@ async def make_context(env, quiet=False):
     with make.context():
         yield make
 
+
 from dan.core.settings import InstallMode, InstallSettings, BuildSettings
+
 
 @env.command()
 @click.option("--force", "-f", help="Force", is_flag=True)
@@ -196,7 +198,7 @@ from dan.core.settings import InstallMode, InstallSettings, BuildSettings
 @click.argument("packages", type=str, nargs=-1)
 async def install(env: Environment, packages, force):
     """Install dan packages into environment."""
-    logger.info("installing '%s'...", env.path)
+    logger.info("installing %s to '%s'...", packages, env.path)
     from dan.io.package import PackageBuild, IoPackage
 
     async with make_context(env) as make:
@@ -210,9 +212,11 @@ async def install(env: Environment, packages, force):
             if target is None:
                 raise RuntimeError(f"cannot find {package_spec} in {repository.name}")
 
+            logger.info("installing '%s'...", target)
+
             pkg = PackageBuild(
                 name,
-                version_spec.version,
+                version_spec.version if version_spec is not None else None,
                 repository,
                 package_makefile=package_makefile,
                 packages_root=env.build_path,
@@ -220,7 +224,6 @@ async def install(env: Environment, packages, force):
                 spec=version_spec,
                 makefile=root_makefile,
             )
-
 
             await pkg.initialize()
 

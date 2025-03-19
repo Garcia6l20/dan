@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 
 from dan.core.cache import Cache
-from dan.core.target import Options, Target
+from dan.core.target import Options, Target, Option
 from dan.core.test import Test
 from dan.logging import Logging
 
@@ -13,14 +13,16 @@ from dan.env import Environment
 
 class MakeFile(sys.__class__, Logging):
 
-    def _setup(self,
-               name: str,
-               source_path: Path,
-               build_path: Path,
-               requirements: 'MakeFile' = None,
-               parent: 'MakeFile' = None,
-               is_requirement = False,
-               context = None) -> None:
+    def _setup(
+        self,
+        name: str,
+        source_path: Path,
+        build_path: Path,
+        requirements: "MakeFile" = None,
+        parent: "MakeFile" = None,
+        is_requirement=False,
+        context=None,
+    ) -> None:
         self.name = name
         self.description = None
         self.version = None
@@ -31,7 +33,7 @@ class MakeFile(sys.__class__, Logging):
         self.__is_requirement = is_requirement
         self.__cache: Cache = None
         self.children: list[MakeFile] = list()
-        if self.name != 'dan-requires' and self.parent:
+        if self.name != "dan-requires" and self.parent:
             self.parent.children.append(self)
         self.options = Options(self)
         self.__targets: set[Target] = set()
@@ -40,15 +42,18 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def fullname(self):
-        return f'{self.parent.fullname}.{self.name}' if self.parent else self.name
+        return f"{self.parent.fullname}.{self.name}" if self.parent else self.name
 
     @property
     def cache(self) -> Cache:
         if not self.__cache:
             self.__cache = Cache.instance(
-                self.build_path / f'{self.name}.cache', cache_name=self.fullname, binary=True)
+                self.build_path / f"{self.name}.cache",
+                cache_name=self.fullname,
+                binary=True,
+            )
         return self.__cache
-    
+
     @property
     def parents(self):
         parent = self.parent
@@ -69,7 +74,7 @@ class MakeFile(sys.__class__, Logging):
                 return True
         return False
 
-    def register(self, cls: type[Target | Test]|Target):
+    def register(self, cls: type[Target | Test] | Target):
         """Register Target/Test class"""
         if isinstance(cls, type):
             t = cls()
@@ -84,12 +89,12 @@ class MakeFile(sys.__class__, Logging):
         if issubclass(cls, Test):
             self.__tests.add(t)
         return cls
-            
 
     def wraps(self, cls: type[Target]):
         def decorator(new_cls: type[Target]):
             assert issubclass(
-                new_cls, cls), 'Target wrapper must inherit from original target'
+                new_cls, cls
+            ), "Target wrapper must inherit from original target"
             for t in self.__targets:
                 if type(t) == cls:
                     stream = t._stream
@@ -97,18 +102,22 @@ class MakeFile(sys.__class__, Logging):
                     new_instance = self.__find(new_cls)
                     new_instance._stream = stream
                     return new_cls
-            assert False, 'Original target has not been registered'
-        return decorator
+            assert False, "Original target has not been registered"
 
+        return decorator
 
     @functools.cache
     def __find(self, name_or_class) -> Target:
         if isinstance(name_or_class, type):
+
             def check(t: Target):
                 return type(t) == name_or_class
+
         else:
+
             def check(t: Target):
                 return name_or_class in t.provides
+
         for t in self.__targets:
             if check(t):
                 return t
@@ -116,6 +125,13 @@ class MakeFile(sys.__class__, Logging):
             t = c.__find(name_or_class)
             if t:
                 return t
+
+    def find_makefile(self, name):
+        if self.name == name or self.fullname == name:
+            return self
+        for c in self.children:
+            if c.name == name or c.fullname == name:
+                return c
 
     def find(self, name_or_class) -> Target:
         """Find a target.
@@ -129,7 +145,7 @@ class MakeFile(sys.__class__, Logging):
         t = self.__find(name_or_class)
         if t is not None:
             return t
-        
+
         if self.parent:
             return self.parent.find(name_or_class)
 
@@ -138,7 +154,7 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def requirements(self):
-        if self.name == 'dan-requires':
+        if self.name == "dan-requires":
             return self
         if self.__requirements is not None:
             return self.__requirements
@@ -149,9 +165,8 @@ class MakeFile(sys.__class__, Logging):
     def pkgs_path(self):
         return self.env.packages_path
 
-
     @requirements.setter
-    def requirements(self, value: 'MakeFile'):
+    def requirements(self, value: "MakeFile"):
         self.__requirements = value
 
     @property
@@ -180,6 +195,7 @@ class MakeFile(sys.__class__, Logging):
     @property
     def executables(self):
         from dan.cxx import Executable
+
         return [target for target in self.targets if issubclass(target, Executable)]
 
     @property
@@ -204,16 +220,26 @@ class MakeFile(sys.__class__, Logging):
     @property
     def all_default(self):
         return [target for target in self.all_targets if target.default == True]
-    
+
     @cached_property
     def root(self):
         m = self
         while m.parent is not None:
             m = m.parent
         return m
-    
-    def get_attribute(self, name, recursive = False):
+
+    def get_attribute(self, name, recursive=False):
         value = getattr(self, name, None)
         if value is None and recursive and self.parent is not None:
             return self.parent.get_attribute(name, recursive=recursive)
         return value
+
+    def __str__(self):
+        desc = self.name
+        if self.version is not None:
+            if isinstance(self.version, Option):
+                desc = f"{desc}-{self.version.value}"
+            else:
+                desc = f"{desc}-{self.version}"
+
+        return f"MakeFile[{desc}]"

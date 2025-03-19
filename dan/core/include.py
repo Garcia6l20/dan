@@ -1,5 +1,6 @@
 import importlib.util
 from contextlib import contextmanager
+import inspect
 import os
 import sys
 
@@ -39,9 +40,7 @@ class Context(Logging):
 
     _all: list["Context"] = []
 
-    def __init__(
-        self, name=None, env: Environment = None
-    ):
+    def __init__(self, name=None, env: Environment = None):
         self.name = name
         self.__root: MakeFile = None
         self.imported_makefiles: dict[Path, MakeFile] = dict()
@@ -217,7 +216,15 @@ def include_makefile(name: str | Path, build_path: Path = None) -> set[Target]:
             if len(context.missing) == 0:
                 raise err
         except Exception as err:
-            context.error("makefile error while including %s: %s", module_path, err)
+            for frame_info in inspect.trace():
+                if Path(frame_info.filename) == module_path:
+                    break
+            context.error(
+                "makefile error while including %s:%d: %s",
+                module_path,
+                frame_info.lineno,
+                err,
+            )
             raise MakeFileError(module_path) from err
 
 

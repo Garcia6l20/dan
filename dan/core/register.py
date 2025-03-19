@@ -26,8 +26,10 @@ class Registry(t.Generic[T_]):
         if fltr is None:
             return cls._registry_classes
         elif isinstance(fltr, type):
+
             def _fltr(subclass, c):
                 return c != subclass and issubclass(c, subclass)
+
             fltr = functools.partial(_fltr, fltr)
         return filter(
             fltr,
@@ -37,6 +39,7 @@ class Registry(t.Generic[T_]):
 
 class MakefileRegister:
 
+    _highest_internal_class = None
     makefile = None
 
     def __init_subclass__(cls, *args, internal=False, **kwargs):
@@ -45,6 +48,12 @@ class MakefileRegister:
 
             cls.makefile = context.current
             cls.makefile.register(cls)
+        else:
+            cls._highest_internal_class = cls
+
+    @classmethod
+    def get_highest_internal_class(cls):
+        return cls._highest_internal_class
 
     @classmethod
     def get_static_makefile(cls):

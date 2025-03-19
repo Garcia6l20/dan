@@ -16,7 +16,7 @@ import typing as t
 class RepositoryConfig:
     name: str
     url: str
-    branch: str = 'main'
+    branch: str = "main"
 
 
 @dataclass
@@ -28,9 +28,11 @@ class GitHubConfig:
 @dataclass
 class RepositoriesSettings:
     github: GitHubConfig = field(default_factory=GitHubConfig)
-    repositories: list[RepositoryConfig] = field(default_factory=lambda: [
-        RepositoryConfig('dan.io', 'https://github.com/Garcia6l20/dan.io.git'),
-    ])
+    repositories: list[RepositoryConfig] = field(
+        default_factory=lambda: [
+            RepositoryConfig("dan.io", "https://github.com/Garcia6l20/dan.io.git"),
+        ]
+    )
 
     def get(self, name):
         for config in self.repositories:
@@ -47,14 +49,13 @@ class RepositoriesConfig(Cache[RepositoriesSettings]):
 
 
 _repo_settings: RepositoriesConfig = None
-_repo_instances: dict[str, 'PackageRepository'] = dict()
+_repo_instances: dict[str, "PackageRepository"] = dict()
 
 
 def _get_settings() -> RepositoriesSettings:
     global _repo_settings
     if _repo_settings is None:
-        _repo_settings = RepositoriesConfig(
-            DAN_PATH / 'repositories.json')
+        _repo_settings = RepositoriesConfig(DAN_PATH / "repositories.json")
         if not _repo_settings.path.exists():
             sync_wait(_repo_settings.save(force=True))
     return _repo_settings.data
@@ -67,15 +68,12 @@ class PackageRepository(BaseTarget, internal=True):
 
     def __init__(self, name: str, makefile=None, **kwargs):
         self.repo_data = _get_settings().get(name)
-        super().__init__(name, **kwargs, build_path=makefile.env.build_path / name)
-        self.output = DAN_PATH / 'repositories' / self.name
+        super().__init__(
+            name, **kwargs, makefile=makefile, build_path=makefile.env.build_path / name
+        )
+        self.output = DAN_PATH / "repositories" / self.name
         self._package_makefile = None
-    
-    @property
-    def pkgs_root(self):
-        return get_packages_path() / self.toolchain.system / \
-            self.toolchain.arch / self.toolchain.build_type.name
-    
+
     @property
     def is_requirement(self) -> bool:
         return True
@@ -84,40 +82,50 @@ class PackageRepository(BaseTarget, internal=True):
         if not self.output.exists():
             try:
                 self.output.parent.mkdir(exist_ok=True, parents=True)
-                await async_run(f'git clone -b {self.repo_data.branch} {self.repo_data.url} {self.name}', logger=self, cwd=self.output.parent)
+                await async_run(
+                    f"git clone -b {self.repo_data.branch} {self.repo_data.url} {self.name}",
+                    logger=self,
+                    cwd=self.output.parent,
+                )
 
             except Exception as e:
                 # await aiofiles.rmtree(self.output)
                 raise e
         else:
             try:
-                await async_run(f'git pull -q', logger=self, cwd=self.output)
+                await async_run(f"git pull -q", logger=self, cwd=self.output)
             except CommandError:
-                self.warning('cannot update %s', self.name)
+                self.warning("cannot update %s", self.name)
 
     @property
     def pkgs_makefile(self) -> MakeFile:
         if self._package_makefile is None:
             from dan.core.include import load_makefile
-            root = self.output / 'packages'
+
+            root = self.output / "packages"
             with self.makefile.context:
-                self._package_makefile = load_makefile(root / 'dan-build.py',
-                                                       f'{self.name}.packages',
-                                                       requirements=None,
-                                                       build_path=self.build_path / self.name,
-                                                       parent=self.makefile,
-                                                       is_requirement=True)
+                self._package_makefile = load_makefile(
+                    root / "dan-build.py",
+                    f"{self.name}.packages",
+                    requirements=None,
+                    build_path=self.build_path,
+                    parent=self.makefile,
+                    is_requirement=True,
+                )
 
         return self._package_makefile
 
     @property
-    def installed(self) -> dict[str, 'Target']:
+    def installed(self) -> dict[str, "Target"]:
         pkgs = self.pkgs_makefile
-        return {f'{lib.makefile.name}:{lib.name}@{self.name}': lib for lib in pkgs.all_installed}
+        return {
+            f"{lib.makefile.name}:{lib.name}@{self.name}": lib
+            for lib in pkgs.all_installed
+        }
 
-    def find(self, name: str, package: str) -> tuple[MakeFile, 'Target']:
+    def find(self, name: str, package: str) -> tuple[MakeFile, "Target"]:
         for lib in self.pkgs_makefile.all_installed:
-            if name in lib.provides and (package is None or lib.makefile.name == package):
+            if name in lib.provides or (package is None and lib.name == name):
                 return lib.makefile, lib
         return None, None
 
@@ -125,14 +133,14 @@ class PackageRepository(BaseTarget, internal=True):
 def get_repo_instance(repo_name: str, makefile=None) -> PackageRepository:
     if makefile is None:
         from dan.core.include import context
+
         makefile = context.root
 
     if repo_name is None:
         repo_name = _get_settings().default.name
 
     if not repo_name in _repo_instances:
-        _repo_instances[repo_name] = PackageRepository(
-            repo_name, makefile=makefile)
+        _repo_instances[repo_name] = PackageRepository(repo_name, makefile=makefile)
     return _repo_instances[repo_name]
 
 
@@ -140,7 +148,3 @@ def get_all_repo_instances(makefile=None) -> list[PackageRepository]:
     for repo in _get_settings().repositories:
         get_repo_instance(repo.name, makefile)
     return _repo_instances.values()
-
-
-def get_packages_path() -> Path:
-    return DAN_PATH / 'packages'

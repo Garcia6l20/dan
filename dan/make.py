@@ -30,10 +30,12 @@ from dan.env import Environment
 
 sys.pycache_prefix = str(DAN_PATH / "__pycache__")
 
+
 @dataclass_json
 @dataclass
 class Config:
     source_path: Path = None
+    build_path: Path = None
     current_context: str = None
     contexts: dict[str, str] = field(default_factory=lambda: dict())
 
@@ -180,8 +182,8 @@ class Make(logging.Logging):
             source_path = Path(source_path)
         else:
             source_path = Path.cwd()
-            
-        base_path = source_path / ".dan"
+
+        self._base_path = base_path = source_path / ".dan"
 
         self.config_path = base_path / self._config_name
         self.cache_path = base_path / self._cache_name
@@ -192,6 +194,10 @@ class Make(logging.Logging):
 
         if source_path is not None:
             self.config.source_path = str(source_path)
+
+        self._build_path = None
+        if build_path is not None:
+            self.config.build_path = str(build_path)
 
         self.debug(f"jobs: {jobs}")
 
@@ -215,15 +221,17 @@ class Make(logging.Logging):
             else:
                 context_env = Environment.load(self.config.contexts[context_name])
                 # self.config.settings[context_name] = BuildSettings()
-            self.contexts.append(
-                Context(context_name, context_env)
-            )
+            self.contexts.append(Context(context_name, context_env))
 
     def context(self, name: str = None) -> Context:
         if name is None:
             name = self.config.current_context
         return self.contexts[name]
-    
+
+    @property
+    def current_context(self):
+        return self.context()
+
     def bind_context(self, ctx_name, env: Environment = None):
         if env is None:
             env = ctx_name
@@ -232,14 +240,15 @@ class Make(logging.Logging):
 
         self.contexts[ctx_name] = Context(ctx_name, env)
         self.config.contexts[ctx_name] = env.name
-        
+
         return self.contexts[ctx_name]
+
+    def build_path_of(self, ctx: Context):
+        return Path(self.config.build_path) / ctx.name
 
     @property
     def build_path(self):
-        build_base = self.context().env.build_path
-        sub_path = self.source_path.relative_to(Path.home())
-        return build_base / sub_path
+        return self.build_path_of(self.current_context)
 
     @property
     def config(self) -> Config:
@@ -295,10 +304,11 @@ class Make(logging.Logging):
         return contexts
 
     async def configure(self, context: str = None):
-        self.info("source path: %s", self.config.source_path)
         if not self.config.current_context:
             self.config.current_context = context
             self.info("setting current context to %s", context)
+        self.info("source path: %s", self.source_path)
+        self.info("build path: %s", self.build_path)
         await self._config.save()
 
     @asyncio.cached
@@ -317,7 +327,7 @@ class Make(logging.Logging):
 
             with ctx:
                 try:
-                    include_makefile(self.source_path, self.build_path)
+                    include_makefile(self.source_path, self.build_path_of(ctx))
                 except MakeFileError as err:
                     self._diagnostics.update(gen_python_diags(err))
                     raise
@@ -330,7 +340,7 @@ class Make(logging.Logging):
                 ctx_name = None
             if ctx_name and ctx_name != ctx.name:
                 return False
-            if fnmatch.fnmatch(target.fullname, f"*{required}*"):
+            if fnmatch.fnmatch(target.fullname, required):
                 return True
         return False
 

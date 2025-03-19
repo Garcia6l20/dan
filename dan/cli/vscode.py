@@ -10,6 +10,7 @@ from dan.cxx.targets import CXXObject, Executable
 from dan.logging import Logging
 from dan.core.utils import unique
 from dan.core.pathlib import Path
+from dan.env import Environment
 
 from dan.cli import click
 from dan.cli.common import common_opts, minimal_options, pass_context, CommandsContext
@@ -185,7 +186,7 @@ class Code(Logging):
         }
         if target.cpp_std is not None:
             config["standard"] = f"c++{target.cpp_std}"
-    
+
         return {
             "uri": str(source),
             "configuration": config,
@@ -194,7 +195,7 @@ class Code(Logging):
     async def get_sources_configuration(self, sources):
         targets_map = await self.make.targets_of(sources)
 
-        async with asyncio.TaskGroup() as g:    
+        async with asyncio.TaskGroup() as g:
             for source, target in targets_map.items():
                 if target:
                     g.create_task(self._make_source_configuration(source, target))
@@ -211,14 +212,12 @@ class Code(Logging):
 
         context = self.make.context()
         root = context.root
-        toolchain = context.get('cxx_toolchain')
+        toolchain = context.get("cxx_toolchain")
 
         cpp_std = 11
         browse_path = set()
         compiler_args = set()
-        cxx_targets = [
-            t for t in root.all_default if isinstance(t, CXXTarget)
-        ]
+        cxx_targets = [t for t in root.all_default if isinstance(t, CXXTarget)]
         async with asyncio.TaskGroup("initializing cxx targets") as g:
             for target in cxx_targets:
                 g.create_task(self._init_target(target))
@@ -251,65 +250,75 @@ def code():
 
 from dan.core.bench import benchmark, report_all
 
+
 @code.command()
+@click.option("--benchmark", "report_benchmark", is_flag=True)
 @common_opts
-@click.argument('CONTEXT', nargs=-1)
+@click.argument("CONTEXT", nargs=-1)
 @pass_context
-async def get_targets(ctx: CommandsContext, **kwargs):
+async def get_targets(ctx: CommandsContext, report_benchmark, **kwargs):
     """Get targets."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
-    with benchmark('get-targets') as bench:
-        make_init = bench.begin('make-init')
+    kwargs.update({"quiet": True, "diags": True, "no_status": True})
+    with benchmark("get-targets") as bench:
+        make_init = bench.begin("make-init")
         async with ctx(**kwargs) as make:
             make_init.end()
             out = []
             targets = make.context().root.all_targets
-            with bench('load-dependencies'):
+            with bench("load-dependencies"):
                 async with asyncio.TaskGroup() as g:
                     for target in targets:
                         g.create_task(target.load_dependencies())
-                with bench('gen-output'):
+                with bench("gen-output"):
                     for target in targets:
-                        with bench(f'gen-output-{target.name}'):
-                            out.append({
-                                'name': target.name,
-                                'fullname': target.fullname,
-                                'buildPath': str(target.build_path),
-                                'srcPath': str(target.source_path),
-                                'output': str(target.output),
-                                'executable': isinstance(target, Executable),
-                                'type': type(target).__name__,
-                                'env': target.env if isinstance(target, Executable) else None,
-                            })
-                with bench('json-dump'):
+                        with bench(f"gen-output-{target.name}"):
+                            out.append(
+                                {
+                                    "name": target.name,
+                                    "fullname": target.fullname,
+                                    "buildPath": str(target.build_path),
+                                    "srcPath": str(target.source_path),
+                                    "output": str(target.output),
+                                    "executable": isinstance(target, Executable),
+                                    "type": type(target).__name__,
+                                    "env": (
+                                        target.env
+                                        if isinstance(target, Executable)
+                                        else None
+                                    ),
+                                }
+                            )
+                with bench("json-dump"):
                     click.echo(json.dumps(out))
-    report_all()
+    if report_benchmark:
+        report_all()
+
 
 @code.command()
 @common_opts
-@click.argument('TARGETS', nargs=-1)
+@click.argument("TARGETS", nargs=-1)
 @pass_context
 async def get_tests(ctx: CommandsContext, **kwargs):
     """Get tests."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    kwargs.update({"quiet": True, "diags": True, "no_status": True})
     async with ctx(**kwargs) as make:
         out = list()
         for t in make.context().root.all_tests:
             out.append(t.fullname)
             if len(t) > 1:
                 for c in t.cases:
-                    out.append(f'{t.fullname}:{c.name}')
+                    out.append(f"{t.fullname}:{c.name}")
         click.echo(json.dumps(out))
 
 
 @code.command()
 @common_opts
-@click.option('--pretty', is_flag=True)
-@click.argument('TARGETS', nargs=-1)
+@click.option("--pretty", is_flag=True)
+@click.argument("TARGETS", nargs=-1)
 @pass_context
 async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
     """Get test suites."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    kwargs.update({"quiet": True, "diags": True, "no_status": True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(code.get_test_suites(pretty))
@@ -318,27 +327,54 @@ async def get_test_suites(ctx: CommandsContext, pretty, **kwargs):
 @code.command()
 def get_toolchains(**kwargs):
     """Get toolchains."""
-    click.echo(json.dumps(list(Make.toolchains()['toolchains'].keys())))
+    click.echo(json.dumps(list(Make.toolchains()["toolchains"].keys())))
+
 
 @code.command()
 @common_opts
 @pass_context
 async def get_buildfiles(ctx: CommandsContext, **kwargs):
     """Get buildfiles."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    kwargs.update({"quiet": True, "diags": True, "no_status": True})
     async with ctx(**kwargs) as make:
-        builfiles = [f.__file__ for f in make.makefiles()]        
+        builfiles = [f.__file__ for f in make.makefiles()]
         click.echo(json.dumps(builfiles))
 
 
 @code.command()
-@click.option('--for-install', is_flag=True, help='Build for install purpose (will update rpaths [posix only])')
-@click.option('--context', '-c', 'contexts', type=click.ContextParamType(), multiple=True,
-              help='Use this context')
 @common_opts
-@click.option('--force', '-f', is_flag=True,
-              help='Clean before building')
-@click.argument('TARGETS', nargs=-1, type=click.TargetParamType())
+@pass_context
+async def get_environments(ctx: CommandsContext, **kwargs):
+    """Get environments."""
+    click.echo(json.dumps(Environment.available()))
+
+
+@code.command()
+@common_opts
+@pass_context
+@click.argument("NAME")
+async def get_environment(ctx: CommandsContext, name, **kwargs):
+    """Get environments."""
+    click.echo(Environment.load(name).to_json())
+
+
+@code.command()
+@click.option(
+    "--for-install",
+    is_flag=True,
+    help="Build for install purpose (will update rpaths [posix only])",
+)
+@click.option(
+    "--context",
+    "-c",
+    "contexts",
+    type=click.ContextParamType(),
+    multiple=True,
+    help="Use this context",
+)
+@common_opts
+@click.option("--force", "-f", is_flag=True, help="Clean before building")
+@click.argument("TARGETS", nargs=-1, type=click.TargetParamType())
 @pass_context
 async def build(ctx: CommandsContext, force=False, **kwargs):
     """Build targets (vscode version)."""
@@ -350,11 +386,13 @@ async def build(ctx: CommandsContext, force=False, **kwargs):
 
 @code.command()
 @minimal_options
-@click.argument('SOURCES', nargs=-1, type=click.Path(exists=True, dir_okay=False, resolve_path=True))
+@click.argument(
+    "SOURCES", nargs=-1, type=click.Path(exists=True, dir_okay=False, resolve_path=True)
+)
 @pass_context
 async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
     """Get source configuration."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    kwargs.update({"quiet": True, "diags": True, "no_status": True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_sources_configuration(sources))
@@ -365,7 +403,7 @@ async def get_source_configuration(ctx: CommandsContext, sources, **kwargs):
 @pass_context
 async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
     """Get workspace browse configuration."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True})
+    kwargs.update({"quiet": True, "diags": True, "no_status": True})
     async with ctx(**kwargs) as make:
         code = Code(make)
         click.echo(await code.get_workspace_browse_configuration())
@@ -373,20 +411,24 @@ async def get_workspace_browse_configuration(ctx: CommandsContext, **kwargs):
 
 @code.command()
 @common_opts
-@click.argument('CONTEXT')
+@click.argument("CONTEXT")
 @pass_context
 async def get_options(ctx: CommandsContext, context, **kwargs):
     """Get options."""
-    kwargs.update({'quiet': True, 'diags': True, 'no_status': True, 'contexts': [context]})
+    kwargs.update(
+        {"quiet": True, "diags": True, "no_status": True, "contexts": [context]}
+    )
     async with ctx(**kwargs) as make:
         opts = list()
         for o in make.all_options():
-            opts.append({
-                'name': o.name,
-                'fullname': o.fullname,
-                'help': o.help,
-                'type': o.type.__name__,
-                'value': o.value,
-                'default': o.default
-            })
+            opts.append(
+                {
+                    "name": o.name,
+                    "fullname": o.fullname,
+                    "help": o.help,
+                    "type": o.type.__name__,
+                    "value": o.value,
+                    "default": o.default,
+                }
+            )
         click.echo(json.dumps(opts))

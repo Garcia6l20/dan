@@ -165,7 +165,7 @@ class TargetParamType(ParamType):
             build_path,
             quiet=True,
             terminal_mode=TerminalMode.BASIC,
-            contexts=ctx.params.get("contexts", None),
+            contexts=ctx.params.get("contexts", "default"),
             all=ctx.params.get("all", False),
         )
         sync_wait(make.initialize())
