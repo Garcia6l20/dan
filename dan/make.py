@@ -26,7 +26,7 @@ from dan.cxx.targets import Executable
 from dan.core.runners import max_jobs
 from dan.core.terminal import TerminalMode, TermStream, set_mode as set_terminal_mode
 from dan.core.utils import Env, flatten
-from dan.env import Environment
+from dan.venv import VEnvironment
 
 sys.pycache_prefix = str(DAN_PATH / "__pycache__")
 
@@ -138,7 +138,7 @@ class Make(logging.Logging):
 
     def __init__(
         self,
-        env: Environment = None,
+        env: VEnvironment = None,
         build_path: str = None,
         source_path: str = None,
         targets: list[str] = None,
@@ -219,7 +219,7 @@ class Make(logging.Logging):
                 else:
                     context_env = None
             else:
-                context_env = Environment.load(self.config.contexts[context_name])
+                context_env = VEnvironment.load(self.config.contexts[context_name])
                 # self.config.settings[context_name] = BuildSettings()
             self.contexts.append(Context(context_name, context_env))
 
@@ -232,11 +232,11 @@ class Make(logging.Logging):
     def current_context(self):
         return self.context()
 
-    def bind_context(self, ctx_name, env: Environment = None):
+    def bind_context(self, ctx_name, env: VEnvironment = None):
         if env is None:
             env = ctx_name
         if isinstance(env, str):
-            env = Environment.load(env)
+            env = VEnvironment.load(env)
 
         self.contexts[ctx_name] = Context(ctx_name, env)
         self.config.contexts[ctx_name] = env.name

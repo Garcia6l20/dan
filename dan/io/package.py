@@ -42,7 +42,7 @@ class PackageBuild(Target, internal=True):
             packages_root = self.repo.build_path
         self.packages_root = packages_root
         if source_root is None:
-            source_root = self.env.source_path / self.repo.name
+            source_root = self.venv.source_path / self.repo.name
         self.source_root = source_root
 
     @property
@@ -95,7 +95,7 @@ class PackageBuild(Target, internal=True):
         self._build_path = self.output
         self.lock = aiofiles.FileLock(self.build_path / "build.lock")
 
-        self.install_settings = InstallSettings(self.env.packages_path)
+        self.install_settings = InstallSettings(self.venv.packages_path)
 
         # update package build-path
         makefile.build_path = self.build_path / "build"
@@ -373,7 +373,7 @@ class IoPackage(Target, internal=True):
                 f"importing {self.name} package requirements"
             ) as group:
                 toolchain = self.context.get("cxx_toolchain")
-                search_paths = self.env.package_search_paths
+                search_paths = self.venv.package_search_paths
                 dest = self.build_path / self.pkgconfig_path
                 for pkg in data.requires:
                     pkgconfig_file = find_file(rf"{pkg.name}.pc$", search_paths)

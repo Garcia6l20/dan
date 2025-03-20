@@ -566,8 +566,8 @@ class Target(Logging, MakefileRegister, internal=True):
         self._version = value
 
     @property
-    def env(self):
-        return self.makefile.env
+    def venv(self):
+        return self.makefile.venv
 
     @output.setter
     def output(self, path):

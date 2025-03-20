@@ -8,7 +8,7 @@ from dan.core.target import Options, Target, Option
 from dan.core.test import Test
 from dan.logging import Logging
 
-from dan.env import Environment
+from dan.venv import VEnvironment
 
 
 class MakeFile(sys.__class__, Logging):
@@ -62,8 +62,8 @@ class MakeFile(sys.__class__, Logging):
             parent = parent.parent
 
     @property
-    def env(self) -> Environment:
-        return self.context.env
+    def venv(self) -> VEnvironment:
+        return self.context.venv
 
     @property
     def is_requirement(self):
@@ -163,7 +163,7 @@ class MakeFile(sys.__class__, Logging):
 
     @property
     def pkgs_path(self):
-        return self.env.packages_path
+        return self.venv.packages_path
 
     @requirements.setter
     def requirements(self, value: "MakeFile"):

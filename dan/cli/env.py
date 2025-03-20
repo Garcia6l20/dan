@@ -3,7 +3,7 @@ from dan.core.terminal import set_mode as set_terminal_mode, TerminalMode
 from dan.core import asyncio
 
 from dan.cxx.base_toolchain import ToolchainSettings as CXXSettings
-from dan.env import Environment, ENVIRONMENTS_PATH
+from dan.venv import VEnvironment, ENVIRONMENTS_PATH
 
 from dan import logging
 
@@ -41,7 +41,7 @@ async def new(cxx, cxx_settings, force, name):
     logger.info("creating '%s' environment...", name)
     logger.info("cxx toolchain: %s", cxx)
 
-    env = Environment(name, cxx, cxx_settings[0])
+    env = VEnvironment(name, cxx, cxx_settings[0])
     env.path.mkdir(parents=True, exist_ok=force)
 
     await env.cache.save(force=force)
@@ -50,13 +50,13 @@ async def new(cxx, cxx_settings, force, name):
 @env.command()
 async def list():
     """List available environments."""
-    for env in Environment.available():
+    for env in VEnvironment.available():
         click.echo(f"{env.name}")
 
 
 @env.command()
 @click.argument("env", type=click.EnvironmentParamType())
-async def remove(env: Environment):
+async def remove(env: VEnvironment):
     """Remove an environment."""
     logger.info("removing '%s'...", env.path)
     env.cache.ignore()
@@ -66,7 +66,7 @@ async def remove(env: Environment):
 @env.command()
 @click.argument("alias")
 @click.argument("env", type=click.EnvironmentParamType())
-async def alias(alias, env: Environment):
+async def alias(alias, env: VEnvironment):
     """Alias an environment."""
     alias_path = ENVIRONMENTS_PATH / alias
     if alias_path.exists():
@@ -77,7 +77,7 @@ async def alias(alias, env: Environment):
 
 @env.command()
 @click.argument("env", type=click.EnvironmentParamType())
-async def show(env: Environment):
+async def show(env: VEnvironment):
     """Show an environment."""
     click.echo(env.to_json(indent=2))
     click.echo(f"system packages: {[str(p) for p in env.system_packages]}")
@@ -86,7 +86,7 @@ async def show(env: Environment):
 _imported_libraries = set()
 
 
-async def import_libraries(env: Environment, libraries, search_paths):
+async def import_libraries(env: VEnvironment, libraries, search_paths):
     from dan.pkgconfig.package import find_pkg_config, PkgConfig
 
     async with asyncio.TaskGroup() as tg:
@@ -123,7 +123,7 @@ async def import_libraries(env: Environment, libraries, search_paths):
 )
 @click.argument("env", type=click.EnvironmentParamType())
 @click.argument("libraries", type=str, nargs=-1)
-async def import_(env: Environment, libraries, search_paths):
+async def import_(env: VEnvironment, libraries, search_paths):
     """Import system libraries into environment."""
     env.system_packages_path.mkdir(parents=True, exist_ok=True)
     await import_libraries(env, libraries, search_paths)
@@ -139,7 +139,7 @@ import contextlib
 _make: Make = None
 
 
-async def get_make(env: Environment, quiet=True):
+async def get_make(env: VEnvironment, quiet=True):
     global _make
     if _make is None:
         env.source_path.mkdir(parents=True, exist_ok=True)
@@ -196,7 +196,7 @@ from dan.core.settings import InstallMode, InstallSettings, BuildSettings
 @click.option("--force", "-f", help="Force", is_flag=True)
 @click.argument("env", type=click.EnvironmentParamType())
 @click.argument("packages", type=str, nargs=-1)
-async def install(env: Environment, packages, force):
+async def install(env: VEnvironment, packages, force):
     """Install dan packages into environment."""
     logger.info("installing %s to '%s'...", packages, env.path)
     from dan.io.package import PackageBuild, IoPackage

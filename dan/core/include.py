@@ -12,7 +12,7 @@ from dan.core.target import Target
 from dan.logging import Logging
 from dan.pkgconfig.package import parse_requirement
 from dan.core.settings import BuildSettings
-from dan.env import Environment
+from dan.venv import VEnvironment
 
 
 class TargetNotFound(RuntimeError):
@@ -40,14 +40,14 @@ class Context(Logging):
 
     _all: list["Context"] = []
 
-    def __init__(self, name=None, env: Environment = None):
+    def __init__(self, name=None, venv: VEnvironment = None):
         self.name = name
         self.__root: MakeFile = None
         self.imported_makefiles: dict[Path, MakeFile] = dict()
         self.__ctx_stack: list[Context] = []
         self.__makefile_stack: list[MakeFile] = []
         self.__attributes = dict()
-        self.env = env
+        self.venv = venv
 
         Context._all.append(self)
 

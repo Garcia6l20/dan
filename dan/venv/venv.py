@@ -12,7 +12,7 @@ ENVIRONMENTS_PATH = DAN_PATH / "environments"
 
 @dataclass_json
 @dataclass
-class Environment:
+class VEnvironment:
 
     name: str
     cxx_toolchain: str
@@ -66,19 +66,18 @@ class Environment:
 
     @classmethod
     def available(cls):
-        return [
-            env.name
-            for env in DAN_PATH.joinpath("environments").iterdir()
-            if env.is_dir()
-        ]
+        return [e for e in DAN_PATH.joinpath("environments").iterdir() if e.is_dir()]
 
     @classmethod
-    def load(cls, name: str):
-        path = ENVIRONMENTS_PATH / name / ".cache"
-        if not path.exists():
-            raise FileNotFoundError(f"Environment '{name}' not found.")
-        return EnvironmentCache.instance(path, cache_name=f"{name}-env").data
+    def load(cls, e: str|Path):
+        e = Path(e)
+        if not e.is_absolute():
+            e = ENVIRONMENTS_PATH / e
+        cpath = e / ".cache"
+        if not cpath.exists():
+            raise FileNotFoundError(f"Environment '{e}' not found.")
+        return EnvironmentCache.instance(cpath, cache_name=f"{e.name}-env").data
 
 
-class EnvironmentCache(Cache[Environment]):
+class EnvironmentCache(Cache[VEnvironment]):
     indent = 2

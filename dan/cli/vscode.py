@@ -10,7 +10,7 @@ from dan.cxx.targets import CXXObject, Executable
 from dan.logging import Logging
 from dan.core.utils import unique
 from dan.core.pathlib import Path
-from dan.env import Environment
+from dan.venv import VEnvironment
 
 from dan.cli import click
 from dan.cli.common import common_opts, minimal_options, pass_context, CommandsContext
@@ -346,7 +346,7 @@ async def get_buildfiles(ctx: CommandsContext, **kwargs):
 @pass_context
 async def get_environments(ctx: CommandsContext, **kwargs):
     """Get environments."""
-    click.echo(json.dumps(Environment.available()))
+    click.echo(json.dumps([e.name for e in VEnvironment.available()]))
 
 
 @code.command()
@@ -355,7 +355,7 @@ async def get_environments(ctx: CommandsContext, **kwargs):
 @click.argument("NAME")
 async def get_environment(ctx: CommandsContext, name, **kwargs):
     """Get environments."""
-    click.echo(Environment.load(name).to_json())
+    click.echo(VEnvironment.load(name).to_json())
 
 
 @code.command()

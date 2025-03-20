@@ -27,7 +27,7 @@ mode = TerminalMode.BASIC
 def set_mode(new_mode: TerminalMode):
     global mode
     global _manager
-    if _manager is not None:
+    if _manager is not None and mode != new_mode:
         raise RuntimeError("Cannot change terminal mode once initialized")
     mode = new_mode
 

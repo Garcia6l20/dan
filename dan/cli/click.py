@@ -15,7 +15,7 @@ from dan import logging
 class AsyncContext(Context):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.loop = asyncio.get_event_loop() or asyncio.new_event_loop()
+        self.loop = asyncio.get_event_loop()
 
     def invoke(self, __callback, *args, **kwargs):
         ret = super().invoke(__callback, *args, **kwargs)
@@ -197,16 +197,16 @@ class ToolchainParamType(ParamType):
 
 class EnvironmentParamType(ParamType):
     def shell_complete(self, ctx: AsyncContext, param, incomplete):
-        from dan.env import Environment
+        from dan.venv import VEnvironment
 
         comps = []
-        for env in Environment.available():
+        for env in VEnvironment.available():
             if env.name.startswith(incomplete):
                 comps.append(CompletionItem(env.name))
 
         return comps
 
     def convert(self, value, param, ctx):
-        from dan.env.env import Environment
+        from dan.venv import VEnvironment
 
-        return Environment.load(value)
+        return VEnvironment.load(value)

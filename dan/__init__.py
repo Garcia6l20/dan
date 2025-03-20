@@ -5,6 +5,7 @@ from dan.core import asyncio
 from dan.core.include import include, requires, MakeFile
 from dan.core.generator import generator
 from dan.core.target import Target
+from dan.core.pathlib import Path
 from dan.pkgconfig.package import find_package
 
 

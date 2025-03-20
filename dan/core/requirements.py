@@ -148,7 +148,7 @@ async def load_requirements(
     deps_install_path = makefile.root.pkgs_path
     deps_settings = InstallSettings(deps_install_path)
 
-    pkgs_search_paths = makefile.env.package_search_paths
+    pkgs_search_paths = makefile.venv.package_search_paths
     if makefile.requirements:
         pkgs_search_paths.append(makefile.requirements.pkgs_path)
 

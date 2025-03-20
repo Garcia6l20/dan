@@ -94,7 +94,7 @@ class Project(BaseTarget, internal=True):
                     value = 'ON' if value else 'OFF'
                 cmake_options[opt.cmake_name] = value
 
-        cmake_options['CMAKE_PREFIX_PATH'] = self.env.packages_path.as_posix()
+        cmake_options['CMAKE_PREFIX_PATH'] = self.venv.packages_path.as_posix()
         cmake_options['CMAKE_POSITION_INDEPENDENT_CODE'] = 'ON'
 
         base_opts = []

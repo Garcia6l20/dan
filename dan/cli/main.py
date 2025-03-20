@@ -26,7 +26,7 @@ from dan.make import InstallMode, Make
 from dan.cli.common import common_opts, CommandsContext, pass_context
 from dan.cli.vscode import code
 from dan.cli.env import env
-from dan.env import Environment
+from dan.venv import VEnvironment
 
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,7 @@ user_cli.context_class = click.AsyncContext
 async def configure(
     ctx: CommandsContext,
     context: str,
-    env: Environment,
+    env: VEnvironment,
     yes: bool,
     settings: tuple[str],
     options: tuple[str],
@@ -169,10 +169,10 @@ async def configure(
                     }
 
         make_ctx = make.contexts.get(context)
-        if make_ctx is None or make_ctx.env is None:
+        if make_ctx is None or make_ctx.venv is None:
             if env is None:
-                if context in Environment.available():
-                    env = Environment.load(context)
+                if context in VEnvironment.available():
+                    env = VEnvironment.load(context)
                 else:
                     raise InvalidConfiguration("You must specify an environment to use")
 

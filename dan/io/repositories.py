@@ -69,7 +69,7 @@ class PackageRepository(BaseTarget, internal=True):
     def __init__(self, name: str, makefile=None, **kwargs):
         self.repo_data = _get_settings().get(name)
         super().__init__(
-            name, **kwargs, makefile=makefile, build_path=makefile.env.build_path / name
+            name, **kwargs, makefile=makefile, build_path=makefile.venv.build_path / name
         )
         self.output = DAN_PATH / "repositories" / self.name
         self._package_makefile = None
