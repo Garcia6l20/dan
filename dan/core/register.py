@@ -41,11 +41,13 @@ class MakefileRegister:
 
     _highest_internal_class = None
     makefile = None
+    _is_internal = True
 
     def __init_subclass__(cls, *args, internal=False, **kwargs):
         if not internal:
             from dan.core.include import context
 
+            cls._is_internal = False
             cls.makefile = context.current
             cls.makefile.register(cls)
         else:

@@ -529,11 +529,18 @@ class Target(Logging, MakefileRegister, internal=True):
                 functools.partial(_get_source_path, self.source_path)
             )
 
-        # if type(self).output != Target.output:
-        #     # hack class-defined output
-        #     #   transform it to classproperty for build_path resolution
-        #     output = self.output
-        #     type(self).output = utils.classproperty(lambda: self.build_path / output)
+        icls = self.get_highest_internal_class()
+        if hasattr(icls, "output") and type(self).output != icls.output:
+            # hack class-defined output
+            #   transform it to classproperty for build_path resolution
+
+            def __get_output(output, self):
+                if output.is_absolute():
+                    return output
+                else:
+                    return self.build_path / output
+
+            type(self).output = property(functools.partial(__get_output, Path(self.output)))
 
         self.diagnostics = diags.DiagnosticCollection()
 
@@ -734,6 +741,14 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @cached_property
     def up_to_date(self):
+
+        src = Path(self.makefile.__file__)
+        ts = src.modification_time
+        prev_ts = self.cache.get("src_timestamp", None)
+        if ts != prev_ts:
+            self.cache["src_timestamp"] = ts
+            return False
+
         output = (
             self.build_path / f"{self.name}.stamp"
             if self.output is None
