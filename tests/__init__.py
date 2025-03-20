@@ -71,10 +71,9 @@ class PyMakeBaseTest(unittest.IsolatedAsyncioTestCase, Logging):
                 source_path = source_path / self.subdir
             if self.clean:
                 await self.test.clean()
-                make = Make(build_path, verbose=True, targets=self.targets, diags=self.diags)
-                await make.configure(source_path, os.getenv('DAN_TOOLCHAIN', 'default'))
-            else:
-                make = Make(build_path, verbose=True, targets=self.targets, diags=self.diags)
+            make = Make(build_path, source_path, verbose=True, targets=self.targets, diags=self.diags)
+            if self.clean:
+                await make.configure("default")
             if len(self.options) or len(self.settings):
                 if len(self.options):
                     await make.apply_options(*self.options)

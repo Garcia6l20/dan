@@ -15,7 +15,11 @@ from dan import logging
 class AsyncContext(Context):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.loop = asyncio.get_event_loop()
+        try:
+            self.loop = asyncio.get_event_loop()
+        except:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
 
     def invoke(self, __callback, *args, **kwargs):
         ret = super().invoke(__callback, *args, **kwargs)

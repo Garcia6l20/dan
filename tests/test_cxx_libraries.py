@@ -12,7 +12,7 @@ class CXXSimpleLibTest(PyMakeBaseTest):
 
         ########################################
         async with self.section("base build", clean=True) as make:
-            target = make.root.find(target_name)
+            target = make.find(target_name)
             await target.initialize()
             self.assertFalse(target.output.exists())
             await target.build()
@@ -20,23 +20,23 @@ class CXXSimpleLibTest(PyMakeBaseTest):
             self.modified_at = target.output.modification_time
 
         # ########################################
-        # async with self.section("no-modification => no-rebuild") as make:
-        #     target = make.root.find(target_name)
-        #     await target.build()
-        #     self.assertTrue(target.output.exists())
-        #     self.assertEqual(self.modified_at, target.output.modification_time,
-        #                     "no modifications should NOT trigger a re-build")
+        async with self.section("no-modification => no-rebuild") as make:
+            target = make.find(target_name)
+            await target.build()
+            self.assertTrue(target.output.exists())
+            self.assertEqual(self.modified_at, target.output.modification_time,
+                            "no modifications should NOT trigger a re-build")
 
-        #     # update source
-        #     src: Path = target.source_path / list(target.sources)[0]
-        #     src.utime()
+            # update source
+            src: Path = target.source_path / list(target.sources)[0]
+            src.utime()
 
-        # async with self.section("source modification => rebuild") as make:
-        #     target = make.root.find(target_name)
-        #     await target.build()
-        #     self.assertTrue(target.output.younger_than(self.modified_at),
-        #                     "a source modification should trigger a re-build")
-        #     self.modified_at = target.output.modification_time
+        async with self.section("source modification => rebuild") as make:
+            target = make.find(target_name)
+            await target.build()
+            self.assertTrue(target.output.younger_than(self.modified_at),
+                            "a source modification should trigger a re-build")
+            self.modified_at = target.output.modification_time
 
 
     # async def test_install(self):

@@ -149,8 +149,8 @@ class Test(Logging, MakefileRegister, internal=True):
             async with asyncio.TaskGroup(f"running {self.name} tests") as tests:
                 for caze in self.cases:
                     tests.create_task(self._run_test(caze))
-        except asyncio.ExceptionGroup as errors:
-            for err in errors.errors:
+        except ExceptionGroup as eg:
+            for err in eg.exceptions:
                 self.error(err)
             return False
         return True

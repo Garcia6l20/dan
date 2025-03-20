@@ -250,6 +250,16 @@ class _OutputStreamProgress:
             case _:
                 return self.__str_default()
 
+def _flatten_group(root: ExceptionGroup):
+    exceptions = []
+    for e in root.exceptions:
+        match e:
+            case ExceptionGroup():
+                exceptions.extend(_flatten_group(e))
+            case _:
+                exceptions.append(e)
+    return exceptions
+
 
 class _TaskGroup(asyncio.TaskGroup, _OutputStreamProgress):
     def __init__(self, stream: "TermStream", name: str, **kwargs):
@@ -269,8 +279,13 @@ class _TaskGroup(asyncio.TaskGroup, _OutputStreamProgress):
                 task.add_done_callback(self.__notify_bar_task_done)
             self._s.update()
         _OutputStreamProgress.__enter__(self)
-        result = await asyncio.TaskGroup.__aexit__(self, et, exc, tb)
-        _OutputStreamProgress.__exit__(self, et, exc, tb)
+        try:
+            result = await asyncio.TaskGroup.__aexit__(self, et, exc, tb)
+        except ExceptionGroup as g:
+            out = ExceptionGroup(g.message, _flatten_group(g))
+            raise out from g
+        finally:
+            _OutputStreamProgress.__exit__(self, et, exc, tb)
         # async def delayed_exit():
         #     await asyncio.sleep(0.5)
         #     _OutputStreamProgress.__exit__(self, et, exc, tb)

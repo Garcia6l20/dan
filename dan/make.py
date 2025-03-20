@@ -9,6 +9,7 @@ import sys
 
 from dan import logging
 
+from dan.core.errors import InvalidConfiguration
 import dan.core.typing as t
 from dan.core import diagnostics as diag
 from dan.core.cache import Cache
@@ -138,7 +139,6 @@ class Make(logging.Logging):
 
     def __init__(
         self,
-        env: VEnvironment = None,
         build_path: str = None,
         source_path: str = None,
         cache_path: str = None,
@@ -151,11 +151,10 @@ class Make(logging.Logging):
         contexts: list[str] = None,
         all=False,
         quiet=False,
+        env: VEnvironment = None,
     ):
         jobs = jobs or os.cpu_count()
         max_jobs(jobs)
-
-        self._env = env
 
         if quiet:
             verbose = -1
@@ -307,12 +306,22 @@ class Make(logging.Logging):
 
         return contexts
 
-    async def configure(self, context: str = None):
+    async def configure(self, context: str = None, venv: VEnvironment | str = None):
+        if venv is not None:
+            if isinstance(venv, str):
+                venv = VEnvironment.load(venv)
+
+        ctx = self.bind_context(context, venv)
+        if ctx.venv is None:
+            raise InvalidConfiguration("You must specify an environment to use")
+
         if not self.config.current_context:
             self.config.current_context = context
             self.info("setting current context to %s", context)
+
         self.info("source path: %s", self.source_path)
         self.info("build path: %s", self.build_path)
+
         await self._config.save()
 
     @asyncio.cached
@@ -367,6 +376,10 @@ class Make(logging.Logging):
             else:
                 items.extend(ctx.root.all_default)
         return items
+
+    def find(self, name, context: str = None) -> Target:
+        context = self.context(context)
+        return context.root.find(name)
 
     @functools.cached_property
     def tests(self) -> list[Test]:
