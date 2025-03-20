@@ -150,7 +150,7 @@ async def configure(
 ):
     """Configure project."""
     user_contexts = dict()
-    async with ctx(no_init=True, no_status=True, **kwds) as make:
+    async with ctx(no_init=True, no_status=True, context=context, **kwds) as make:
 
         if context == "auto":
             context_config = await make.project_config()
@@ -171,7 +171,7 @@ async def configure(
         make_ctx = make.contexts.get(context)
         if make_ctx is None or make_ctx.venv is None:
             if env is None:
-                if context in VEnvironment.available():
+                if context in [e.name for e in VEnvironment.available()]:
                     env = VEnvironment.load(context)
                 else:
                     raise InvalidConfiguration("You must specify an environment to use")

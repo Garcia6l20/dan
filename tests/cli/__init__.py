@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 import unittest
 import click.testing
 import click
@@ -5,6 +6,7 @@ from pathlib import Path
 import sys
 
 from dan import logging
+from dan.core import asyncio
 
 import typing as t
 
@@ -13,7 +15,7 @@ class CliTestCase(unittest.TestCase, logging.Logging):
     tests_path = Path(__file__).parent
     root_path = tests_path.parent.parent
     examples_path = root_path / "examples"
-    build_path = tests_path / "build-unittest"
+    tmp_path = tests_path / "tmp"
 
     verbose_level = 2
     no_progress = True
@@ -30,9 +32,12 @@ class CliTestCase(unittest.TestCase, logging.Logging):
         assert self.base_command is not None
         self.fullname = "test-" + self.test_project.replace("/", "-")
         super().__init__(methodName)
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         self.runner = click.testing.CliRunner(
             env={
-                "DAN_BUILD_PATH": self.build_path.as_posix(),
                 "DAN_SOURCE_PATH": self.source_path.as_posix(),
                 "DAN_VERBOSE": str(self.verbose_level),
                 "DAN_NOPROGRESS": str(self.no_progress),
@@ -44,8 +49,27 @@ class CliTestCase(unittest.TestCase, logging.Logging):
         logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
         return super().setUp()
 
+    @contextmanager
     def session(self):
-        return self.runner.isolated_filesystem()
+        self.tmp_path.mkdir(exist_ok=True, parents=True)
+        try:
+            with self.runner.isolated_filesystem(self.tmp_path) as cwd:
+                cwd = Path(cwd)
+                self.runner.env["DAN_CACHE_PATH"] = cwd.as_posix()
+                self.runner.env["DAN_BUILD_PATH"] = (cwd / "build").as_posix()
+                yield cwd
+        finally:
+            cwd.rmdir(recursive=True)
+
+    def assertExists(self, path: Path, msg: str = None):
+        return self.assertTrue(path.exists(), msg)
+
+    def assertChanged(
+        self, path: Path, previous_modification_time: float, msg: str = None
+    ):
+        modif_time = path.modification_time
+        self.assertGreater(modif_time, previous_modification_time, msg)
+        return modif_time
 
     def invoke(
         self,
@@ -55,12 +79,23 @@ class CliTestCase(unittest.TestCase, logging.Logging):
         catch_exceptions: bool = True,
         color: bool = False,
         fail_test: bool = False,
+        forward_exceptions: bool = False,
+        msg: str = None,
         **extra: t.Any,
     ):
         result = self.runner.invoke(
             self.base_command, args, input, env, catch_exceptions, color, **extra
         )
-        (self.assertNotEqual if fail_test else self.assertEqual)(
-            result.exit_code, 0, msg=f"command failure: {args=}, {input=}\n ==== output ==== \n{result.output}"
-        )
+        if result.exception and forward_exceptions:
+            raise result.exception
+        
+        check = lambda rc: rc == 0 if not fail_test else lambda rc: rc != 0
+        if check(result.return_value):
+            standardMsg=f"command failure: {args=}, {input=}\n ==== stdout ==== \n{result.stdout}\n", # ==== stderr ==== \n{result.stderr}",
+            msg = self._formatMessage(None, standardMsg)
+            raise self.failureException(msg)
+        
+        sys.stdout.write(result.stdout)
+        # sys.stderr.write(result.stderr)
+        
         return result

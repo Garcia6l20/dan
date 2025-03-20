@@ -7,4 +7,4 @@ toolchains.yaml
 temp.obj
 
 .dan/
-
+/tests/**/tmp*

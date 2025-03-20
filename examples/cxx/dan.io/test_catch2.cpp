@@ -1,5 +1,4 @@
-#include <catch2/catch_all.hpp>
-#include <spdlog/spdlog.h>
+#include "test.hpp"
 
 // TEST_CASE("line-commented-test", "[dan][catch2]") {
 //     REQUIRE(true == true);

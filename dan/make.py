@@ -141,6 +141,7 @@ class Make(logging.Logging):
         env: VEnvironment = None,
         build_path: str = None,
         source_path: str = None,
+        cache_path: str = None,
         targets: list[str] = None,
         verbose: int = 0,
         for_install: bool = False,
@@ -183,17 +184,20 @@ class Make(logging.Logging):
         else:
             source_path = Path.cwd()
 
-        self._base_path = base_path = source_path / ".dan"
+        if cache_path is None:
+            cache_path = Path(os.environ.get("DAN_CACHE_PATH", source_path / ".dan"))
 
-        self.config_path = base_path / self._config_name
-        self.cache_path = base_path / self._cache_name
-
-        self.required_targets = targets
+        self.config_path = cache_path / self._config_name
+        self.cache_path = cache_path / self._cache_name
         self._config = ConfigCache.instance(self.config_path)
         self.cache = Cache.instance(self.cache_path, binary=True)
 
-        if source_path is not None:
+        self.required_targets = targets
+
+        if self.config.source_path is None:
             self.config.source_path = str(source_path)
+        elif self.config.source_path != str(source_path):
+            source_path = Path(self.config.source_path)
 
         self._build_path = None
         if build_path is not None:

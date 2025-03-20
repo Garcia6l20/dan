@@ -1,6 +1,8 @@
 from dan.cli import click
 from dan.core.terminal import set_mode as set_terminal_mode, TerminalMode
 from dan.core import asyncio
+from dan.core.cache import Cache
+from dan.core.settings import InstallMode, InstallSettings
 
 from dan.cxx.base_toolchain import ToolchainSettings as CXXSettings
 from dan.venv import VEnvironment, ENVIRONMENTS_PATH
@@ -41,9 +43,8 @@ async def new(cxx, cxx_settings, force, name):
     logger.info("creating '%s' environment...", name)
     logger.info("cxx toolchain: %s", cxx)
 
-    env = VEnvironment(name, cxx, cxx_settings[0])
+    env = VEnvironment(name, cxx, cxx_settings or CXXSettings())
     env.path.mkdir(parents=True, exist_ok=force)
-
     await env.cache.save(force=force)
 
 
@@ -59,7 +60,7 @@ async def list():
 async def remove(env: VEnvironment):
     """Remove an environment."""
     logger.info("removing '%s'...", env.path)
-    env.cache.ignore()
+    Cache.clear_all()
     env.path.rmdir(recursive=True)
 
 
@@ -187,9 +188,6 @@ async def make_context(env, quiet=False):
     make = await get_make(env, quiet=quiet)
     with make.context():
         yield make
-
-
-from dan.core.settings import InstallMode, InstallSettings, BuildSettings
 
 
 @env.command()

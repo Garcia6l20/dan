@@ -54,17 +54,14 @@ class Cache(t.Generic[T]):
             self.__data = None
             if self.path.exists():
                 with open(self.path, "rb") as f:
-                    try:
-                        if dataclasses.is_dataclass(self.dataclass):
-                            body = f.read()
-                            self.__data = self.dataclass.from_json(body.decode())
-                        else:
-                            self.__data = self.__serializer.load(f)
-                        if not isinstance(self.__data, self.dataclass):
-                            self.__data = self.dataclass(**self.__data)
-                        self.__modification_date = self.path.modification_time
-                    except Exception as err:
-                        pass
+                    if dataclasses.is_dataclass(self.dataclass):
+                        body = f.read()
+                        self.__data = self.dataclass.from_json(body.decode())
+                    else:
+                        self.__data = self.__serializer.load(f)
+                    if not isinstance(self.__data, self.dataclass):
+                        self.__data = self.dataclass(**self.__data)
+                    self.__modification_date = self.path.modification_time
             if self.__data is None:
                 self.__data = self.dataclass(*args, **kwargs)
         else:

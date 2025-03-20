@@ -687,11 +687,6 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @asyncio.cached
     async def preload(self):
-        # self.build_path.mkdir(parents=True, exist_ok=True)
-        # logger = self.get_logger()
-        # import logging
-        # logger.addHandler(logging.FileHandler(self.build_path / f'{self.name}.log'))
-
         self.trace("preloading...")
 
         async with asyncio.TaskGroup(
@@ -706,6 +701,8 @@ class Target(Logging, MakefileRegister, internal=True):
         ) as group:
             for dep in self.target_dependencies:
                 group.create_task(dep.preload())
+
+        self.dependencies.add(self.makefile.__file__)
 
         return await asyncio.may_await(self.__preload__())
 
@@ -741,13 +738,6 @@ class Target(Logging, MakefileRegister, internal=True):
 
     @cached_property
     def up_to_date(self):
-
-        src = Path(self.makefile.__file__)
-        ts = src.modification_time
-        prev_ts = self.cache.get("src_timestamp", None)
-        if ts != prev_ts:
-            self.cache["src_timestamp"] = ts
-            return False
 
         output = (
             self.build_path / f"{self.name}.stamp"
@@ -909,7 +899,7 @@ class Target(Logging, MakefileRegister, internal=True):
                 for fn in self.utils:
                     tmp = inspect.getsourcelines(fn)[0]
                     tmp[0] = f"\n\n@self.utility\n"
-                    body += "\n".join(tmp)
+                    body += "".join(tmp)
                 await installer.install_data(body, f"dan/{self.name}.py")
 
     async def __clean__(self): ...
