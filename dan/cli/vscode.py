@@ -181,7 +181,7 @@ class Code(Logging):
 
         async with asyncio.TaskGroup() as g:
             for source, target in targets_map.items():
-                if target:
+                if target is not None:
                     g.create_task(self._make_source_configuration(source, target))
 
         return json.dumps(list(g.results()))
