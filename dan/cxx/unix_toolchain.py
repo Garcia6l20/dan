@@ -68,7 +68,7 @@ class UnixToolchain(Toolchain):
             build_type = self.build_type
         match build_type:
             case BuildType.debug:
-                flags.extend(("-g",))
+                flags.extend(("-Og", "-g", "-DDEBUG"))
             case BuildType.release:
                 flags.extend(("-O3", "-DNDEBUG"))
             case BuildType.release_min_size:

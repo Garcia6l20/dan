@@ -144,6 +144,7 @@ class CXXObject(BaseTarget, internal=True):
                 self.private_cxx_flags,
                 self.build_path,
                 self.build_type,
+                self.cpp_std,
             )
             self.parent.diagnostics.insert(diags, str(self.source))
         except CompilationFailure as err:
@@ -393,13 +394,6 @@ class CXXTarget(BaseTarget, internal=True):
     @cached_property
     def private_cxx_flags(self):
         flags = []
-        cpp_std = self.cpp_std
-        if cpp_std is not None:
-            flags.extend(
-                self.toolchain.make_compile_options(
-                    [cpp_std if isinstance(cpp_std, CppStd) else CppStd(cpp_std)]
-                )
-            )
         flags.extend(self.includes.private)
         flags.extend(self.cxx_flags)
         flags.extend(self.compile_options.private)
