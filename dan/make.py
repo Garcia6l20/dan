@@ -315,9 +315,8 @@ class Make(logging.Logging):
         if ctx.venv is None:
             raise InvalidConfiguration("You must specify an environment to use")
 
-        if not self.config.current_context:
-            self.config.current_context = context
-            self.info("setting current context to %s", context)
+        self.config.current_context = context
+        self.info("setting current context to %s", context)
 
         self.info("source path: %s", self.source_path)
         self.info("build path: %s", self.build_path)
@@ -446,19 +445,22 @@ class Make(logging.Logging):
 
         def check(t: CXXObjectsTarget):
             nonlocal result
-            for source in result.keys():
-                if t.source_path not in source.parents:
-                    continue
-                if source.suffix[1].lower() == "h":
-                    for p in [*t.includes.private_raw, *t.includes.public_raw]:
-                        p: Path = p
-                        if p not in source.parents:
-                            continue
-                        result[source] = t
-                else:
-                    t._init_sources()
-                    if source.name in [Path(s).name for s in t.sources]:
-                        result[source] = t
+            try:
+                for source in result.keys():
+                    if t.source_path not in source.parents:
+                        continue
+                    if source.suffix[1].lower() == "h":
+                        for p in [*t.includes.private_raw, *t.includes.public_raw]:
+                            p: Path = p
+                            if p not in source.parents:
+                                continue
+                            result[source] = t
+                    else:
+                        t._init_sources()
+                        if source.name in [Path(s).name for s in t.sources]:
+                            result[source] = t
+            except asyncio.CancelledError:
+                pass
 
         object_targets = [
             target

@@ -306,7 +306,11 @@ class PackageConfig(CXXTarget, internal=True):
                         raise RuntimeError(f"Unresolved requirement: {req}")
                     group.create_task(dep.initialize())
                     deps.add(dep)
-        self.includes.public.append(self.data.get("includedir"))
+        self.includes.add(self.data.get("includedir"), public=True)
+        for f in self.cxx_flags:
+            match re_match(f):
+                case r"-D(.+)" as m:
+                    self.compile_definitions.add(m[1], public=True)
         self.dependencies.update(deps)
 
     @property

@@ -155,37 +155,21 @@ class Code(Logging):
             await target.initialize()
 
     async def _make_source_configuration(self, source: Path, target: CXXObject):
-        # interface:
-        #   - includePath: string[]
-        #   - defines: string[]
-        #   - intelliSenseMode?: "linux-clang-x86" | "linux-clang-x64" | "linux-clang-arm" | "linux-clang-arm64" | "linux-gcc-x86" | "linux-gcc-x64" | "linux-gcc-arm" | "linux-gcc-arm64" | "macos-clang-x86" | "macos-clang-x64" | "macos-clang-arm" | "macos-clang-arm64" | "macos-gcc-x86" | "macos-gcc-x64" | "macos-gcc-arm" | "macos-gcc-arm64" | "windows-clang-x86" | "windows-clang-x64" | "windows-clang-arm" | "windows-clang-arm64" | "windows-gcc-x86" | "windows-gcc-x64" | "windows-gcc-arm" | "windows-gcc-arm64" | "windows-msvc-x86" | "windows-msvc-x64" | "windows-msvc-arm" | "windows-msvc-arm64" | "msvc-x86" | "msvc-x64" | "msvc-arm" | "msvc-arm64" | "gcc-x86" | "gcc-x64" | "gcc-arm" | "gcc-arm64" | "clang-x86" | "clang-x64" | "clang-arm" | "clang-arm64";
-        #   - standard?: "c89" | "c99" | "c11" | "c17" | "c++98" | "c++03" | "c++11" | "c++14" | "c++17" | "c++20" | "gnu89" | "gnu99" | "gnu11" | "gnu17" | "gnu++98" | "gnu++03" | "gnu++11" | "gnu++14" | "gnu++17" | "gnu++20";
-        #   - forcedInclude?: string[];
-        #   - compilerPath?: string;
-        #   - compilerArgs?: string[];
-        #   - windowsSdkVersion?: string;
-        includes = await target.toolchain.get_default_include_paths()
-        defines = [
-            f"{k}={v}"
-            for k, v in (await target.toolchain.get_default_defines()).items()
-        ]
         await self._init_target(target)
-        for flag in target.private_cxx_flags:
-            match re_match(flag):
-                case r"[/-]I:?(.+)" as m:
-                    includes.append(m[1])
-                case r"[/-]D:?(.+)" as m:
-                    defines.append(m[1])
+
+        cc, *args = target.toolchain.get_base_compile_args(
+            lang=target.lang,
+            cpp_std=target.cpp_std,
+            build_type=target.makefile.context.venv.cxx_settings.build_type,
+        )
 
         config = {
-            "includePath": [os.path.normcase(i) for i in unique(includes)],
-            "defines": defines,
-            "compilerPath": os.path.normcase(target.toolchain.cxx),
-            "intelliSenseMode": get_intellisense_mode(target.toolchain),
-            "compilerArgs": target.cxx_flags,
+            "includePath": [os.path.normcase(i) for i in target.includes.all_raw],
+            "defines": list(target.compile_definitions.all_raw),
+            "compilerPath": os.path.normcase(cc),
+            "compilerArgs": [],
+            "compilerFragments": args,
         }
-        if target.cpp_std is not None:
-            config["standard"] = f"c++{target.cpp_std}"
 
         return {
             "uri": str(source),
@@ -199,46 +183,39 @@ class Code(Logging):
             for source, target in targets_map.items():
                 if target:
                     g.create_task(self._make_source_configuration(source, target))
-        return json.dumps(g.results())
+
+        return json.dumps(list(g.results()))
 
     async def get_workspace_browse_configuration(self):
-        # interface:
-        #   - browsePath: string[];
-        #   - compilerPath?: string;
-        #   - compilerArgs?: string[];
-        #   - standard?: see above
-        #   - windowsSdkVersion?: string
         from dan.cxx.targets import CXXTarget
 
         context = self.make.context()
         root = context.root
         toolchain = context.get("cxx_toolchain")
 
-        cpp_std = 11
+        cpp_std = 17
         browse_path = set()
-        compiler_args = set()
         cxx_targets = [t for t in root.all_default if isinstance(t, CXXTarget)]
         async with asyncio.TaskGroup("initializing cxx targets") as g:
             for target in cxx_targets:
                 g.create_task(self._init_target(target))
 
         for target in cxx_targets:
-            browse_path.update(target.includes.private_raw)
-            browse_path.update(target.includes.public_raw)
-            compiler_args.update(target.cxx_flags)
+            browse_path.add(target.makefile.source_path)
             if target.cpp_std is not None and target.cpp_std > cpp_std:
                 cpp_std = target.cpp_std
 
-        from dan.pkgconfig.package import get_packages_cache
-
-        for package in get_packages_cache(context).values():
-            compiler_args.update(package.cxx_flags)
+        cc, *args = target.toolchain.get_base_compile_args(
+            lang=target.lang,
+            cpp_std=cpp_std,
+            build_type=target.makefile.context.venv.cxx_settings.build_type,
+        )
 
         result = {
             "browsePath": [os.path.normcase(p) for p in browse_path],
             "compilerPath": str(toolchain.cxx),
-            "compilerArgs": list(compiler_args),
-            "standard": f"c++{cpp_std}",
+            "compilerArgs": [],
+            "compilerFragments": args,
         }
         return json.dumps(result)
 

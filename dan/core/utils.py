@@ -158,6 +158,8 @@ class IndexList(list[T]):
                     return True
         return False
 
+def make_dict(*entries, key="name"):
+    return { getattr(e, key): e for e in entries }
 
 def flatten(list_of_lists):
     if len(list_of_lists) == 0:

@@ -141,6 +141,9 @@ class TaskGroup(OrigTaskGroup):
         if not self._never_abort:
             super()._abort()
 
+    def cancel(self):
+        super()._abort()
+
     def create_task(self, coro, *, name=None, context=None) -> Task:
         if self._return_exceptions:
             coro = return_exceptions(coro)

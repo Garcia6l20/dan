@@ -2,7 +2,6 @@ from pathlib import Path
 from tests import PyMakeBaseTest
 
 from dan.cxx.base_toolchain import CompilationFailure, LinkageFailure
-from dan.core.asyncio import ExceptionGroup
 
 
 base_path = Path(__file__).parent / "errors" / "cxx"

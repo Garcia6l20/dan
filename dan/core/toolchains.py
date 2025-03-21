@@ -25,7 +25,7 @@ class Lang:
 class BaseToolchain(Registry, registry=True):
     final = False
     kind: str = None
-    languages : list[Lang] = None
+    languages : dict[str, Lang] = None
     SettingsClass: type = None
     __loaded = False
     __all: list['BaseToolchain'] = []

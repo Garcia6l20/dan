@@ -36,6 +36,21 @@ BaseCommand.context_class = AsyncContext
 logger = logging.getLogger("cli")
 
 
+
+class EnumType(Choice):
+    name = "enum"
+
+    def __init__(self, enum: type, case_sensitive: bool = False) -> None:
+        super().__init__(enum._member_names_, case_sensitive)
+        self.enum = enum
+
+    def convert(self, value: t.Any, param: Parameter | None, ctx: Context | None):
+        if isinstance(value, self.enum):
+            return value
+        value = super().convert(value, param, ctx)
+        return self.enum[value]
+
+
 class SettingsParamType(ParamType):
 
     _instances = dict()

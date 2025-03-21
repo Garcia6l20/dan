@@ -225,7 +225,8 @@ def _parse_compiler_version(defines: dict[str, str]):
         return None
 
 __data_path = Path(__file__).parent / 'data'
-__empty_source = __data_path / 'empty.c'
+__empty_c_source = __data_path / 'empty.c'
+__empty_cpp_source = __data_path / 'empty.cpp'
 __detect_cmd = __data_path / 'detect.cmd'
 
 detectors = {
@@ -233,19 +234,19 @@ detectors = {
     # "-E" run only preprocessor
     # "-x c" compiler as C code
     # the output is of lines in form of "#define name value"
-    'gcc': ['-dM', '-E', '-x', 'c'],
-    'clang': ['-dM', '-E', '-x', 'c'],
-    'clang-cl': ['--driver-mode=g++', '-dM', '-E', '-x', 'c'],
-    'sun-cc': ['-c', '-xdumpmacros'],
+    'gcc': lambda lang: ['-dM', '-E', '-x', lang],
+    'clang': lambda lang: ['-dM', '-E', '-x', lang],
+    'clang-cl': lambda lang: ['--driver-mode=g++', '-dM', '-E', '-x', lang],
+    'sun-cc': lambda lang: [f'-{lang}', '-xdumpmacros'],
     # cl (Visual Studio, MSVC)
     # "/nologo" Suppress Startup Banner
     # "/E" Preprocess to stdout
     # "/B1" C front-end
     # "/c" Compile Without Linking
     # "/TC" Specify Source File Type
-    'msvc': ['/nologo', '/E', '/B1', str(__detect_cmd), '/c', '/TC'],
-    'icc': ['/QdM', '/E', '/TC'],  # icc (Intel) on Windows,
-    'qcc': ['-Wp', '-dM', '-E', '-x', 'c'],  # QNX QCC
+    'msvc': lambda lang: ['/nologo', '/E', '/B1', str(__detect_cmd), f'/{lang}', '/TC'],
+    'icc': lambda lang: ['/QdM', '/E', '/TC'],  # icc (Intel) on Windows, FIXME: how to set lang ???
+    'qcc': lambda lang: ['-Wp', '-dM', '-E', '-x', {lang}],  # QNX QCC
 }
 
 def parse_compiler_defines(output: str):
@@ -271,13 +272,15 @@ def parse_compiler_defines(output: str):
             break
     return defines
 
-def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None) -> dict[str, str]:
+def get_compiler_defines(executable: str, compiler_type: str, options: list[str], env=None, lang: str=None) -> dict[str, str]:
     if env is None:
         env = dict()
+    if lang is None:
+        lang = "c"
     env['LC_LOCAL'] = 'C'
     with tempfile.TemporaryDirectory(prefix='dan-dci-') as tmpdir:
         output, _, rc = sync_run(
-                [executable, *detectors[compiler_type], *options, str(__empty_source)], env=env, cwd=tmpdir)
+                [executable, *detectors[compiler_type](lang), *options, str(__empty_c_source)], env=env, cwd=tmpdir)
         return parse_compiler_defines(output)
 
 
@@ -286,7 +289,7 @@ def detect_compiler_id(executable, env=None, logger=None):
     with tempfile.TemporaryDirectory(prefix='dan-dci-') as tmpdir:
         for name, detector in detectors.items():
             output, _, rc = sync_run(
-                [executable, *detector, str(__empty_source)], no_raise=True, env=env, cwd=tmpdir, logger=logger)
+                [executable, *detector("c"), str(__empty_c_source)], no_raise=True, env=env, cwd=tmpdir, logger=logger)
             if 0 == rc:
                 defines = parse_compiler_defines(output)
                 compiler = _parse_compiler_version(defines)

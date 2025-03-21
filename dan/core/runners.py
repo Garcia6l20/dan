@@ -238,12 +238,16 @@ async def async_run(command, log=True, logger: logging.Logger = None, no_raise=F
             _jobs_sem.release()
 
 
-def sync_run(command, pipe=True, logger: logging.Logger = None, no_raise=False, shell=True, env=None, cwd=None):
+def sync_run(command, pipe=True, logger: logging.Logger = None, no_raise=False, shell=True, env=None, cwd=None, input: str = None):
     command = list2cmdline(command)
     if pipe:
         stdout = subprocess.PIPE
     else:
         stdout = None
+    if input is not None:
+        stdin = asyncio.subprocess.PIPE
+    else:
+        stdin = None        
     if logger:
         logger.debug(f'executing: {command}')
     if env:
@@ -254,10 +258,15 @@ def sync_run(command, pipe=True, logger: logging.Logger = None, no_raise=False, 
     proc = subprocess.Popen(command,
                             stdout=stdout,
                             stderr=stdout,
+                            stdin=stdin,
                             shell=shell,
                             env=env,
                             cwd=cwd,
                             universal_newlines=True)
+    
+    if input is not None:
+        proc.stdin.write(input)
+
     out, err = proc.communicate()
     if proc.returncode != 0 and not no_raise:
         message = f'command returned {proc.returncode}: {command}\n{err if err else ""}'
